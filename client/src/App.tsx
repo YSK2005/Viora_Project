@@ -75,6 +75,15 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleDashboardDateRangeChange = async (startDate?: string, endDate?: string) => {
+    try {
+      const summary = await fetchDashboardSummary({ startDate, endDate });
+      setDashboardSummary(summary);
+    } catch (err) {
+      console.error('Failed to filter dashboard summary:', err);
+    }
+  };
+
   const handleOpenNewInvoice = () => {
     setEditingInvoice(null);
     setIsNewInvoiceOpen(true);
@@ -110,6 +119,7 @@ export const App: React.FC = () => {
             onSimulateEmptyToggle={setIsSimulatedEmpty}
             onNavigateToCustomers={() => setCurrentNav('customers')}
             onNavigateToProducts={() => setCurrentNav('products')}
+            onDateRangeChange={handleDashboardDateRangeChange}
           />
         )}
 
@@ -130,7 +140,21 @@ export const App: React.FC = () => {
 
         {currentNav === 'products' && <ProductsView />}
 
-        {currentNav === 'payments' && <PaymentsView />}
+        {currentNav === 'payments' && (
+          <PaymentsView
+            onSelectInvoice={(invId) => setPreviewInvoiceId(invId)}
+            onOpenRecordPayment={() => {
+              const payable = invoices.find(
+                (inv) => inv.status === 'ISSUED' && (inv.balanceRemaining === undefined || inv.balanceRemaining > 0)
+              );
+              if (payable) {
+                setPaymentInvoice(payable);
+              } else {
+                alert('No outstanding issued invoices available for payment. Please issue an invoice first.');
+              }
+            }}
+          />
+        )}
 
         {currentNav === 'reports' && <ReportsView />}
 

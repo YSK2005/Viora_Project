@@ -211,6 +211,106 @@ export const ReportsView: React.FC = () => {
             </div>
           </div>
 
+          {/* Visual Sales vs Collections Timeline Chart */}
+          <div className="bg-white rounded-xl border border-slate-200/80 p-5 shadow-card">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-navy-900 tracking-tight">
+                  Revenue Comparison Timeline ({groupBy === 'day' ? 'Daily' : 'Monthly'})
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Visual contrast between invoiced receivables (sales date) and cash settlements (collection date)
+                </p>
+              </div>
+
+              {/* Legend */}
+              <div className="flex items-center gap-4 text-xs font-medium">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-xs bg-teal-600 inline-block" />
+                  <span className="text-slate-700">Issued Sales (Invoice Date)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-xs bg-emerald-500 inline-block" />
+                  <span className="text-slate-700">Payments Collected (Payment Date)</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Chart Area */}
+            {(() => {
+              const salesMap = new Map((reportData?.salesTimeline || []).map((s: any) => [s.period, s.grandTotal]));
+              const collectionsMap = new Map((reportData?.collectionsTimeline || []).map((c: any) => [c.period, c.totalCollected]));
+
+              const allPeriods = Array.from(
+                new Set([
+                  ...(reportData?.salesTimeline || []).map((s: any) => s.period),
+                  ...(reportData?.collectionsTimeline || []).map((c: any) => c.period),
+                ])
+              ).sort();
+
+              const chartData = allPeriods.map((period) => ({
+                period,
+                sales: Number(salesMap.get(period) || 0),
+                collections: Number(collectionsMap.get(period) || 0),
+              }));
+
+              const maxVal = Math.max(...chartData.map((d) => Math.max(d.sales, d.collections)), 1000);
+
+              if (chartData.length === 0) {
+                return (
+                  <div className="py-12 text-center text-xs text-slate-400">
+                    No sales or collections activity recorded for the selected date range.
+                  </div>
+                );
+              }
+
+              return (
+                <div className="pt-6 pb-2 overflow-x-auto">
+                  <div className="min-w-[480px]">
+                    <div className="h-48 flex items-end gap-3 sm:gap-6 border-b border-slate-200 pb-2 px-2">
+                      {chartData.map((item) => {
+                        const salesHeight = Math.max(4, Math.round((item.sales / maxVal) * 160));
+                        const collHeight = Math.max(4, Math.round((item.collections / maxVal) * 160));
+
+                        return (
+                          <div key={item.period} className="flex-1 flex flex-col items-center gap-1 group relative">
+                            {/* Bar Pair */}
+                            <div className="w-full flex items-end justify-center gap-1 sm:gap-1.5 h-40">
+                              {/* Sales Bar */}
+                              <div
+                                style={{ height: `${salesHeight}px` }}
+                                className="w-3 sm:w-5 bg-teal-600 rounded-t hover:bg-teal-700 transition-all cursor-pointer relative"
+                              >
+                                <div className="hidden group-hover:block absolute bottom-full mb-1 left-1/2 -translate-x-1/2 z-20 bg-slate-900 text-white text-[10px] px-2 py-1 rounded shadow whitespace-nowrap">
+                                  Sales: {formatCurrency(item.sales)}
+                                </div>
+                              </div>
+
+                              {/* Collections Bar */}
+                              <div
+                                style={{ height: `${collHeight}px` }}
+                                className="w-3 sm:w-5 bg-emerald-500 rounded-t hover:bg-emerald-600 transition-all cursor-pointer relative"
+                              >
+                                <div className="hidden group-hover:block absolute bottom-full mb-1 left-1/2 -translate-x-1/2 z-20 bg-slate-900 text-white text-[10px] px-2 py-1 rounded shadow whitespace-nowrap">
+                                  Collected: {formatCurrency(item.collections)}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* X-axis Label */}
+                            <span className="text-[10px] font-mono text-slate-500 truncate max-w-[60px] sm:max-w-none">
+                              {item.period}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+
           {/* Detailed Timelines: Sales vs Collections */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Sales by Invoice Date */}

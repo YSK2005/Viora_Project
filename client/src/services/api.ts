@@ -32,9 +32,18 @@ export async function fetchHealth(): Promise<SystemHealth> {
 // -------------------------------------------------------------
 // Dashboard & Reports API
 // -------------------------------------------------------------
-export async function fetchDashboardSummary(): Promise<DashboardSummary | null> {
+export async function fetchDashboardSummary(params?: {
+  startDate?: string;
+  endDate?: string;
+}): Promise<DashboardSummary | null> {
   try {
-    const res = await fetch(`${API_BASE}/dashboard/summary`);
+    const query = new URLSearchParams();
+    if (params?.startDate) query.append('startDate', params.startDate);
+    if (params?.endDate) query.append('endDate', params.endDate);
+
+    const queryString = query.toString();
+    const url = queryString ? `${API_BASE}/dashboard/summary?${queryString}` : `${API_BASE}/dashboard/summary`;
+    const res = await fetch(url);
     if (!res.ok) throw new Error('Failed to load dashboard summary');
     const json = await res.json();
     return json.data;
@@ -382,10 +391,22 @@ export async function deleteProduct(id: string): Promise<any> {
 export async function fetchPayments(params?: {
   page?: number;
   limit?: number;
+  search?: string;
+  startDate?: string;
+  endDate?: string;
+  method?: string;
+  invoiceId?: string;
+  customerId?: string;
 }): Promise<{ payments: PaymentRecord[]; totalCount: number }> {
   const query = new URLSearchParams();
   if (params?.page) query.append('page', String(params.page));
   if (params?.limit) query.append('limit', String(params.limit));
+  if (params?.search) query.append('search', params.search);
+  if (params?.startDate) query.append('startDate', params.startDate);
+  if (params?.endDate) query.append('endDate', params.endDate);
+  if (params?.method && params.method !== 'ALL') query.append('method', params.method);
+  if (params?.invoiceId) query.append('invoiceId', params.invoiceId);
+  if (params?.customerId) query.append('customerId', params.customerId);
 
   const res = await fetch(`${API_BASE}/payments?${query.toString()}`);
   if (!res.ok) throw new Error('Failed to fetch payments');

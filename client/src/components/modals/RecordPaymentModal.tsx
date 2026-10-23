@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, CreditCard, IndianRupee, Hash, AlertCircle } from 'lucide-react';
+import { X, CreditCard, IndianRupee, Hash, AlertCircle, Calendar, CheckCircle2 } from 'lucide-react';
 import { Invoice } from '../../types';
 import { recordInvoicePayment } from '../../services/api';
 
@@ -18,9 +18,18 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
 }) => {
   if (!isOpen || !invoice) return null;
 
+  const todayStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+
   const [amount, setAmount] = useState(String(invoice.balanceRemaining || ''));
+  const [paymentDate, setPaymentDate] = useState(todayStr);
   const [method, setMethod] = useState('BANK_TRANSFER');
   const [reference, setReference] = useState('');
+  const [confirmed, setConfirmed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,17 +41,30 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
     }).format(amt);
   };
 
+  const payAmt = Number(amount) || 0;
+  const projectedBalance = Math.max(0, invoice.balanceRemaining - payAmt);
+  const isOverpaying = payAmt > invoice.balanceRemaining;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const payAmt = Number(amount);
 
     if (isNaN(payAmt) || payAmt <= 0) {
       setError('Payment amount must be greater than zero');
       return;
     }
 
-    if (payAmt > invoice.balanceRemaining) {
+    if (isOverpaying) {
       setError(`Payment amount cannot exceed outstanding balance (${formatCurrency(invoice.balanceRemaining)})`);
+      return;
+    }
+
+    if (!paymentDate) {
+      setError('Payment date is required');
+      return;
+    }
+
+    if (!confirmed) {
+      setError('Please check the confirmation box before recording the payment');
       return;
     }
 
@@ -53,6 +75,7 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
       const requestKey = `PAY-${invoice.id.slice(-6)}-${Date.now()}`;
       await recordInvoicePayment(invoice.id, {
         amount: payAmt,
+        paymentDate,
         method,
         reference: reference.trim() || undefined,
         requestKey,
@@ -111,30 +134,54 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
             <span className="text-emerald-700">{formatCurrency(invoice.totalPaid)}</span>
           </div>
           <div className="flex justify-between font-bold text-slate-900 pt-1.5 border-t border-slate-200">
-            <span>Balance Outstanding:</span>
+            <span>Current Outstanding:</span>
             <span className="text-amber-700">{formatCurrency(invoice.balanceRemaining)}</span>
           </div>
+          {payAmt > 0 && !isOverpaying && (
+            <div className="flex justify-between font-semibold text-teal-800 pt-1 border-t border-dashed border-teal-200">
+              <span>Remaining After Payment:</span>
+              <span className="font-bold">{formatCurrency(projectedBalance)}</span>
+            </div>
+          )}
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Payment Amount (₹) <span className="text-rose-500">*</span>
-            </label>
-            <div className="relative">
-              <IndianRupee className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="number"
-                required
-                min="0.01"
-                step="0.01"
-                max={invoice.balanceRemaining}
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="0.00"
-                className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/20"
-              />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Payment Amount (₹) <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
+                <IndianRupee className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="number"
+                  required
+                  min="0.01"
+                  step="0.01"
+                  max={invoice.balanceRemaining}
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Payment Date <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
+                <Calendar className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="date"
+                  required
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                />
+              </div>
             </div>
           </div>
 
@@ -172,6 +219,21 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
             </div>
           </div>
 
+          {/* Confirmation Checkbox */}
+          <div className="pt-2 border-t border-slate-100">
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={confirmed}
+                onChange={(e) => setConfirmed(e.target.checked)}
+                className="mt-0.5 rounded text-teal-600 focus:ring-teal-500/20 border-slate-300"
+              />
+              <span className="text-[11px] text-slate-600 leading-tight">
+                I confirm that payment of <strong className="text-slate-900">{formatCurrency(payAmt)}</strong> was physically received from <strong className="text-slate-900">{invoice.customerName}</strong> via {method.replace('_', ' ')}.
+              </span>
+            </label>
+          </div>
+
           <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
             <button
               type="button"
@@ -182,9 +244,10 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || invoice.balanceRemaining <= 0}
-              className="px-5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm disabled:opacity-50"
+              disabled={isSubmitting || invoice.balanceRemaining <= 0 || !confirmed || isOverpaying || payAmt <= 0}
+              className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm disabled:opacity-50 transition-colors"
             >
+              <CheckCircle2 className="w-3.5 h-3.5" />
               {isSubmitting ? 'Recording...' : 'Record Payment'}
             </button>
           </div>

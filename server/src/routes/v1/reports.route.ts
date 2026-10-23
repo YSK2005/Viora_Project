@@ -36,7 +36,7 @@ router.get(
 
       if (startDate || endDate) {
         invoiceWhere.invoiceDate = {};
-        if (startDate) invoiceWhere.invoiceDate.gte = new Date(startDate);
+        if (startDate) invoiceWhere.invoiceDate.gte = new Date(`${startDate}T00:00:00.000Z`);
         if (endDate) invoiceWhere.invoiceDate.lte = new Date(`${endDate}T23:59:59.999Z`);
       }
 
@@ -64,7 +64,7 @@ router.get(
 
       if (startDate || endDate) {
         paymentWhere.paymentDate = {};
-        if (startDate) paymentWhere.paymentDate.gte = new Date(startDate);
+        if (startDate) paymentWhere.paymentDate.gte = new Date(`${startDate}T00:00:00.000Z`);
         if (endDate) paymentWhere.paymentDate.lte = new Date(`${endDate}T23:59:59.999Z`);
       }
 
@@ -79,13 +79,18 @@ router.get(
         },
       });
 
-      // Helper to format date key
+      // Helper to format date key in documented business timezone (Asia/Kolkata)
       const formatPeriodKey = (d: Date): string => {
-        const iso = d.toISOString();
+        const dateStr = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Asia/Kolkata',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).format(d);
         if (groupBy === 'month') {
-          return iso.slice(0, 7); // YYYY-MM
+          return dateStr.slice(0, 7);
         }
-        return iso.slice(0, 10); // YYYY-MM-DD
+        return dateStr;
       };
 
       // Aggregate Sales by Invoice Date
@@ -167,6 +172,13 @@ router.get(
         totalCollected = totalCollected.plus(p.amount);
       }
 
+      const salesTimeline = Object.values(salesAggregation).sort((a, b) =>
+        a.period.localeCompare(b.period)
+      );
+      const collectionsTimeline = Object.values(collectionsAggregation).sort((a, b) =>
+        a.period.localeCompare(b.period)
+      );
+
       return sendSuccess(
         res,
         {
@@ -184,8 +196,8 @@ router.get(
             totalPayments: payments.length,
             netOutstanding: Number(round2(totalSales.minus(totalCollected))),
           },
-          salesTimeline: Object.values(salesAggregation),
-          collectionsTimeline: Object.values(collectionsAggregation),
+          salesTimeline,
+          collectionsTimeline,
         },
         'Sales report generated successfully'
       );

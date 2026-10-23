@@ -1,8 +1,8 @@
-# Viora Bills — Phase 3: Professional Invoice Generation, GST Calculations, PDF and Printing
+# Viora Bills — Phase 4: Payment Tracking, Dashboard Analytics & Sales Reports
 
 A modern, web-based invoice and business billing application developed for the **Viora Tech** internship project.
 
-This milestone completes **Phase 3: Professional Invoice Generation, GST Calculations, PDF and Printing**, delivering an enterprise-ready invoice generation workflow, dynamic line items, configurable Indian GST tax breakdown (CGST, SGST, IGST), downloadable A4 vector PDF generation, clean print stylesheets, and historical audit snapshots.
+This milestone completes **Phase 4: Payment Tracking, Dashboard Analytics and Sales Reports**, delivering ACID database transactional payment recording, row-level locking (`SELECT ... FOR UPDATE`), unique idempotency key enforcement, automated payment status calculation (`UNPAID`, `PARTIALLY_PAID`, `PAID`), real-time dashboard analytics with selectable reporting windows, and comprehensive daily/monthly sales vs. collections reports with a visual comparative chart.
 
 ---
 
@@ -15,7 +15,7 @@ viora-bills/
 │   ├── src/
 │   │   ├── components/         # Reusable UI components
 │   │   │   ├── common/         # Live database indicator banner
-│   │   │   ├── dashboard/      # Stat cards & PostgreSQL metrics grid
+│   │   │   ├── dashboard/      # Stat cards, metrics grid, reporting window toolbar
 │   │   │   ├── invoices/       # Invoice table, status badges & empty state
 │   │   │   ├── layout/         # Collapsible sidebar, navbar & app layout
 │   │   │   ├── modals/         # NewInvoiceModal, RecordPaymentModal, InvoicePreviewModal
@@ -31,7 +31,7 @@ viora-bills/
 │
 ├── server/                     # Backend Application (Node.js, Express, TypeScript, Prisma, PDFKit)
 │   ├── prisma/
-│   │   ├── schema.prisma       # PostgreSQL schema with GST tax breakdown & audit snapshots
+│   │   ├── schema.prisma       # PostgreSQL schema with GST tax breakdown, Payment model & audit snapshots
 │   │   ├── seed.ts             # Database seed script for initial master records
 │   │   └── migrations/         # Prisma migration history
 │   ├── src/
@@ -46,7 +46,7 @@ viora-bills/
 │   │   ├── utils/              # Decimal-safe math (money.ts), response envelope, business helper
 │   │   ├── app.ts              # Express application factory
 │   │   └── index.ts            # Server entrypoint with graceful shutdown
-│   ├── test-endpoints.ts       # 16-scenario comprehensive automated verification test suite
+│   ├── test-endpoints.ts       # 31-scenario comprehensive automated verification test suite (Phase 3 + Phase 4)
 │   ├── package.json            # Server scripts & dependencies
 │   └── tsconfig.json           # Server TypeScript configuration
 │
@@ -57,116 +57,54 @@ viora-bills/
 
 ---
 
-## 📐 GST Calculation Engine & Billing Rules
+## 💳 Payment Tracking & Concurrency Architecture
 
-All calculations are executed server-side using PostgreSQL `NUMERIC(12, 2)` / `Prisma.Decimal` and `decimal.js`. JavaScript native floating-point math is never used.
+### 1. Payment Lifecycle & Derivation
+Payment statuses are calculated server-side directly from persisted ledger transactions:
+- **`UNPAID`**: Total paid is ₹0.
+- **`PARTIALLY_PAID`**: $0 < \text{Total Paid} < \text{Invoice Grand Total}$.
+- **`PAID`**: $\text{Total Paid} \ge \text{Invoice Grand Total}$ (or zero-value invoice).
 
-### 1. Calculation Pipeline
-1. **Prices are tax-exclusive**: Unit price reflects the base pre-tax rate.
-2. **Gross Amount**: $\text{Gross} = \text{Quantity} \times \text{Unit Price}$.
-3. **Discounts Applied Before Tax**: Each line allows a fixed discount amount ($\text{Discount} \le \text{Gross}$).
-4. **Taxable Amount**: $\text{Taxable} = \text{Gross} - \text{Discount}$.
-5. **Tax Amount**: $\text{Tax} = \text{Taxable} \times \frac{\text{Tax Rate}}{100}$, rounded to 2 decimal places using `ROUND_HALF_UP`.
-6. **Line Total**: $\text{Line Total} = \text{Taxable} + \text{Tax}$.
-7. **Invoice Grand Total**: Sum of all line totals.
+### 2. Transaction Serialization & Row-Level Locking
+To prevent concurrent requests from overpaying an invoice or double-crediting balances:
+1. `SELECT id, "invoiceNumber", "grandTotal", status FROM "invoices" WHERE id = $1 FOR UPDATE` locks the invoice row inside an ACID transaction.
+2. The current balance is recalculated inside the transaction from persisted payments.
+3. The incoming payment amount is validated against the live remaining balance.
+4. If valid, the payment record is inserted and the transaction commits.
+5. If another request attempts to overpay concurrently, it is strictly rejected with `HTTP 400 ERR_OVERPAYMENT_REJECTED`.
 
-### 2. Configurable Indian GST Tax Breakdowns
-The engine dynamically determines the tax treatment based on Place of Supply comparison:
-- **Intra-State Supply** ($\text{Place of Supply} = \text{Business State}$):
-  - $\text{CGST Rate} = \frac{\text{Tax Rate}}{2}$
-  - $\text{SGST Rate} = \frac{\text{Tax Rate}}{2}$
-  - $\text{CGST Amount} = \text{round}_2\left(\frac{\text{Tax Amount}}{2}\right)$
-  - $\text{SGST Amount} = \text{Tax Amount} - \text{CGST Amount}$ *(prevents 1-paisa rounding divergence)*
-  - $\text{IGST} = 0$
-- **Inter-State Supply** ($\text{Place of Supply} \ne \text{Business State}$):
-  - $\text{IGST Rate} = \text{Tax Rate}$
-  - $\text{IGST Amount} = \text{Tax Amount}$
-  - $\text{CGST} = 0, \text{SGST} = 0$
-
-### 3. Specification Test Example
-- **Quantity**: 2
-- **Unit price**: ₹500.00
-- **Discount**: ₹100.00
-- **Tax rate**: 10%
-- **Computed**:
-  - $\text{Gross} = 2 \times 500 = \text{₹1,000.00}$
-  - $\text{Taxable} = 1000 - 100 = \text{₹900.00}$
-  - $\text{Tax} = 900 \times 10\% = \text{₹90.00}$
-  - $\text{Grand Total} = 900 + 90 = \text{₹990.00}$
+### 3. Duplicate Prevention via Idempotency Keys
+Every payment submission requires a stable `requestKey` with a unique database constraint:
+- Duplicate submissions return `HTTP 409 ERR_DUPLICATE_PAYMENT_REQUEST`.
+- Network retries never double-post payments or alter ledger balances.
 
 ---
 
-## 🗄️ Database Models & Snapshots
+## 📊 Dashboard Analytics & Sales Reports
 
-Schema located in [`server/prisma/schema.prisma`](file:///c:/Users/Vipul_kumawat/Documents/DataThon/Viora_Project/server/prisma/schema.prisma):
+### 1. Distinction Between Sales and Collections
+- **Total Sales**: Sum of issued invoice grand totals grouped by **invoice date** (drafts and cancelled invoices strictly excluded).
+- **Total Invoices**: Count of issued invoices in the reporting period.
+- **Total Payments Collected**: Sum of recorded payments grouped by **payment date**.
+- **Outstanding Payments**: Unsettled balances on issued invoices.
+- **Business Timezone**: Aggregations use `Asia/Kolkata` (Indian Standard Time, UTC+5:30) to avoid off-by-one UTC day boundary errors.
 
-1. **`Business`**: Name, logo, address, phone, email, GSTIN, state of origin, invoice prefix (`INV`), and sequence counter.
-2. **`Customer`**: Name, phone, email, billing address, GSTIN, state, soft-deletion status (`isArchived`).
-3. **`Product`**: Catalog item with name, description, unit (PCS, HRS, NOS, BOX, etc.), unit price, default tax rate, and active flag.
-4. **`Invoice`**:
-   - Lifecycle status: `DRAFT`, `ISSUED`, `CANCELLED`.
-   - Payment status: `UNPAID`, `PARTIALLY_PAID`, `PAID`.
-   - Place of supply and `isInterState` flag.
-   - Financial totals: `subtotal`, `discountTotal`, `taxableAmount`, `cgstTotal`, `sgstTotal`, `igstTotal`, `taxTotal`, `grandTotal`.
-   - **Immutable Snapshots**: Stores legal historical snapshots upon issuance (`customerNameSnapshot`, `customerAddressSnapshot`, `customerGstinSnapshot`, `customerStateSnapshot`, `businessNameSnapshot`, `businessGstinSnapshot`, `businessStateSnapshot`) so that editing master profiles never corrupts issued invoices.
-5. **`InvoiceItem`**: Line item record with unit, quantity, unit price, discount amount, taxable amount, tax rate, CGST/SGST/IGST breakdown, and line total.
-6. **`Payment`**: Immutable ledger entry with idempotency `requestKey` to prevent double-charging.
+### 2. Comparative Revenue Visualizations
+The Sales Reports view provides a visual dual-timeline chart contrasting invoiced receivables against actual cash collected, supporting day and month grouping.
 
 ---
 
-## 🖨️ PDF Generation & Print Support
+## 🧪 Automated Verification Suite (31 Scenarios)
 
-1. **Server-Side PDF Generation (`GET /api/invoices/:id/pdf`)**:
-   - Built with pure TypeScript `PDFKit` streaming vector engine.
-   - Clean A4 layout with navy header, teal accent line, company details, customer card, itemized table with discount and GST columns, summary card with tax breakdown, payment history ledger, and dynamic multi-page numbering (`Page X of Y`).
-   - Served with `Content-Type: application/pdf` and `Content-Disposition: inline; filename="invoice-INV-YYYY-XXXXXX.pdf"`.
-2. **Print Support**:
-   - Embedded `@media print` CSS stylesheet automatically hides application chrome, sidebars, buttons, and banners.
-   - Formatted for crisp physical printing on A4 paper with proper page margins.
+The test suite runs against the live PostgreSQL database (`npm run test:backend`):
 
----
-
-## 🌐 Complete REST API Reference
-
-| Scope | Method | Route | Description |
-|---|---|---|---|
-| **Health** | `GET` | `/api/health` | Backend and PostgreSQL connectivity status |
-| **Business** | `GET` | `/api/business` | Retrieve business profile and invoice numbering sequence |
-| | `PUT` | `/api/business` | Update business name, address, GSTIN, state, and prefix |
-| **Customers** | `GET` | `/api/customers` | Paginated search of customers with invoice counts |
-| | `POST` | `/api/customers` | Register customer with GSTIN, billing address, and state |
-| | `GET`, `PUT`, `DELETE` | `/api/customers/:id` | View, update, or soft-delete customer |
-| **Products** | `GET` | `/api/products` | Search product catalog with units and tax rates |
-| | `POST` | `/api/products` | Create product or service item |
-| | `GET`, `PUT`, `DELETE` | `/api/products/:id` | View, update, or soft-delete product item |
-| **Invoices** | `GET` | `/api/invoices` | List invoices with status, payment, search, and date filters |
-| | `POST` | `/api/invoices` | Create draft invoice with server-side GST calculations |
-| | `GET` | `/api/invoices/:id` | Fetch full invoice details, snapshots, items, and payments |
-| | `PUT` | `/api/invoices/:id` | Edit draft invoice items *(Strictly rejected if ISSUED)* |
-| | `POST` | `/api/invoices/:id/issue` | Atomically assign unique sequence number and lock snapshots |
-| | `GET` | `/api/invoices/:id/pdf` | Download official printable A4 vector PDF document |
-| | `POST` | `/api/invoices/:id/payments` | Record payment against invoice with overpayment guard |
-| **Payments** | `GET` | `/api/payments` | Retrieve complete payment audit log |
-| **Dashboard** | `GET` | `/api/dashboard/summary` | Real-time aggregate KPIs from PostgreSQL |
-| **Reports** | `GET` | `/api/reports/sales` | Sales and collections timeline grouped by day or month |
-
----
-
-## 🧪 Automated Verification Suite (16 Scenarios)
-
-The test suite in [`server/test-endpoints.ts`](file:///c:/Users/Vipul_kumawat/Documents/DataThon/Viora_Project/server/test-endpoints.ts) rigorously verifies every business requirement:
-
-```bash
-npm run test:backend
-```
-
-### Verified Test Cases:
-1. ✅ **Correct invoice totals**: 2 qty @ ₹500, ₹100 discount, 10% tax $\to$ Gross ₹1,000, Taxable ₹900, Tax ₹90, Grand Total ₹990.
-2. ✅ **Multiple products**: Computes multiple line items with different quantities and prices.
-3. ✅ **Mixed tax rates**: Validated across 0%, 5%, 18%, and 28% tax tiers.
-4. ✅ **Fixed discounts**: Applied before tax without floating-point distortion.
-5. ✅ **Fractional quantities**: 2.75 hours consulting @ ₹1,200.00 $\to$ exact ₹3,300 gross.
-6. ✅ **Rounding edge cases**: 1 @ ₹33.33 @ 18% tax $\to$ ₹5.9994 correctly rounded to ₹6.00 via `ROUND_HALF_UP`.
+### Phase 3 Tests:
+1. ✅ **Invoice totals calculation**: Spec item: Gross ₹1,000, Taxable ₹900, Tax ₹90, Grand Total ₹990.
+2. ✅ **Multiple products in single invoice**: Subtotal ₹4,000, Tax ₹594, Grand Total ₹4,294.
+3. ✅ **Intra-state GST tax split**: 50% CGST + 50% SGST with penny-safe rounding.
+4. ✅ **Inter-state GST tax split**: 100% IGST applied.
+5. ✅ **Zero-rate GST goods**: Tax ₹0.00, Grand Total ₹500.00.
+6. ✅ **Max discount validation**: 100% discount produces Tax ₹0.00, Grand Total ₹0.00.
 7. ✅ **Missing customer**: Rejected with `HTTP 404 ERR_CUSTOMER_NOT_FOUND`.
 8. ✅ **Empty invoice**: Zero items rejected with `HTTP 400 ERR_VALIDATION_ERROR`.
 9. ✅ **Invalid quantities**: Zero or negative quantities rejected with `HTTP 400`.
@@ -177,6 +115,23 @@ npm run test:backend
 14. ✅ **Prevention of issued invoice modification**: Editing an `ISSUED` invoice strictly rejected with `HTTP 400 ERR_INVOICE_NOT_DRAFT`.
 15. ✅ **PDF generation**: `GET /api/invoices/:id/pdf` returns valid binary stream starting with `%PDF-`.
 16. ✅ **Historical snapshot integrity**: Stored item price on invoice remains unchanged even after catalog product price is modified.
+
+### Phase 4 Tests:
+17. ✅ **No payment produces UNPAID**: Total ₹1,000, Paid ₹0, Balance ₹1,000.
+18. ✅ **Partial payment produces PARTIALLY_PAID**: Paid ₹400, Balance ₹600.
+19. ✅ **Final payment produces PAID**: Paid ₹1,000, Balance ₹0.
+20. ✅ **Outstanding balance arithmetic**: Reconciled as `grandTotal === totalPaid + balanceRemaining`.
+21. ✅ **Zero, negative, and malformed payment amounts**: Strictly rejected with `HTTP 400`.
+22. ✅ **Overpayment rejected**: Attempted ₹2,500 on ₹2,000 balance rejected with `HTTP 400 ERR_OVERPAYMENT_REJECTED`.
+23. ✅ **Duplicate idempotency keys**: Re-submitting same `requestKey` returns `HTTP 409 Conflict` and prevents double-posting.
+24. ✅ **Concurrent payment serialization**: Two simultaneous ₹1,000 requests on ₹1,500 balance accept exactly one and reject the other.
+25. ✅ **Draft invoices cannot receive payments**: Rejected with `HTTP 400 ERR_INVALID_INVOICE_STATUS`.
+26. ✅ **Dashboard sales exclude drafts**: Draft amounts excluded from total sales metric.
+27. ✅ **Sales attributed by invoice date**: Sales reported under invoice date period.
+28. ✅ **Collections attributed by payment date**: Payments reported under payment date period.
+29. ✅ **Daily and monthly aggregates reconcile**: Timeline sums equal summary aggregates and match database records.
+30. ✅ **Cross-boundary date filters**: Seamless filtering across month and year boundaries.
+31. ✅ **Empty database periods**: Produces valid empty summaries (0 sales, 0 collections, 0 invoices, zero NaN).
 
 ---
 
@@ -204,7 +159,7 @@ npm run dev:client   # Vite Frontend on http://localhost:5173
 
 ### 4. Run Verification Suite & Type Checks
 ```bash
-# Run backend verification suite
+# Run 31-scenario backend verification suite
 npm run test:backend
 
 # Run TypeScript type check across both workspaces

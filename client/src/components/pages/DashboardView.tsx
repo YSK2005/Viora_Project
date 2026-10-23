@@ -21,6 +21,7 @@ interface DashboardViewProps {
   onSimulateEmptyToggle: (val: boolean) => void;
   onNavigateToCustomers?: () => void;
   onNavigateToProducts?: () => void;
+  onDateRangeChange?: (startDate?: string, endDate?: string) => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -32,7 +33,40 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onSimulateEmptyToggle,
   onNavigateToCustomers,
   onNavigateToProducts,
+  onDateRangeChange,
 }) => {
+  const [selectedPreset, setSelectedPreset] = React.useState<'ALL' | 'TODAY' | 'MONTH' | 'CUSTOM'>('ALL');
+  const [customStart, setCustomStart] = React.useState('');
+  const [customEnd, setCustomEnd] = React.useState('');
+
+  const todayStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+
+  const monthStartStr = todayStr.slice(0, 7) + '-01';
+
+  const handlePresetSelect = (preset: 'ALL' | 'TODAY' | 'MONTH' | 'CUSTOM') => {
+    setSelectedPreset(preset);
+    if (preset === 'ALL') {
+      onDateRangeChange?.(undefined, undefined);
+    } else if (preset === 'TODAY') {
+      onDateRangeChange?.(todayStr, todayStr);
+    } else if (preset === 'MONTH') {
+      onDateRangeChange?.(monthStartStr, todayStr);
+    }
+  };
+
+  const handleApplyCustomDates = () => {
+    if (customStart || customEnd) {
+      onDateRangeChange?.(customStart || undefined, customEnd || undefined);
+    }
+  };
+
+  const isZeroData = summary && summary.metrics.totalInvoices.count === 0 && summary.metrics.totalInvoices.draftCount === 0;
+
   return (
     <div className="space-y-6">
       {/* Welcome & Quick Action Bar */}
@@ -44,11 +78,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </h2>
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-800 border border-teal-200">
               <Sparkles className="w-3 h-3 text-teal-600" />
-              Phase 2: Database Connected
+              Phase 4: Real-time Analytics Active
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1 max-w-2xl">
-            Live PostgreSQL database active. Invoices, customers, catalog items, and payment transactions are persisted and calculated with strict decimal precision.
+            Live PostgreSQL database active. Sales, collections, outstanding balances, and customer ledger entries are persisted and calculated with strict decimal precision.
           </p>
         </div>
 
@@ -62,6 +96,95 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Date Range Selector Toolbar */}
+      <div className="bg-white rounded-xl border border-slate-200/80 p-3.5 shadow-card flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-slate-600">Reporting Window:</span>
+          <div className="inline-flex rounded-lg bg-slate-100 p-0.5">
+            <button
+              onClick={() => handlePresetSelect('ALL')}
+              className={`px-3 py-1 rounded-md font-medium transition-colors ${
+                selectedPreset === 'ALL'
+                  ? 'bg-white text-navy-900 shadow-xs'
+                  : 'text-slate-600 hover:text-navy-900'
+              }`}
+            >
+              All Time
+            </button>
+            <button
+              onClick={() => handlePresetSelect('TODAY')}
+              className={`px-3 py-1 rounded-md font-medium transition-colors ${
+                selectedPreset === 'TODAY'
+                  ? 'bg-white text-navy-900 shadow-xs'
+                  : 'text-slate-600 hover:text-navy-900'
+              }`}
+            >
+              Today
+            </button>
+            <button
+              onClick={() => handlePresetSelect('MONTH')}
+              className={`px-3 py-1 rounded-md font-medium transition-colors ${
+                selectedPreset === 'MONTH'
+                  ? 'bg-white text-navy-900 shadow-xs'
+                  : 'text-slate-600 hover:text-navy-900'
+              }`}
+            >
+              This Month
+            </button>
+            <button
+              onClick={() => setSelectedPreset('CUSTOM')}
+              className={`px-3 py-1 rounded-md font-medium transition-colors ${
+                selectedPreset === 'CUSTOM'
+                  ? 'bg-white text-navy-900 shadow-xs'
+                  : 'text-slate-600 hover:text-navy-900'
+              }`}
+            >
+              Custom
+            </button>
+          </div>
+        </div>
+
+        {selectedPreset === 'CUSTOM' && (
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={customStart}
+              onChange={(e) => setCustomStart(e.target.value)}
+              className="px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+            />
+            <span className="text-slate-400">to</span>
+            <input
+              type="date"
+              value={customEnd}
+              onChange={(e) => setCustomEnd(e.target.value)}
+              className="px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+            />
+            <button
+              onClick={handleApplyCustomDates}
+              className="px-3 py-1 font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg"
+            >
+              Apply
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Empty Database Notice if applicable */}
+      {isZeroData && (
+        <div className="p-6 bg-slate-50 border border-slate-200 rounded-xl text-center">
+          <h4 className="text-sm font-semibold text-navy-900 mb-1">No invoices found for this reporting period</h4>
+          <p className="text-xs text-slate-500 max-w-md mx-auto mb-3">
+            All analytics and financial summaries reflect real persisted database records. Create and issue your first invoice to populate real-time sales and payment analytics.
+          </p>
+          <button
+            onClick={onNewInvoice}
+            className="px-3 py-1.5 text-xs font-semibold text-teal-700 bg-white border border-teal-300 hover:bg-teal-50 rounded-lg shadow-xs"
+          >
+            + Create New Invoice
+          </button>
+        </div>
+      )}
 
       {/* Overview Metric Cards (Real PostgreSQL Calculations) */}
       <section aria-label="Financial Overview">

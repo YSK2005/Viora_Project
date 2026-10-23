@@ -12,6 +12,7 @@ import {
   toDecimal,
 } from '../../utils/money';
 import { generateInvoicePdfStream, InvoicePdfData } from '../../services/pdf.service';
+import { createPaymentSchema, handleRecordPayment } from './payments.route';
 
 const router = Router();
 
@@ -661,10 +662,10 @@ router.post('/:id/issue', async (req: Request, res: Response, next: NextFunction
  */
 router.post(
   '/:id/payments',
+  validateRequest({ body: createPaymentSchema }),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
-      const { handleRecordPayment } = await import('./payments.route');
       const result = await handleRecordPayment(id, req.body);
       return sendSuccess(res, result, 'Payment recorded successfully', 201);
     } catch (error) {

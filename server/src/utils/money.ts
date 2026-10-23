@@ -215,7 +215,9 @@ export function derivePaymentStatus(
   const balanceRemaining = balance.isNegative() ? new Prisma.Decimal(0) : balance;
 
   let paymentStatus: PaymentStatus = 'UNPAID';
-  if (totalPaid.greaterThanOrEqualTo(total) && total.greaterThan(0)) {
+  if (total.isZero()) {
+    paymentStatus = 'PAID';
+  } else if (totalPaid.greaterThanOrEqualTo(total)) {
     paymentStatus = 'PAID';
   } else if (totalPaid.greaterThan(0)) {
     paymentStatus = 'PARTIALLY_PAID';
