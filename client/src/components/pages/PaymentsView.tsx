@@ -64,6 +64,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
+      minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(amt);
   };
@@ -308,6 +309,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page <= 1}
+                  aria-label="Previous page"
                   className="p-1 rounded border border-slate-200 hover:bg-slate-50 disabled:opacity-40"
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -318,6 +320,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                 <button
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page >= totalPages}
+                  aria-label="Next page"
                   className="p-1 rounded border border-slate-200 hover:bg-slate-50 disabled:opacity-40"
                 >
                   <ChevronRight className="w-4 h-4" />

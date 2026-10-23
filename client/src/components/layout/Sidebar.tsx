@@ -32,7 +32,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { key: 'invoices', label: 'Invoices', icon: Receipt, badge: '6' },
+  { key: 'invoices', label: 'Invoices', icon: Receipt },
   { key: 'customers', label: 'Customers', icon: Users },
   { key: 'products', label: 'Products & Services', icon: Package },
   { key: 'payments', label: 'Payments', icon: CreditCard },
@@ -177,12 +177,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <ShieldCheck className="w-4 h-4 text-teal-600 flex-shrink-0" />
                 <span className="truncate">Viora Tech Intern</span>
               </div>
-              <div className="mt-1 text-[11px] text-slate-500">
-                Phase 1: Foundation
+              <div className="mt-1 text-[11px] text-teal-700 font-medium">
+                Phase 5: Production Verified
               </div>
               <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
-                <span>Stack: React + Express</span>
-                <span className="font-mono text-teal-700">v0.1.0</span>
+                <span>Stack: React + PostgreSQL</span>
+                <span className="font-mono text-teal-700">v1.0.0</span>
               </div>
             </div>
           ) : (

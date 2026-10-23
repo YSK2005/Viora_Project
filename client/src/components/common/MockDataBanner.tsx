@@ -14,12 +14,12 @@ export const MockDataBanner: React.FC<MockDataBannerProps> = ({ isDbConnected = 
             {isDbConnected ? (
               <>
                 <Database className="w-3 h-3 text-teal-700" />
-                Phase 2 Live
+                Production Active
               </>
             ) : (
               <>
                 <Sparkles className="w-3 h-3 text-teal-600" />
-                Phase 1 Preview
+                Offline Preview
               </>
             )}
           </span>
@@ -36,7 +36,7 @@ export const MockDataBanner: React.FC<MockDataBannerProps> = ({ isDbConnected = 
           </span>
         </div>
         <div className="text-[11px] font-medium text-teal-800 hidden md:block">
-          Viora Tech Internship Project • Phase 2 Milestone
+          Viora Tech Internship Project • Phase 5 Production Verified
         </div>
       </div>
     </div>

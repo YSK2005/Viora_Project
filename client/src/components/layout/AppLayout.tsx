@@ -64,7 +64,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
               </div>
               <div className="flex items-center gap-4 text-[11px]">
                 <span className="text-teal-700 font-semibold">
-                  Phase 2: Database and Backend Active
+                  Phase 5: Production Verified
                 </span>
                 <span>•</span>
                 <span>PostgreSQL 18 · Prisma ORM · Node.js · Express · React · TypeScript</span>

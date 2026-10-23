@@ -18,6 +18,7 @@ import {
   Tag,
   ToggleLeft,
   ToggleRight,
+  FileEdit,
 } from 'lucide-react';
 
 export const ProductsView: React.FC = () => {
@@ -26,6 +27,7 @@ export const ProductsView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -56,23 +58,55 @@ export const ProductsView: React.FC = () => {
     return () => clearTimeout(timer);
   }, [loadData]);
 
-  const handleCreateProduct = async (e: React.FormEvent) => {
+  const handleOpenAddModal = () => {
+    setEditingProduct(null);
+    setName('');
+    setDescription('');
+    setUnit('PCS');
+    setUnitPrice('');
+    setTaxRate('18');
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEditModal = (p: Product) => {
+    setEditingProduct(p);
+    setName(p.name);
+    setDescription(p.description || '');
+    setUnit(p.unit || 'PCS');
+    setUnitPrice(String(p.unitPrice));
+    setTaxRate(String(p.taxRate ?? 18));
+    setIsModalOpen(true);
+  };
+
+  const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !unitPrice) return;
 
     setIsSubmitting(true);
     try {
-      await createProduct({
-        name: name.trim(),
-        description: description.trim() || undefined,
-        unit: unit.trim().toUpperCase(),
-        unitPrice: Number(unitPrice),
-        taxRate: Number(taxRate) || 0,
-      });
+      if (editingProduct) {
+        await updateProduct(editingProduct.id, {
+          name: name.trim(),
+          description: description.trim() || undefined,
+          unit: unit.trim().toUpperCase(),
+          unitPrice: Number(unitPrice),
+          taxRate: Number(taxRate) || 0,
+        });
+        setToastMessage('Product updated successfully');
+      } else {
+        await createProduct({
+          name: name.trim(),
+          description: description.trim() || undefined,
+          unit: unit.trim().toUpperCase(),
+          unitPrice: Number(unitPrice),
+          taxRate: Number(taxRate) || 0,
+        });
+        setToastMessage('Product created successfully');
+      }
 
-      setToastMessage('Product created successfully');
       setTimeout(() => setToastMessage(null), 3000);
       setIsModalOpen(false);
+      setEditingProduct(null);
       setName('');
       setDescription('');
       setUnit('PCS');
@@ -80,7 +114,7 @@ export const ProductsView: React.FC = () => {
       setTaxRate('18');
       loadData();
     } catch (err: any) {
-      alert(`Error creating product: ${err.message}`);
+      alert(`Error saving product: ${err.message}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -116,6 +150,7 @@ export const ProductsView: React.FC = () => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
+      minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(amt);
   };
@@ -145,7 +180,7 @@ export const ProductsView: React.FC = () => {
         </div>
 
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={handleOpenAddModal}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white shadow-sm transition-all hover:shadow"
         >
           <Plus className="w-4 h-4" />
@@ -200,7 +235,7 @@ export const ProductsView: React.FC = () => {
               : 'Add items or services to easily populate your invoices.'}
           </p>
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={handleOpenAddModal}
             className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm"
           >
             <Plus className="w-4 h-4" />
@@ -266,13 +301,24 @@ export const ProductsView: React.FC = () => {
                       </button>
                     </td>
                     <td className="py-3.5 px-4 sm:px-6 text-right">
-                      <button
-                        onClick={() => handleDelete(p)}
-                        title="Delete or Archive Product"
-                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => handleOpenEditModal(p)}
+                          title="Edit Product Details"
+                          aria-label={`Edit ${p.name}`}
+                          className="p-1.5 text-slate-400 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition-colors"
+                        >
+                          <FileEdit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(p)}
+                          title="Delete or Archive Product"
+                          aria-label={`Delete ${p.name}`}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -292,19 +338,26 @@ export const ProductsView: React.FC = () => {
                   <Package className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-900">Add Product or Service</h3>
-                  <p className="text-[11px] text-slate-500">Persisted in PostgreSQL database catalog</p>
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    {editingProduct ? 'Edit Product / Service' : 'Add Product or Service'}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    {editingProduct ? 'Updates reflected in future invoices (issued invoices unchanged)' : 'Persisted in PostgreSQL database catalog'}
+                  </p>
                 </div>
               </div>
               <button
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setEditingProduct(null);
+                }}
                 className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateProduct} className="p-6 space-y-4">
+            <form onSubmit={handleSaveProduct} className="p-6 space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Product / Service Name <span className="text-rose-500">*</span>
@@ -389,7 +442,10 @@ export const ProductsView: React.FC = () => {
               <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setEditingProduct(null);
+                  }}
                   className="px-4 py-2 text-xs font-medium text-slate-600 hover:text-slate-800 bg-slate-100 rounded-lg"
                 >
                   Cancel
@@ -399,7 +455,7 @@ export const ProductsView: React.FC = () => {
                   disabled={isSubmitting}
                   className="px-4 py-2 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Saving...' : 'Save Product'}
+                  {isSubmitting ? 'Saving...' : editingProduct ? 'Save Changes' : 'Save Product'}
                 </button>
               </div>
             </form>

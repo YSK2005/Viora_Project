@@ -356,6 +356,9 @@ router.post(
       if (!customer) {
         throw new AppError('Customer not found', 404, 'ERR_CUSTOMER_NOT_FOUND');
       }
+      if (customer.isArchived) {
+        throw new AppError('Cannot create an invoice for an archived customer', 400, 'ERR_CUSTOMER_ARCHIVED');
+      }
 
       // Validate dates
       const invDateObj = new Date(invoiceDate);
@@ -490,6 +493,9 @@ router.put(
       const customer = await prisma.customer.findUnique({ where: { id: customerId } });
       if (!customer) {
         throw new AppError('Customer not found', 404, 'ERR_CUSTOMER_NOT_FOUND');
+      }
+      if (customer.isArchived) {
+        throw new AppError('Cannot update an invoice with an archived customer', 400, 'ERR_CUSTOMER_ARCHIVED');
       }
 
       const business = existing.business;

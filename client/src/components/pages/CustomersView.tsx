@@ -3,6 +3,7 @@ import { Customer } from '../../types';
 import {
   fetchCustomers,
   createCustomer,
+  updateCustomer,
   deleteCustomer,
 } from '../../services/api';
 import {
@@ -18,6 +19,7 @@ import {
   FileText,
   X,
   CheckCircle2,
+  FileEdit,
 } from 'lucide-react';
 
 export const CustomersView: React.FC = () => {
@@ -26,6 +28,7 @@ export const CustomersView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -56,23 +59,55 @@ export const CustomersView: React.FC = () => {
     return () => clearTimeout(timer);
   }, [loadData]);
 
-  const handleCreateCustomer = async (e: React.FormEvent) => {
+  const handleOpenAddModal = () => {
+    setEditingCustomer(null);
+    setName('');
+    setPhone('');
+    setEmail('');
+    setBillingAddress('');
+    setGstin('');
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEditModal = (c: Customer) => {
+    setEditingCustomer(c);
+    setName(c.name);
+    setPhone(c.phone);
+    setEmail(c.email || '');
+    setBillingAddress(c.billingAddress);
+    setGstin(c.gstin || '');
+    setIsModalOpen(true);
+  };
+
+  const handleSaveCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !phone.trim() || !billingAddress.trim()) return;
 
     setIsSubmitting(true);
     try {
-      await createCustomer({
-        name: name.trim(),
-        phone: phone.trim(),
-        email: email.trim() || undefined,
-        billingAddress: billingAddress.trim(),
-        gstin: gstin.trim() || undefined,
-      });
+      if (editingCustomer) {
+        await updateCustomer(editingCustomer.id, {
+          name: name.trim(),
+          phone: phone.trim(),
+          email: email.trim() || undefined,
+          billingAddress: billingAddress.trim(),
+          gstin: gstin.trim() || undefined,
+        });
+        setToastMessage('Customer details updated successfully');
+      } else {
+        await createCustomer({
+          name: name.trim(),
+          phone: phone.trim(),
+          email: email.trim() || undefined,
+          billingAddress: billingAddress.trim(),
+          gstin: gstin.trim() || undefined,
+        });
+        setToastMessage('Customer created successfully');
+      }
 
-      setToastMessage('Customer created successfully');
       setTimeout(() => setToastMessage(null), 3000);
       setIsModalOpen(false);
+      setEditingCustomer(null);
       setName('');
       setPhone('');
       setEmail('');
@@ -80,7 +115,7 @@ export const CustomersView: React.FC = () => {
       setGstin('');
       loadData();
     } catch (err: any) {
-      alert(`Error creating customer: ${err.message}`);
+      alert(`Error saving customer: ${err.message}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -129,7 +164,7 @@ export const CustomersView: React.FC = () => {
         </div>
 
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={handleOpenAddModal}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white shadow-sm transition-all hover:shadow"
         >
           <Plus className="w-4 h-4" />
@@ -184,7 +219,7 @@ export const CustomersView: React.FC = () => {
               : 'Add your first customer to start creating professional GST invoices.'}
           </p>
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={handleOpenAddModal}
             className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm"
           >
             <Plus className="w-4 h-4" />
@@ -250,13 +285,24 @@ export const CustomersView: React.FC = () => {
                       </span>
                     </td>
                     <td className="py-3.5 px-4 sm:px-6 text-right">
-                      <button
-                        onClick={() => handleDelete(c)}
-                        title="Delete or Archive Customer"
-                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => handleOpenEditModal(c)}
+                          title="Edit Customer Details"
+                          aria-label={`Edit ${c.name}`}
+                          className="p-1.5 text-slate-400 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition-colors"
+                        >
+                          <FileEdit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(c)}
+                          title="Delete or Archive Customer"
+                          aria-label={`Delete ${c.name}`}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -266,7 +312,7 @@ export const CustomersView: React.FC = () => {
         </div>
       )}
 
-      {/* Add Customer Modal */}
+      {/* Add / Edit Customer Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/40 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="bg-white rounded-2xl shadow-popover border border-slate-200/90 w-full max-w-lg overflow-hidden">
@@ -276,19 +322,26 @@ export const CustomersView: React.FC = () => {
                   <Users className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-900">Add New Customer</h3>
-                  <p className="text-[11px] text-slate-500">Persisted directly in PostgreSQL database</p>
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    {editingCustomer ? 'Edit Customer Details' : 'Add New Customer'}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    {editingCustomer ? 'Updates reflected across future invoices' : 'Persisted directly in PostgreSQL database'}
+                  </p>
                 </div>
               </div>
               <button
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setEditingCustomer(null);
+                }}
                 className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateCustomer} className="p-6 space-y-4">
+            <form onSubmit={handleSaveCustomer} className="p-6 space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Customer / Business Name <span className="text-rose-500">*</span>
@@ -362,7 +415,10 @@ export const CustomersView: React.FC = () => {
               <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setEditingCustomer(null);
+                  }}
                   className="px-4 py-2 text-xs font-medium text-slate-600 hover:text-slate-800 bg-slate-100 rounded-lg"
                 >
                   Cancel
@@ -372,7 +428,7 @@ export const CustomersView: React.FC = () => {
                   disabled={isSubmitting}
                   className="px-4 py-2 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Saving...' : 'Save Customer'}
+                  {isSubmitting ? 'Saving...' : editingCustomer ? 'Save Changes' : 'Save Customer'}
                 </button>
               </div>
             </form>

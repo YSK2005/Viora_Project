@@ -243,7 +243,7 @@ export const SettingsView: React.FC = () => {
                   className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
                 />
                 <span className="text-[11px] text-slate-400 mt-1 block">
-                  Example generated format: <code className="text-teal-700 font-bold">{invoicePrefix}-1001</code>
+                  Example generated format: <code className="text-teal-700 font-bold">{invoicePrefix || 'INV'}-{new Date().getFullYear()}-000001</code>
                 </span>
               </div>
 

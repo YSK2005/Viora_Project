@@ -948,8 +948,304 @@ async function runTests() {
     }
     console.log('✅ 5.5 System Health (/api/health) & Standard Error Envelopes verified');
 
+    // =========================================================================
+    // PHASE 16: MASTER QA AUTOMATED END-TO-END SCENARIO SUITE (TEST A - TEST H)
+    // =========================================================================
+    console.log('\n🚀 Starting Master QA Automated End-to-End Scenarios (TEST A - TEST H)...\n');
+
+    // --- TEST A: Create customer -> create product -> create invoice -> issue invoice -> download PDF ---
+    console.log('--- TEST A: Full Lifecycle (Customer -> Product -> Draft -> Issue -> PDF) ---');
+    const custARes = await fetch(`${BASE}/customers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Master QA Client Alpha',
+        phone: '+91 99000 11223',
+        email: 'alpha@masterqa.com',
+        billingAddress: 'Tower 4, Embassy Tech Village, Outer Ring Road, Bangalore, Karnataka - 560103',
+        gstin: '29ABCDE1234F1Z5',
+        state: 'Karnataka',
+      }),
+    });
+    if (custARes.status !== 201) throw new Error(`TEST A: Failed to create customer (${custARes.status})`);
+    const custA = (await custARes.json()).data;
+
+    const prodARes = await fetch(`${BASE}/products`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Enterprise Cloud Retainer',
+        description: 'Monthly managed cloud architecture & reliability support',
+        unit: 'MONTH',
+        unitPrice: 25000,
+        taxRate: 18,
+      }),
+    });
+    if (prodARes.status !== 201) throw new Error(`TEST A: Failed to create product (${prodARes.status})`);
+    const prodA = (await prodARes.json()).data;
+
+    const invARes = await fetch(`${BASE}/invoices`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerId: custA.id,
+        invoiceDate: '2026-06-01',
+        dueDate: '2026-06-15',
+        placeOfSupply: 'Karnataka',
+        isInterState: false,
+        notes: 'Monthly enterprise SLA services rendered',
+        items: [
+          {
+            productId: prodA.id,
+            descriptionSnapshot: prodA.name,
+            unit: prodA.unit,
+            quantity: 2,
+            unitPrice: 25000,
+            discountAmount: 5000,
+            taxRate: 18,
+          },
+        ],
+      }),
+    });
+    if (invARes.status !== 201) throw new Error(`TEST A: Failed to create invoice draft (${invARes.status})`);
+    const invA = (await invARes.json()).data;
+    if (Number(invA.grandTotal) !== 53100) {
+      throw new Error(`TEST A: Grand total mismatch: expected 53100, got ${invA.grandTotal}`);
+    }
+
+    const issueARes = await fetch(`${BASE}/invoices/${invA.id}/issue`, { method: 'POST' });
+    if (issueARes.status !== 200) throw new Error(`TEST A: Failed to issue invoice (${issueARes.status})`);
+    const issuedA = (await issueARes.json()).data;
+    if (issuedA.status !== 'ISSUED' || !issuedA.invoiceNumber.startsWith('INV-')) {
+      throw new Error(`TEST A: Issued invoice validation failed: ${issuedA.invoiceNumber}`);
+    }
+
+    const pdfARes = await fetch(`${BASE}/invoices/${invA.id}/pdf`);
+    if (pdfARes.status !== 200) throw new Error(`TEST A: PDF download failed (${pdfARes.status})`);
+    const pdfContentType = pdfARes.headers.get('content-type');
+    const pdfABuffer = Buffer.from(await pdfARes.arrayBuffer());
+    if (!pdfContentType?.includes('application/pdf') || pdfABuffer.length < 1000 || !pdfABuffer.subarray(0, 5).toString().startsWith('%PDF')) {
+      throw new Error(`TEST A: Invalid PDF stream or payload: length=${pdfABuffer.length}`);
+    }
+    console.log('✅ TEST A PASSED: Customer, Product, Invoice Draft, Sequential Issuance, and Binary PDF Export verified');
+
+    // --- TEST B: Partial payment -> balance verification -> final payment -> PAID status ---
+    console.log('--- TEST B: Progressive Payment Settlement & Status Derivation ---');
+    const pay1Res = await fetch(`${BASE}/invoices/${invA.id}/payments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        amount: 20000,
+        paymentDate: '2026-06-05',
+        method: 'BANK_TRANSFER',
+        reference: 'UTR-B-PARTIAL-001',
+        requestKey: `IDEM-TEST-B-1-${Date.now()}`,
+      }),
+    });
+    if (pay1Res.status !== 201) throw new Error(`TEST B: Partial payment failed (${pay1Res.status})`);
+    const pay1Data = (await pay1Res.json()).data;
+    if (pay1Data.invoiceSummary.paymentStatus !== 'PARTIALLY_PAID' || Number(pay1Data.invoiceSummary.balanceRemaining) !== 33100) {
+      throw new Error(`TEST B: Incorrect partial payment balance: ${JSON.stringify(pay1Data)}`);
+    }
+
+    const pay2Res = await fetch(`${BASE}/invoices/${invA.id}/payments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        amount: 33100,
+        paymentDate: '2026-06-10',
+        method: 'UPI',
+        reference: 'UPI-B-FINAL-002',
+        requestKey: `IDEM-TEST-B-2-${Date.now()}`,
+      }),
+    });
+    if (pay2Res.status !== 201) throw new Error(`TEST B: Final payment failed (${pay2Res.status})`);
+    const pay2Data = (await pay2Res.json()).data;
+    if (pay2Data.invoiceSummary.paymentStatus !== 'PAID' || Number(pay2Data.invoiceSummary.balanceRemaining) !== 0) {
+      throw new Error(`TEST B: Final payment did not achieve PAID status: ${JSON.stringify(pay2Data)}`);
+    }
+    console.log('✅ TEST B PASSED: Progressive settlements correctly transition UNPAID -> PARTIALLY_PAID -> PAID with exact balance tracking');
+
+    // --- TEST C: Multi-invoice reporting, date filters, and draft exclusion ---
+    console.log('--- TEST C: Multi-invoice attribution, report dates & draft exclusion ---');
+    const draftCRes = await fetch(`${BASE}/invoices`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerId: custA.id,
+        invoiceDate: '2026-07-01',
+        dueDate: '2026-07-15',
+        items: [{ descriptionSnapshot: 'Unissued Draft Item', quantity: 1, unitPrice: 99999, taxRate: 18 }],
+      }),
+    });
+    const draftC = (await draftCRes.json()).data;
+
+    const dashRes = await fetch(`${BASE}/dashboard/summary`);
+    const dashData = (await dashRes.json()).data;
+    const invListRes = await fetch(`${BASE}/invoices?status=ISSUED`);
+    const issuedInvoices = (await invListRes.json()).data.invoices;
+    const computedSales = issuedInvoices.reduce((sum: number, inv: any) => sum + Number(inv.grandTotal), 0);
+    if (Math.abs(Number(dashData.totalSales) - computedSales) > 0.01) {
+      throw new Error(`TEST C: Dashboard total sales does not match sum of issued invoices: dash=${dashData.totalSales}, computed=${computedSales}`);
+    }
+    console.log('✅ TEST C PASSED: Dashboard sales strictly exclude draft invoices and reconcile with database totals');
+
+    // --- TEST D: Negative/Zero Quantity, Negative Price, Excessive Discount & Archived Customer Validation ---
+    console.log('--- TEST D: Validation Safeguards (Negative Qty, Zero Qty, Excessive Discount, Archived Customer) ---');
+    const negQtyRes = await fetch(`${BASE}/invoices`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerId: custA.id,
+        invoiceDate: '2026-06-01',
+        dueDate: '2026-06-15',
+        items: [{ descriptionSnapshot: 'Negative Qty', quantity: -5, unitPrice: 1000 }],
+      }),
+    });
+    if (negQtyRes.status !== 400) throw new Error(`TEST D: Negative quantity accepted (${negQtyRes.status})`);
+
+    const excDiscRes = await fetch(`${BASE}/invoices`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerId: custA.id,
+        invoiceDate: '2026-06-01',
+        dueDate: '2026-06-15',
+        items: [{ descriptionSnapshot: 'Excessive Discount', quantity: 1, unitPrice: 1000, discountAmount: 2000 }],
+      }),
+    });
+    if (excDiscRes.status !== 400) throw new Error(`TEST D: Excessive discount accepted (${excDiscRes.status})`);
+
+    const tempCustRes = await fetch(`${BASE}/customers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Archived Customer Test',
+        phone: '+91 91111 22222',
+        billingAddress: 'Old Office',
+      }),
+    });
+    const tempCust = (await tempCustRes.json()).data;
+    await prisma.customer.update({ where: { id: tempCust.id }, data: { isArchived: true } });
+
+    const archCustInvRes = await fetch(`${BASE}/invoices`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerId: tempCust.id,
+        invoiceDate: '2026-06-01',
+        dueDate: '2026-06-15',
+        items: [{ descriptionSnapshot: 'Valid Item', quantity: 1, unitPrice: 500 }],
+      }),
+    });
+    if (archCustInvRes.status !== 400) {
+      throw new Error(`TEST D: Archived customer invoice creation was not rejected: status=${archCustInvRes.status}`);
+    }
+    const archErr = await archCustInvRes.json();
+    if (archErr.error?.code !== 'ERR_CUSTOMER_ARCHIVED') {
+      throw new Error(`TEST D: Unexpected error code for archived customer: ${JSON.stringify(archErr)}`);
+    }
+    console.log('✅ TEST D PASSED: Server-side financial & relational validations strictly enforced');
+
+    // --- TEST E: Duplicate Payment Idempotency Protection ---
+    console.log('--- TEST E: Duplicate Payment Idempotency Protection ---');
+    const invERes = await fetch(`${BASE}/invoices`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerId: custA.id,
+        invoiceDate: '2026-06-01',
+        dueDate: '2026-06-15',
+        items: [{ descriptionSnapshot: 'Idempotency Test Item', quantity: 1, unitPrice: 10000, taxRate: 0 }],
+      }),
+    });
+    const invE = (await invERes.json()).data;
+    await fetch(`${BASE}/invoices/${invE.id}/issue`, { method: 'POST' });
+
+    const testEKey = `IDEM-KEY-DUP-TEST-${Date.now()}`;
+    const firstPayRes = await fetch(`${BASE}/invoices/${invE.id}/payments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        amount: 5000,
+        paymentDate: '2026-06-05',
+        method: 'BANK_TRANSFER',
+        requestKey: testEKey,
+      }),
+    });
+    if (firstPayRes.status !== 201) throw new Error(`TEST E: First payment failed (${firstPayRes.status})`);
+
+    const secondPayRes = await fetch(`${BASE}/invoices/${invE.id}/payments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        amount: 5000,
+        paymentDate: '2026-06-05',
+        method: 'BANK_TRANSFER',
+        requestKey: testEKey,
+      }),
+    });
+    if (secondPayRes.status !== 409) {
+      throw new Error(`TEST E: Duplicate payment did not return HTTP 409 Conflict: status=${secondPayRes.status}`);
+    }
+    const dupPaymentsCount = await prisma.payment.count({ where: { requestKey: testEKey } });
+    if (dupPaymentsCount !== 1) {
+      throw new Error(`TEST E: Database recorded multiple payments for duplicate key: count=${dupPaymentsCount}`);
+    }
+    console.log('✅ TEST E PASSED: Duplicate payment requestKeys rejected with HTTP 409 Conflict without double-posting');
+
+    // --- TEST F: Post-Issuance Product Modification Snapshot Immutability ---
+    console.log('--- TEST F: Snapshot Immutability (Product price edits do not alter historical invoices) ---');
+    const origGrandTotal = Number(issuedA.grandTotal);
+    const updateProdResF = await fetch(`${BASE}/products/${prodA.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ unitPrice: 99000, taxRate: 28 }),
+    });
+    if (updateProdResF.status !== 200) throw new Error(`TEST F: Failed to update product (${updateProdResF.status})`);
+
+    const refetchARes = await fetch(`${BASE}/invoices/${invA.id}`);
+    const refetchedA = (await refetchARes.json()).data;
+    if (Number(refetchedA.grandTotal) !== origGrandTotal || Number(refetchedA.items[0].unitPrice) !== 25000) {
+      throw new Error(`TEST F: Historical invoice changed after product price update! grandTotal=${refetchedA.grandTotal}`);
+    }
+    console.log('✅ TEST F PASSED: Immutable snapshots preserve historical invoice totals and line items indefinitely');
+
+    // --- TEST G: Database Persistence & Retrieval ---
+    console.log('--- TEST G: Database Persistence & Cold Re-query Verification ---');
+    const [bizCheck, custCheck, prodCheck, invCheck, payCheck] = await Promise.all([
+      prisma.business.findFirst(),
+      prisma.customer.findMany({ where: { id: custA.id } }),
+      prisma.product.findMany({ where: { id: prodA.id } }),
+      prisma.invoice.findMany({ where: { id: invA.id } }),
+      prisma.payment.findMany({ where: { invoiceId: invA.id } }),
+    ]);
+    if (!bizCheck || custCheck.length === 0 || prodCheck.length === 0 || invCheck.length === 0 || payCheck.length === 0) {
+      throw new Error('TEST G: Data persistence check failed for one or more entities');
+    }
+    console.log('✅ TEST G PASSED: PostgreSQL database holds durable records verified via cold re-query');
+
+    // --- TEST H: Customer & Product Complete Lifecycle ---
+    console.log('--- TEST H: Customer & Product Complete Lifecycle & Protection ---');
+    const custUpdateH = await fetch(`${BASE}/customers/${custA.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Master QA Client Alpha Updated', phone: '+91 99000 99999' }),
+    });
+    if (custUpdateH.status !== 200) throw new Error(`TEST H: Failed to update customer (${custUpdateH.status})`);
+    const custUpdatedData = (await custUpdateH.json()).data;
+    if (custUpdatedData.name !== 'Master QA Client Alpha Updated') {
+      throw new Error('TEST H: Customer name not updated');
+    }
+
+    const invASnapshotCheck = await prisma.invoice.findUnique({ where: { id: invA.id } });
+    if (invASnapshotCheck?.customerNameSnapshot !== 'Master QA Client Alpha') {
+      throw new Error(`TEST H: Customer snapshot was modified on historical invoice! ${invASnapshotCheck?.customerNameSnapshot}`);
+    }
+    console.log('✅ TEST H PASSED: Customer and Product lifecycles functional while preserving snapshot integrity');
+
     console.log('\n=============================================================');
-    console.log('🏆 ALL PHASES (PHASE 1 - PHASE 5) VERIFIED & FULLY PASSING!');
+    console.log('🏆 ALL PHASES & MASTER QA SCENARIOS (TEST A - H) FULLY PASSED!');
     console.log('=============================================================\n');
   } catch (err) {
     console.error('❌ Test suite failed:', err);

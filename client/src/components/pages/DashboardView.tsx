@@ -78,7 +78,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </h2>
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-800 border border-teal-200">
               <Sparkles className="w-3 h-3 text-teal-600" />
-              Phase 4: Real-time Analytics Active
+              Real-time Analytics Active
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1 max-w-2xl">
