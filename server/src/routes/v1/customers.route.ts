@@ -14,6 +14,7 @@ const createCustomerSchema = z.object({
   email: z.string().email('Invalid email address').optional().nullable(),
   billingAddress: z.string().min(3, 'Billing address must be at least 3 characters'),
   gstin: z.string().optional().nullable(),
+  state: z.string().optional().nullable(),
 });
 
 const updateCustomerSchema = createCustomerSchema.partial();
@@ -140,6 +141,7 @@ router.post(
           email: req.body.email ? req.body.email.trim() : null,
           billingAddress: req.body.billingAddress.trim(),
           gstin: req.body.gstin ? req.body.gstin.trim() : null,
+          state: req.body.state ? req.body.state.trim() : 'Karnataka',
         },
       });
 
@@ -173,6 +175,7 @@ router.put(
           email: req.body.email !== undefined ? (req.body.email ? req.body.email.trim() : null) : undefined,
           billingAddress: req.body.billingAddress !== undefined ? req.body.billingAddress.trim() : undefined,
           gstin: req.body.gstin !== undefined ? (req.body.gstin ? req.body.gstin.trim() : null) : undefined,
+          state: req.body.state !== undefined ? (req.body.state ? req.body.state.trim() : null) : undefined,
         },
       });
 

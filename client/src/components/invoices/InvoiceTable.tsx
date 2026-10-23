@@ -11,7 +11,10 @@ import {
   SlidersHorizontal,
   CreditCard,
   SendHorizontal,
+  Download,
+  FileEdit,
 } from 'lucide-react';
+import { downloadInvoicePdf } from '../../services/api';
 
 interface InvoiceTableProps {
   invoices: Invoice[];
@@ -19,6 +22,7 @@ interface InvoiceTableProps {
   onNewInvoice?: () => void;
   onIssueInvoice?: (invoice: Invoice) => void;
   onRecordPayment?: (invoice: Invoice) => void;
+  onEditDraft?: (invoice: Invoice) => void;
   onSimulateEmptyToggle?: (isEmpty: boolean) => void;
   isSimulatedEmpty?: boolean;
 }
@@ -29,6 +33,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
   onNewInvoice,
   onIssueInvoice,
   onRecordPayment,
+  onEditDraft,
   onSimulateEmptyToggle,
   isSimulatedEmpty = false,
 }) => {
@@ -242,11 +247,37 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                       <button
                         type="button"
                         onClick={() => onSelectInvoice?.(inv)}
-                        title="View Details"
+                        title="Preview & Print"
                         className="p-1.5 text-slate-400 hover:text-teal-700 hover:bg-teal-50 rounded-md transition-colors"
                       >
                         <Eye className="w-4 h-4" />
                       </button>
+
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await downloadInvoicePdf(inv.id, inv.invoiceNumber);
+                          } catch (err: any) {
+                            alert(`Download error: ${err.message}`);
+                          }
+                        }}
+                        title="Download A4 PDF"
+                        className="p-1.5 text-slate-400 hover:text-teal-700 hover:bg-teal-50 rounded-md transition-colors"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+
+                      {inv.status === 'DRAFT' && onEditDraft && (
+                        <button
+                          type="button"
+                          onClick={() => onEditDraft(inv)}
+                          title="Edit Draft"
+                          className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors"
+                        >
+                          <FileEdit className="w-4 h-4" />
+                        </button>
+                      )}
 
                       {inv.status === 'DRAFT' && onIssueInvoice && (
                         <button

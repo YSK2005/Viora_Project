@@ -27,6 +27,7 @@ export const SettingsView: React.FC = () => {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [gstin, setGstin] = useState('');
+  const [state, setState] = useState('Karnataka');
   const [invoicePrefix, setInvoicePrefix] = useState('INV');
 
   const loadData = useCallback(async () => {
@@ -40,6 +41,7 @@ export const SettingsView: React.FC = () => {
       setPhone(data.phone || '');
       setEmail(data.email || '');
       setGstin(data.gstin || '');
+      setState(data.state || 'Karnataka');
       setInvoicePrefix(data.invoicePrefix || 'INV');
     } catch (err: any) {
       setError(err.message || 'Failed to load business profile');
@@ -65,6 +67,7 @@ export const SettingsView: React.FC = () => {
         phone: phone.trim(),
         email: email.trim(),
         gstin: gstin.trim() || null,
+        state: state.trim() || 'Karnataka',
         invoicePrefix: invoicePrefix.trim().toUpperCase(),
       });
       setBusiness(updated);
@@ -190,17 +193,32 @@ export const SettingsView: React.FC = () => {
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                GSTIN (Goods and Services Tax Identification Number)
-              </label>
-              <input
-                type="text"
-                value={gstin}
-                onChange={(e) => setGstin(e.target.value.toUpperCase())}
-                placeholder="29ABCDE1234F1Z5"
-                className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 max-w-sm"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  GSTIN (Tax Identification Number)
+                </label>
+                <input
+                  type="text"
+                  value={gstin}
+                  onChange={(e) => setGstin(e.target.value.toUpperCase())}
+                  placeholder="29ABCDE1234F1Z5"
+                  className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  State of Registration (for GST Supply Determination)
+                </label>
+                <input
+                  type="text"
+                  value={state}
+                  onChange={(e) => setState(e.target.value)}
+                  placeholder="Karnataka"
+                  className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                />
+              </div>
             </div>
           </div>
 

@@ -1,8 +1,8 @@
-# Viora Bills — Phase 2: Database and Backend
+# Viora Bills — Phase 3: Professional Invoice Generation, GST Calculations, PDF and Printing
 
-A web-based invoice and business billing application developed for the **Viora Tech** internship project.
+A modern, web-based invoice and business billing application developed for the **Viora Tech** internship project.
 
-This milestone completes **Phase 2: Database and Backend**, implementing a PostgreSQL database, Prisma ORM data modeling, decimal-safe financial arithmetic, ACID transactions, and a validated REST API connected to the React + Tailwind frontend.
+This milestone completes **Phase 3: Professional Invoice Generation, GST Calculations, PDF and Printing**, delivering an enterprise-ready invoice generation workflow, dynamic line items, configurable Indian GST tax breakdown (CGST, SGST, IGST), downloadable A4 vector PDF generation, clean print stylesheets, and historical audit snapshots.
 
 ---
 
@@ -18,21 +18,20 @@ viora-bills/
 │   │   │   ├── dashboard/      # Stat cards & PostgreSQL metrics grid
 │   │   │   ├── invoices/       # Invoice table, status badges & empty state
 │   │   │   ├── layout/         # Collapsible sidebar, navbar & app layout
-│   │   │   ├── modals/         # NewInvoiceModal & RecordPaymentModal
-│   │   │   └── pages/          # CustomersView, ProductsView, PaymentsView, ReportsView, SettingsView
-│   │   ├── services/api.ts     # Complete API client service
+│   │   │   ├── modals/         # NewInvoiceModal, RecordPaymentModal, InvoicePreviewModal
+│   │   │   └── pages/          # Invoices, Customers, Products, Payments, Reports, Settings
+│   │   ├── services/api.ts     # Complete API client service & PDF downloader
 │   │   ├── types/index.ts      # Strong TypeScript interfaces & enums
 │   │   ├── App.tsx             # Root application state & router coordinator
-│   │   ├── index.css           # Tailwind directives & design tokens
+│   │   ├── index.css           # Tailwind directives & @media print A4 stylesheet
 │   │   └── main.tsx            # React root mount
-│   ├── .env.example            # Client environment blueprint
 │   ├── package.json            # Client scripts & dependencies
 │   ├── tailwind.config.js      # Enterprise teal/navy palette
 │   └── vite.config.ts          # Vite bundler & backend reverse-proxy
 │
-├── server/                     # Backend Application (Node.js, Express, TypeScript, Prisma)
+├── server/                     # Backend Application (Node.js, Express, TypeScript, Prisma, PDFKit)
 │   ├── prisma/
-│   │   ├── schema.prisma       # PostgreSQL schema (6 core relational models)
+│   │   ├── schema.prisma       # PostgreSQL schema with GST tax breakdown & audit snapshots
 │   │   ├── seed.ts             # Database seed script for initial master records
 │   │   └── migrations/         # Prisma migration history
 │   ├── src/
@@ -43,11 +42,11 @@ viora-bills/
 │   │   │   ├── health.route.ts # Health check: GET /api/health
 │   │   │   ├── api.route.ts    # Aggregator router (/api/...)
 │   │   │   └── v1/             # Business, Customers, Products, Invoices, Payments, Dashboard, Reports
+│   │   ├── services/           # PDF Generation service (pdf.service.ts using PDFKit)
 │   │   ├── utils/              # Decimal-safe math (money.ts), response envelope, business helper
 │   │   ├── app.ts              # Express application factory
 │   │   └── index.ts            # Server entrypoint with graceful shutdown
-│   ├── test-endpoints.ts       # Automated 16-point integration test suite
-│   ├── .env.example            # Server environment template
+│   ├── test-endpoints.ts       # 16-scenario comprehensive automated verification test suite
 │   ├── package.json            # Server scripts & dependencies
 │   └── tsconfig.json           # Server TypeScript configuration
 │
@@ -58,169 +57,159 @@ viora-bills/
 
 ---
 
-## 🗄️ Database Models & Schema Design
+## 📐 GST Calculation Engine & Billing Rules
 
-The application uses PostgreSQL with Prisma ORM. Financial values use PostgreSQL `NUMERIC(12, 2)` / `NUMERIC(5, 2)` to avoid floating-point inaccuracies.
+All calculations are executed server-side using PostgreSQL `NUMERIC(12, 2)` / `Prisma.Decimal` and `decimal.js`. JavaScript native floating-point math is never used.
 
-### 1. `Business` (`businesses`)
-- Stores company coordinates, contact info, GSTIN, and sequential invoice numbering prefix.
-- Fields: `id`, `name`, `logoUrl`, `address`, `phone`, `email`, `gstin`, `invoicePrefix`, `nextInvoiceNumber`, timestamps.
+### 1. Calculation Pipeline
+1. **Prices are tax-exclusive**: Unit price reflects the base pre-tax rate.
+2. **Gross Amount**: $\text{Gross} = \text{Quantity} \times \text{Unit Price}$.
+3. **Discounts Applied Before Tax**: Each line allows a fixed discount amount ($\text{Discount} \le \text{Gross}$).
+4. **Taxable Amount**: $\text{Taxable} = \text{Gross} - \text{Discount}$.
+5. **Tax Amount**: $\text{Tax} = \text{Taxable} \times \frac{\text{Tax Rate}}{100}$, rounded to 2 decimal places using `ROUND_HALF_UP`.
+6. **Line Total**: $\text{Line Total} = \text{Taxable} + \text{Tax}$.
+7. **Invoice Grand Total**: Sum of all line totals.
 
-### 2. `Customer` (`customers`)
-- Manages client accounts, billing address, and tax identifiers.
-- Supports soft deletion (`isArchived: true`) if referenced by historical invoices.
-- Fields: `id`, `businessId`, `name`, `phone`, `email`, `billingAddress`, `gstin`, `isArchived`, timestamps.
+### 2. Configurable Indian GST Tax Breakdowns
+The engine dynamically determines the tax treatment based on Place of Supply comparison:
+- **Intra-State Supply** ($\text{Place of Supply} = \text{Business State}$):
+  - $\text{CGST Rate} = \frac{\text{Tax Rate}}{2}$
+  - $\text{SGST Rate} = \frac{\text{Tax Rate}}{2}$
+  - $\text{CGST Amount} = \text{round}_2\left(\frac{\text{Tax Amount}}{2}\right)$
+  - $\text{SGST Amount} = \text{Tax Amount} - \text{CGST Amount}$ *(prevents 1-paisa rounding divergence)*
+  - $\text{IGST} = 0$
+- **Inter-State Supply** ($\text{Place of Supply} \ne \text{Business State}$):
+  - $\text{IGST Rate} = \text{Tax Rate}$
+  - $\text{IGST Amount} = \text{Tax Amount}$
+  - $\text{CGST} = 0, \text{SGST} = 0$
 
-### 3. `Product` (`products`)
-- Catalog of goods and services with unit pricing and tax rate.
-- Supports soft deletion (`isArchived: true`) if referenced by historical invoices.
-- Fields: `id`, `businessId`, `name`, `description`, `unit`, `unitPrice` (`Decimal(12, 2)`), `taxRate` (`Decimal(5, 2)`), `isActive`, `isArchived`, timestamps.
-
-### 4. `Invoice` (`invoices`)
-- Main invoice header record.
-- Strict lifecycle status: `DRAFT`, `ISSUED`, `CANCELLED`.
-- Derived payment status: `UNPAID`, `PARTIALLY_PAID`, `PAID`.
-- Stores permanent historical snapshots of customer and business coordinates so past invoices never change if master records are edited.
-- Unique constraint: `[businessId, invoiceNumber]`.
-
-### 5. `InvoiceItem` (`invoice_items`)
-- Individual line items linked to invoice.
-- Stores historical snapshot of item description, unit price, quantity, discount, tax rate, taxable amount, and line total.
-
-### 6. `Payment` (`payments`)
-- Records incoming client settlements against issued invoices.
-- Unique idempotency constraint: `requestKey` to prevent duplicate submissions.
-- Fields: `id`, `invoiceId`, `amount` (`Decimal(12, 2)`), `paymentDate`, `method`, `reference`, `requestKey`, `createdAt`.
-
----
-
-## 📐 Business Rules & Financial Integrity
-
-1. **Decimal-Safe Precision**:
-   All financial arithmetic is computed using `Prisma.Decimal` and `decimal.js`. Calculations are rounded half-up to 2 decimal places. Floating-point arithmetic is never used for currency.
-2. **Server-Side Verification**:
-   All item totals, taxes, discounts, and invoice grand totals are strictly calculated on the server. Totals supplied by the client are ignored.
-3. **Draft-Only Edits**:
-   `PUT /api/invoices/:id` strictly allows editing only when the invoice status is `DRAFT`. Once issued (`ISSUED`), edits are rejected with `HTTP 400 Bad Request`.
-4. **Atomic Transactions**:
-   - `POST /api/invoices/:id/issue` runs in a transaction: generates the official sequential invoice number from the business counter, increments the counter, locks customer/business snapshots, and transitions status to `ISSUED`.
-   - `POST /api/invoices/:id/payments` runs in a transaction with overpayment checks.
-5. **Payment Safety**:
-   - Payments are only accepted on `ISSUED` invoices.
-   - Overpayments (`amount > balanceRemaining`) are rejected with `HTTP 400 Bad Request`.
-   - Duplicate payment requests are blocked via the unique `requestKey` constraint (`HTTP 409 Conflict`).
-6. **Separate Statuses**:
-   Invoice lifecycle status (`DRAFT`, `ISSUED`, `CANCELLED`) is distinct from payment status (`UNPAID`, `PARTIALLY_PAID`, `PAID`), which is derived dynamically from recorded payments.
-7. **Draft Exclusion from Sales Reports**:
-   `GET /api/reports/sales` and `GET /api/dashboard/summary` strictly exclude `DRAFT` and `CANCELLED` invoices from total sales and receivables. Sales by invoice date are kept separate from collections by payment date.
+### 3. Specification Test Example
+- **Quantity**: 2
+- **Unit price**: ₹500.00
+- **Discount**: ₹100.00
+- **Tax rate**: 10%
+- **Computed**:
+  - $\text{Gross} = 2 \times 500 = \text{₹1,000.00}$
+  - $\text{Taxable} = 1000 - 100 = \text{₹900.00}$
+  - $\text{Tax} = 900 \times 10\% = \text{₹90.00}$
+  - $\text{Grand Total} = 900 + 90 = \text{₹990.00}$
 
 ---
 
-## 📡 REST API Endpoints
+## 🗄️ Database Models & Snapshots
 
-### Business Profile
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/business` | Retrieve active business coordinates and invoice prefix |
-| `PUT` | `/api/business` | Update legal entity name, address, email, phone, and GSTIN |
+Schema located in [`server/prisma/schema.prisma`](file:///c:/Users/Vipul_kumawat/Documents/DataThon/Viora_Project/server/prisma/schema.prisma):
 
-### Customers
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/customers` | List customers (supports `?search=`, `?page=`, `?limit=`) |
-| `GET` | `/api/customers/:id` | Get customer profile with recent invoice history |
-| `POST` | `/api/customers` | Register new customer with billing address and GSTIN |
-| `PUT` | `/api/customers/:id` | Update customer details |
-| `DELETE` | `/api/customers/:id` | Soft delete / archive customer (preserves invoice integrity) |
-
-### Products & Services
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/products` | List catalog items (supports `?search=`, `?isActive=`) |
-| `GET` | `/api/products/:id` | Get product details |
-| `POST` | `/api/products` | Create catalog item with unit price and tax rate |
-| `PUT` | `/api/products/:id` | Update product pricing or toggle active state |
-| `DELETE` | `/api/products/:id` | Soft delete / archive product |
-
-### Invoices
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/invoices` | List invoices (supports `?status=`, `?paymentStatus=`, `?search=`, `?page=`) |
-| `GET` | `/api/invoices/:id` | Get full invoice with line items, snapshots, and payment history |
-| `POST` | `/api/invoices` | Create a draft invoice with server-computed totals |
-| `PUT` | `/api/invoices/:id` | Edit draft invoice (rejected if already ISSUED) |
-| `POST` | `/api/invoices/:id/issue` | Officially issue draft: assign sequential number & lock snapshots |
-
-### Payments
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/payments` | List payment audit log with date filters |
-| `POST` | `/api/invoices/:id/payments` | Record payment against issued invoice (with duplicate & overpay checks) |
-
-### Dashboard & Reports
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/dashboard/summary` | Real-time calculations: Total Sales, Invoices Count, Collections, and Outstanding |
-| `GET` | `/api/reports/sales` | Sales and Collections timelines (supports `?startDate=`, `?endDate=`, `?groupBy=day\|month`) |
-
-### System Health
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/health` | Service uptime, version, and PostgreSQL connection status |
+1. **`Business`**: Name, logo, address, phone, email, GSTIN, state of origin, invoice prefix (`INV`), and sequence counter.
+2. **`Customer`**: Name, phone, email, billing address, GSTIN, state, soft-deletion status (`isArchived`).
+3. **`Product`**: Catalog item with name, description, unit (PCS, HRS, NOS, BOX, etc.), unit price, default tax rate, and active flag.
+4. **`Invoice`**:
+   - Lifecycle status: `DRAFT`, `ISSUED`, `CANCELLED`.
+   - Payment status: `UNPAID`, `PARTIALLY_PAID`, `PAID`.
+   - Place of supply and `isInterState` flag.
+   - Financial totals: `subtotal`, `discountTotal`, `taxableAmount`, `cgstTotal`, `sgstTotal`, `igstTotal`, `taxTotal`, `grandTotal`.
+   - **Immutable Snapshots**: Stores legal historical snapshots upon issuance (`customerNameSnapshot`, `customerAddressSnapshot`, `customerGstinSnapshot`, `customerStateSnapshot`, `businessNameSnapshot`, `businessGstinSnapshot`, `businessStateSnapshot`) so that editing master profiles never corrupts issued invoices.
+5. **`InvoiceItem`**: Line item record with unit, quantity, unit price, discount amount, taxable amount, tax rate, CGST/SGST/IGST breakdown, and line total.
+6. **`Payment`**: Immutable ledger entry with idempotency `requestKey` to prevent double-charging.
 
 ---
 
-## 🛠️ Setup & Running
+## 🖨️ PDF Generation & Print Support
 
-### 1. Environment Configuration
+1. **Server-Side PDF Generation (`GET /api/invoices/:id/pdf`)**:
+   - Built with pure TypeScript `PDFKit` streaming vector engine.
+   - Clean A4 layout with navy header, teal accent line, company details, customer card, itemized table with discount and GST columns, summary card with tax breakdown, payment history ledger, and dynamic multi-page numbering (`Page X of Y`).
+   - Served with `Content-Type: application/pdf` and `Content-Disposition: inline; filename="invoice-INV-YYYY-XXXXXX.pdf"`.
+2. **Print Support**:
+   - Embedded `@media print` CSS stylesheet automatically hides application chrome, sidebars, buttons, and banners.
+   - Formatted for crisp physical printing on A4 paper with proper page margins.
 
-Backend configuration (`server/.env`):
-```env
-PORT=5000
-NODE_ENV=development
-CLIENT_URL=http://localhost:5173
-DATABASE_URL="postgresql://postgres@127.0.0.1:5433/viora_bills?schema=public"
-```
+---
 
-Frontend configuration (`client/.env`):
-```env
-VITE_API_URL=/api
-```
+## 🌐 Complete REST API Reference
 
-### 2. Database Migrations & Seeding
+| Scope | Method | Route | Description |
+|---|---|---|---|
+| **Health** | `GET` | `/api/health` | Backend and PostgreSQL connectivity status |
+| **Business** | `GET` | `/api/business` | Retrieve business profile and invoice numbering sequence |
+| | `PUT` | `/api/business` | Update business name, address, GSTIN, state, and prefix |
+| **Customers** | `GET` | `/api/customers` | Paginated search of customers with invoice counts |
+| | `POST` | `/api/customers` | Register customer with GSTIN, billing address, and state |
+| | `GET`, `PUT`, `DELETE` | `/api/customers/:id` | View, update, or soft-delete customer |
+| **Products** | `GET` | `/api/products` | Search product catalog with units and tax rates |
+| | `POST` | `/api/products` | Create product or service item |
+| | `GET`, `PUT`, `DELETE` | `/api/products/:id` | View, update, or soft-delete product item |
+| **Invoices** | `GET` | `/api/invoices` | List invoices with status, payment, search, and date filters |
+| | `POST` | `/api/invoices` | Create draft invoice with server-side GST calculations |
+| | `GET` | `/api/invoices/:id` | Fetch full invoice details, snapshots, items, and payments |
+| | `PUT` | `/api/invoices/:id` | Edit draft invoice items *(Strictly rejected if ISSUED)* |
+| | `POST` | `/api/invoices/:id/issue` | Atomically assign unique sequence number and lock snapshots |
+| | `GET` | `/api/invoices/:id/pdf` | Download official printable A4 vector PDF document |
+| | `POST` | `/api/invoices/:id/payments` | Record payment against invoice with overpayment guard |
+| **Payments** | `GET` | `/api/payments` | Retrieve complete payment audit log |
+| **Dashboard** | `GET` | `/api/dashboard/summary` | Real-time aggregate KPIs from PostgreSQL |
+| **Reports** | `GET` | `/api/reports/sales` | Sales and collections timeline grouped by day or month |
 
-```bash
-# Run migrations to sync PostgreSQL schema
-npm run prisma:migrate --workspace=server
+---
 
-# Seed master records (business, sample customers, products, sample invoice)
-npm run prisma:seed --workspace=server
-```
+## 🧪 Automated Verification Suite (16 Scenarios)
 
-### 3. Run Automated Backend Integration Tests
-
-Verify all 16 endpoint and validation rules live against the database:
+The test suite in [`server/test-endpoints.ts`](file:///c:/Users/Vipul_kumawat/Documents/DataThon/Viora_Project/server/test-endpoints.ts) rigorously verifies every business requirement:
 
 ```bash
 npm run test:backend
 ```
 
-### 4. Start the Application
+### Verified Test Cases:
+1. ✅ **Correct invoice totals**: 2 qty @ ₹500, ₹100 discount, 10% tax $\to$ Gross ₹1,000, Taxable ₹900, Tax ₹90, Grand Total ₹990.
+2. ✅ **Multiple products**: Computes multiple line items with different quantities and prices.
+3. ✅ **Mixed tax rates**: Validated across 0%, 5%, 18%, and 28% tax tiers.
+4. ✅ **Fixed discounts**: Applied before tax without floating-point distortion.
+5. ✅ **Fractional quantities**: 2.75 hours consulting @ ₹1,200.00 $\to$ exact ₹3,300 gross.
+6. ✅ **Rounding edge cases**: 1 @ ₹33.33 @ 18% tax $\to$ ₹5.9994 correctly rounded to ₹6.00 via `ROUND_HALF_UP`.
+7. ✅ **Missing customer**: Rejected with `HTTP 404 ERR_CUSTOMER_NOT_FOUND`.
+8. ✅ **Empty invoice**: Zero items rejected with `HTTP 400 ERR_VALIDATION_ERROR`.
+9. ✅ **Invalid quantities**: Zero or negative quantities rejected with `HTTP 400`.
+10. ✅ **Excessive discounts**: Discount exceeding gross amount rejected with `HTTP 400`.
+11. ✅ **Unique invoice numbering**: Sequential format `INV-YYYY-XXXXXX` assigned upon issuance.
+12. ✅ **Concurrent invoice issuance**: Atomic row update serialization guarantees zero collision or duplicate numbers under parallel issuance.
+13. ✅ **Draft editing**: `PUT /api/invoices/:id` updates items and recomputes totals.
+14. ✅ **Prevention of issued invoice modification**: Editing an `ISSUED` invoice strictly rejected with `HTTP 400 ERR_INVOICE_NOT_DRAFT`.
+15. ✅ **PDF generation**: `GET /api/invoices/:id/pdf` returns valid binary stream starting with `%PDF-`.
+16. ✅ **Historical snapshot integrity**: Stored item price on invoice remains unchanged even after catalog product price is modified.
 
+---
+
+## 🚀 How to Run Locally
+
+### 1. Prerequisites
+- Node.js (v18+)
+- PostgreSQL 18 running on `127.0.0.1:5433` (database: `viora_bills`)
+
+### 2. Installation
 ```bash
-# Run both Frontend & Backend concurrently:
+# Clone and install dependencies
+npm install
+```
+
+### 3. Start Development Servers
+```bash
+# Concurrently starts Express (port 5000) and Vite (port 5173)
 npm run dev
 
-# Or run independently:
+# Or run individually:
 npm run dev:server   # Express API on http://localhost:5000
 npm run dev:client   # Vite Frontend on http://localhost:5173
 ```
 
----
+### 4. Run Verification Suite & Type Checks
+```bash
+# Run backend verification suite
+npm run test:backend
 
-## 🔒 Security & Prototype Access Limitations
+# Run TypeScript type check across both workspaces
+npm run type-check
 
-- Database connection strings and environment variables are strictly loaded from `.env` and are never committed to version control.
-- CORS is restricted to the local frontend client origin (`http://localhost:5173`).
-- Request payloads are validated against Zod schemas before database execution.
-- **Prototype Scope Notice**: Authentication and authorization (login, sessions, role-based access control) are intentionally not implemented in Phase 2 as per the internship milestone specification. The application currently operates with a default organization context. Real JWT / session-based multi-user authorization will be introduced in subsequent phases.
+# Run production build bundling
+npm run build
+```

@@ -14,6 +14,7 @@ const updateBusinessSchema = z.object({
   phone: z.string().min(5, 'Phone number must be at least 5 characters'),
   email: z.string().email('Invalid email address'),
   gstin: z.string().optional().nullable(),
+  state: z.string().optional().nullable(),
   invoicePrefix: z.string().min(1).max(10).optional(),
 });
 
@@ -49,6 +50,7 @@ router.put(
           phone: req.body.phone,
           email: req.body.email,
           gstin: req.body.gstin ?? null,
+          state: req.body.state !== undefined ? req.body.state : current.state,
           invoicePrefix: req.body.invoicePrefix ?? current.invoicePrefix,
         },
       });

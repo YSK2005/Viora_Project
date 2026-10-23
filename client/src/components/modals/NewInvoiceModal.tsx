@@ -1,27 +1,63 @@
-import React, { useState, useEffect } from 'react';
-import { X, FilePlus, Trash2, Plus } from 'lucide-react';
-import { Customer, Product } from '../../types';
-import { fetchCustomers, fetchProducts, createInvoice } from '../../services/api';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  X,
+  FilePlus,
+  Trash2,
+  Plus,
+  SendHorizontal,
+  FileText,
+  User,
+} from 'lucide-react';
+import { Customer, Product, Invoice } from '../../types';
+import {
+  fetchCustomers,
+  fetchProducts,
+  createInvoice,
+  updateDraftInvoice,
+  issueInvoice,
+} from '../../services/api';
 
 interface NewInvoiceModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (issuedInvoice?: Invoice) => void;
+  editingInvoice?: Invoice | null;
 }
 
 interface ItemRow {
   productId: string;
   description: string;
+  unit: string;
   quantity: number;
   unitPrice: number;
   discountAmount: number;
   taxRate: number;
 }
 
+const COMMON_UNITS = ['PCS', 'HRS', 'NOS', 'BOX', 'SET', 'MONTH', 'KG', 'MTR'];
+const GST_RATES = [0, 5, 12, 18, 28];
+const INDIAN_STATES = [
+  'Karnataka',
+  'Maharashtra',
+  'Delhi',
+  'Tamil Nadu',
+  'Telangana',
+  'Gujarat',
+  'Uttar Pradesh',
+  'West Bengal',
+  'Rajasthan',
+  'Kerala',
+  'Haryana',
+  'Madhya Pradesh',
+  'Punjab',
+  'Andhra Pradesh',
+];
+
 export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
+  editingInvoice,
 }) => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -32,13 +68,25 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
     d.setDate(d.getDate() + 15);
     return d.toISOString().split('T')[0];
   });
+  const [placeOfSupply, setPlaceOfSupply] = useState('Karnataka');
+  const [isInterState, setIsInterState] = useState(false);
   const [notes, setNotes] = useState('Payment due within 15 days of invoice date.');
   const [items, setItems] = useState<ItemRow[]>([
-    { productId: '', description: '', quantity: 1, unitPrice: 0, discountAmount: 0, taxRate: 18 },
+    {
+      productId: '',
+      description: '',
+      unit: 'PCS',
+      quantity: 1,
+      unitPrice: 0,
+      discountAmount: 0,
+      taxRate: 18,
+    },
   ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isIssueImmediate, setIsIssueImmediate] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Initialize or populate editing invoice
   useEffect(() => {
     if (!isOpen) return;
     setError(null);
@@ -46,15 +94,54 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
     Promise.all([fetchCustomers(), fetchProducts()]).then(([cRes, pRes]) => {
       setCustomers(cRes.customers);
       setProducts(pRes.products);
-      if (cRes.customers.length > 0 && !customerId) {
-        setCustomerId(cRes.customers[0].id);
+
+      if (editingInvoice) {
+        setCustomerId(editingInvoice.customerId);
+        setInvoiceDate(editingInvoice.invoiceDate);
+        setDueDate(editingInvoice.dueDate);
+        setPlaceOfSupply(editingInvoice.placeOfSupply || 'Karnataka');
+        setIsInterState(Boolean(editingInvoice.isInterState));
+        setNotes(editingInvoice.notes || '');
+        if (editingInvoice.items && editingInvoice.items.length > 0) {
+          setItems(
+            editingInvoice.items.map((it) => ({
+              productId: it.productId || '',
+              description: it.descriptionSnapshot,
+              unit: it.unit || 'PCS',
+              quantity: it.quantity,
+              unitPrice: it.unitPrice,
+              discountAmount: it.discountAmount || 0,
+              taxRate: it.taxRate || 0,
+            }))
+          );
+        }
+      } else {
+        if (cRes.customers.length > 0 && !customerId) {
+          setCustomerId(cRes.customers[0].id);
+          const firstState = cRes.customers[0].state || 'Karnataka';
+          setPlaceOfSupply(firstState);
+          setIsInterState(firstState.toLowerCase() !== 'karnataka');
+        }
       }
     }).catch((err) => {
       console.error('Failed to load customers or products:', err);
     });
-  }, [isOpen]);
+  }, [isOpen, editingInvoice]);
 
-  if (!isOpen) return null;
+  // Selected customer details
+  const selectedCustomer = useMemo(() => {
+    return customers.find((c) => c.id === customerId);
+  }, [customers, customerId]);
+
+  // Update place of supply when customer changes (if not explicitly overridden)
+  const handleCustomerChange = (newCustId: string) => {
+    setCustomerId(newCustId);
+    const cust = customers.find((c) => c.id === newCustId);
+    if (cust && cust.state) {
+      setPlaceOfSupply(cust.state);
+      setIsInterState(cust.state.toLowerCase() !== 'karnataka');
+    }
+  };
 
   const handleProductSelect = (index: number, prodId: string) => {
     const prod = products.find((p) => p.id === prodId);
@@ -64,6 +151,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
         ...next[index],
         productId: prod.id,
         description: prod.name,
+        unit: prod.unit || 'PCS',
         unitPrice: prod.unitPrice,
         taxRate: prod.taxRate,
       };
@@ -85,7 +173,15 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
   const addItemRow = () => {
     setItems([
       ...items,
-      { productId: '', description: '', quantity: 1, unitPrice: 0, discountAmount: 0, taxRate: 18 },
+      {
+        productId: '',
+        description: '',
+        unit: 'PCS',
+        quantity: 1,
+        unitPrice: 0,
+        discountAmount: 0,
+        taxRate: 18,
+      },
     ]);
   };
 
@@ -94,338 +190,554 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
     setItems(items.filter((_, i) => i !== index));
   };
 
-  // Live client estimated total for immediate feedback (final computed on server)
-  const estimatedTotals = items.reduce(
-    (acc, it) => {
-      const base = it.quantity * it.unitPrice;
-      const taxable = Math.max(0, base - (it.discountAmount || 0));
-      const tax = taxable * ((it.taxRate || 0) / 100);
+  // Live client estimation for instantaneous responsive UI feedback
+  const clientTotals = useMemo(() => {
+    let subtotal = 0;
+    let discountTotal = 0;
+    let taxableAmount = 0;
+    let taxTotal = 0;
+    let grandTotal = 0;
+
+    const calculatedRows = items.map((it) => {
+      const qty = Math.max(0, it.quantity || 0);
+      const price = Math.max(0, it.unitPrice || 0);
+      const gross = Math.round(qty * price * 100) / 100;
+      const disc = Math.min(gross, Math.max(0, it.discountAmount || 0));
+      const taxable = Math.round((gross - disc) * 100) / 100;
+      const rate = Math.max(0, it.taxRate || 0);
+      const tax = Math.round(taxable * (rate / 100) * 100) / 100;
+      const lineTot = Math.round((taxable + tax) * 100) / 100;
+
+      subtotal += gross;
+      discountTotal += disc;
+      taxableAmount += taxable;
+      taxTotal += tax;
+      grandTotal += lineTot;
+
       return {
-        subtotal: acc.subtotal + base,
-        discount: acc.discount + (it.discountAmount || 0),
-        tax: acc.tax + tax,
-        grandTotal: acc.grandTotal + taxable + tax,
+        gross,
+        taxable,
+        tax,
+        lineTot,
       };
-    },
-    { subtotal: 0, discount: 0, tax: 0, grandTotal: 0 }
-  );
+    });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!customerId) {
-      setError('Please select or register a customer first');
-      return;
-    }
+    const cgstTotal = isInterState ? 0 : Math.round((taxTotal / 2) * 100) / 100;
+    const sgstTotal = isInterState ? 0 : Math.round((taxTotal - cgstTotal) * 100) / 100;
+    const igstTotal = isInterState ? taxTotal : 0;
 
-    for (let i = 0; i < items.length; i++) {
-      if (!items[i].description.trim()) {
-        setError(`Item #${i + 1} must have a description`);
-        return;
-      }
-      if (items[i].quantity <= 0) {
-        setError(`Item #${i + 1} quantity must be greater than zero`);
-        return;
-      }
-      if (items[i].discountAmount > items[i].quantity * items[i].unitPrice) {
-        setError(`Item #${i + 1} discount cannot exceed the item price`);
-        return;
-      }
-    }
+    return {
+      subtotal,
+      discountTotal,
+      taxableAmount,
+      cgstTotal,
+      sgstTotal,
+      igstTotal,
+      taxTotal,
+      grandTotal,
+      rows: calculatedRows,
+    };
+  }, [items, isInterState]);
 
-    setIsSubmitting(true);
-    setError(null);
+  const formatCurrency = (val: number) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 2,
+    }).format(val || 0);
+  };
+
+  const handleSubmit = async (shouldIssueNow: boolean = false) => {
     try {
-      await createInvoice({
+      setError(null);
+      if (!customerId) {
+        setError('Please select a customer for this invoice.');
+        return;
+      }
+
+      if (items.length === 0) {
+        setError('At least one item is required.');
+        return;
+      }
+
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        if (!it.description.trim()) {
+          setError(`Item #${i + 1} description is required.`);
+          return;
+        }
+        if (it.quantity <= 0) {
+          setError(`Item #${i + 1} quantity must be greater than zero.`);
+          return;
+        }
+        if (it.unitPrice < 0) {
+          setError(`Item #${i + 1} unit price cannot be negative.`);
+          return;
+        }
+        const gross = it.quantity * it.unitPrice;
+        if (it.discountAmount > gross) {
+          setError(`Item #${i + 1} discount (₹${it.discountAmount}) cannot exceed gross total (₹${gross}).`);
+          return;
+        }
+      }
+
+      setIsSubmitting(true);
+      setIsIssueImmediate(shouldIssueNow);
+
+      const payload = {
         customerId,
         invoiceDate,
         dueDate,
+        placeOfSupply,
+        isInterState,
         notes: notes.trim() || undefined,
         items: items.map((it) => ({
           productId: it.productId || null,
           descriptionSnapshot: it.description.trim(),
+          unit: it.unit || 'PCS',
           quantity: Number(it.quantity),
           unitPrice: Number(it.unitPrice),
-          discountAmount: Number(it.discountAmount) || 0,
-          taxRate: Number(it.taxRate) || 0,
+          discountAmount: Number(it.discountAmount || 0),
+          taxRate: Number(it.taxRate || 0),
         })),
-      });
+      };
 
-      onSuccess();
+      let savedInvoice: Invoice;
+      if (editingInvoice) {
+        savedInvoice = await updateDraftInvoice(editingInvoice.id, payload);
+      } else {
+        savedInvoice = await createInvoice(payload);
+      }
+
+      // If issue was requested, perform atomic issuance
+      if (shouldIssueNow && savedInvoice.status === 'DRAFT') {
+        const issued = await issueInvoice(savedInvoice.id);
+        onSuccess(issued);
+      } else {
+        onSuccess(savedInvoice);
+      }
+
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Failed to create invoice');
+      setError(err.message || 'Failed to save invoice');
     } finally {
       setIsSubmitting(false);
+      setIsIssueImmediate(false);
     }
   };
 
+  if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/40 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-popover border border-slate-200/90 w-full max-w-3xl overflow-hidden my-8">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-200/80 flex items-center justify-between bg-slate-50/50">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center border border-teal-200">
-              <FilePlus className="w-4 h-4" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-navy-950/50 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-popover border border-slate-200/90 w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden my-auto">
+        {/* Modal Header */}
+        <div className="p-4 sm:px-6 bg-slate-50 border-b border-slate-200/90 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center border border-teal-200 shadow-xs">
+              <FilePlus className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-slate-900">Create New Invoice (Draft)</h3>
-              <p className="text-[11px] text-slate-500">Totals are verified and calculated with Decimal precision on the server</p>
+              <h2 className="text-base font-bold text-slate-900 leading-tight">
+                {editingInvoice ? `Edit Draft Invoice (${editingInvoice.invoiceNumber})` : 'Create New Invoice'}
+              </h2>
+              <p className="text-xs text-slate-500">
+                GST billing with verified decimal precision and audit snapshots
+              </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg"
+            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200/60 transition-colors"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        {error && (
-          <div className="mx-6 mt-4 p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700">
-            {error}
-          </div>
-        )}
+        {/* Modal Body */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+          {error && (
+            <div className="p-3.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center justify-between">
+              <span>{error}</span>
+              <button onClick={() => setError(null)} className="text-red-400 hover:text-red-700 ml-2">✕</button>
+            </div>
+          )}
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          {/* Top Info */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Select Customer <span className="text-rose-500">*</span>
+          {/* Section 1: Customer & Invoice Details */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-slate-50/70 rounded-xl border border-slate-200/70 text-xs">
+            {/* Customer Picker */}
+            <div className="space-y-1.5">
+              <label className="font-semibold text-slate-700 flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-teal-600" />
+                Select Customer *
               </label>
-              {customers.length === 0 ? (
-                <div className="text-xs text-rose-600">
-                  No customers found. Please create a customer first!
+              <select
+                value={customerId}
+                onChange={(e) => handleCustomerChange(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+              >
+                <option value="">-- Choose Customer --</option>
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} {c.gstin ? `(GSTIN: ${c.gstin})` : ''}
+                  </option>
+                ))}
+              </select>
+
+              {selectedCustomer && (
+                <div className="mt-2 p-2.5 bg-white rounded-lg border border-slate-200 text-[11px] text-slate-600 space-y-1">
+                  <div className="font-semibold text-slate-900">{selectedCustomer.name}</div>
+                  <div>{selectedCustomer.billingAddress}</div>
+                  <div className="flex gap-3 text-slate-500">
+                    <span>Phone: {selectedCustomer.phone}</span>
+                    {selectedCustomer.gstin && <span className="font-mono">GSTIN: {selectedCustomer.gstin}</span>}
+                  </div>
                 </div>
-              ) : (
-                <select
-                  required
-                  value={customerId}
-                  onChange={(e) => setCustomerId(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/20"
-                >
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.phone})
-                    </option>
-                  ))}
-                </select>
               )}
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Invoice Date <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="date"
-                required
-                value={invoiceDate}
-                onChange={(e) => setInvoiceDate(e.target.value)}
-                className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/20"
-              />
+            {/* Dates & Reference */}
+            <div className="space-y-3">
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Invoice Date *</label>
+                <input
+                  type="date"
+                  value={invoiceDate}
+                  onChange={(e) => setInvoiceDate(e.target.value)}
+                  className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Due Date *</label>
+                <input
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                />
+              </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Due Date <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="date"
-                required
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/20"
-              />
+            {/* Place of Supply & GST Split Mode */}
+            <div className="space-y-3">
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Place of Supply (State)</label>
+                <select
+                  value={placeOfSupply}
+                  onChange={(e) => {
+                    const st = e.target.value;
+                    setPlaceOfSupply(st);
+                    setIsInterState(st.toLowerCase() !== 'karnataka');
+                  }}
+                  className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                >
+                  {INDIAN_STATES.map((st) => (
+                    <option key={st} value={st}>
+                      {st}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Supply Tax Treatment</label>
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsInterState(false)}
+                    className={`flex-1 py-1.5 px-2 text-xs font-semibold rounded-lg border transition-colors ${
+                      !isInterState
+                        ? 'bg-teal-600 text-white border-teal-600'
+                        : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    Intra-State (CGST + SGST)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsInterState(true)}
+                    className={`flex-1 py-1.5 px-2 text-xs font-semibold rounded-lg border transition-colors ${
+                      isInterState
+                        ? 'bg-teal-600 text-white border-teal-600'
+                        : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    Inter-State (IGST)
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Line Items Table */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                Line Items
-              </label>
+          {/* Section 2: Line Items Table */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5 text-teal-600" />
+                Line Items ({items.length})
+              </h3>
               <button
                 type="button"
                 onClick={addItemRow}
-                className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:text-teal-800"
+                className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg transition-colors"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Add Item
               </button>
             </div>
 
-            <div className="space-y-3">
-              {items.map((row, idx) => (
-                <div
-                  key={idx}
-                  className="p-3 bg-slate-50/80 rounded-xl border border-slate-200/80 space-y-2"
-                >
-                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
-                    {/* Catalog Pre-fill */}
-                    <div className="sm:col-span-4">
-                      <select
-                        value={row.productId}
-                        onChange={(e) => handleProductSelect(idx, e.target.value)}
-                        className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg"
-                      >
-                        <option value="">-- Choose from Catalog (or custom) --</option>
-                        {products.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name} (₹{p.unitPrice})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+            <div className="overflow-x-auto border border-slate-200 rounded-xl">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 font-semibold text-slate-600">
+                    <th className="py-2.5 px-3 w-48">Product / Catalog</th>
+                    <th className="py-2.5 px-3 min-w-[160px]">Description</th>
+                    <th className="py-2.5 px-2 w-20 text-center">Unit</th>
+                    <th className="py-2.5 px-2 w-20 text-right">Qty</th>
+                    <th className="py-2.5 px-2 w-28 text-right">Rate (₹)</th>
+                    <th className="py-2.5 px-2 w-24 text-right">Disc (₹)</th>
+                    <th className="py-2.5 px-2 w-24 text-right">GST Rate</th>
+                    <th className="py-2.5 px-2 w-28 text-right">Taxable</th>
+                    <th className="py-2.5 px-3 w-28 text-right">Line Total</th>
+                    <th className="py-2.5 px-2 w-10 text-center"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {items.map((row, idx) => {
+                    const rowCalc = clientTotals.rows[idx] || { gross: 0, taxable: 0, tax: 0, lineTot: 0 };
+                    return (
+                      <tr key={idx} className="hover:bg-slate-50/50">
+                        {/* Catalog Select */}
+                        <td className="py-2 px-2">
+                          <select
+                            value={row.productId}
+                            onChange={(e) => handleProductSelect(idx, e.target.value)}
+                            className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-slate-800"
+                          >
+                            <option value="">-- Custom Item --</option>
+                            {products.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name} (₹{p.unitPrice})
+                              </option>
+                            ))}
+                          </select>
+                        </td>
 
-                    {/* Item Description */}
-                    <div className="sm:col-span-8">
-                      <input
-                        type="text"
-                        required
-                        placeholder="Description of goods or service"
-                        value={row.description}
-                        onChange={(e) => updateItemField(idx, 'description', e.target.value)}
-                        className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg"
-                      />
-                    </div>
-                  </div>
+                        {/* Description */}
+                        <td className="py-2 px-2">
+                          <input
+                            type="text"
+                            value={row.description}
+                            onChange={(e) => updateItemField(idx, 'description', e.target.value)}
+                            placeholder="Description..."
+                            className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-slate-900 font-medium"
+                          />
+                        </td>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-center">
-                    <div>
-                      <span className="text-[10px] text-slate-500 block mb-0.5">Quantity</span>
-                      <input
-                        type="number"
-                        min="0.01"
-                        step="any"
-                        required
-                        value={row.quantity}
-                        onChange={(e) => updateItemField(idx, 'quantity', Number(e.target.value))}
-                        className="w-full px-2 py-1 text-xs bg-white border border-slate-200 rounded-lg"
-                      />
-                    </div>
+                        {/* Unit */}
+                        <td className="py-2 px-1">
+                          <select
+                            value={row.unit}
+                            onChange={(e) => updateItemField(idx, 'unit', e.target.value)}
+                            className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-center font-mono"
+                          >
+                            {COMMON_UNITS.map((u) => (
+                              <option key={u} value={u}>
+                                {u}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
 
-                    <div>
-                      <span className="text-[10px] text-slate-500 block mb-0.5">Unit Price (₹)</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        required
-                        value={row.unitPrice}
-                        onChange={(e) => updateItemField(idx, 'unitPrice', Number(e.target.value))}
-                        className="w-full px-2 py-1 text-xs bg-white border border-slate-200 rounded-lg"
-                      />
-                    </div>
+                        {/* Quantity */}
+                        <td className="py-2 px-1">
+                          <input
+                            type="number"
+                            min="0.01"
+                            step="any"
+                            value={row.quantity || ''}
+                            onChange={(e) => updateItemField(idx, 'quantity', parseFloat(e.target.value) || 0)}
+                            className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-right font-mono"
+                          />
+                        </td>
 
-                    <div>
-                      <span className="text-[10px] text-slate-500 block mb-0.5">Discount (₹)</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={row.discountAmount}
-                        onChange={(e) => updateItemField(idx, 'discountAmount', Number(e.target.value))}
-                        className="w-full px-2 py-1 text-xs bg-white border border-slate-200 rounded-lg"
-                      />
-                    </div>
+                        {/* Unit Price */}
+                        <td className="py-2 px-1">
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={row.unitPrice || ''}
+                            onChange={(e) => updateItemField(idx, 'unitPrice', parseFloat(e.target.value) || 0)}
+                            className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-right font-mono font-medium"
+                          />
+                        </td>
 
-                    <div>
-                      <span className="text-[10px] text-slate-500 block mb-0.5">GST Rate (%)</span>
-                      <select
-                        value={row.taxRate}
-                        onChange={(e) => updateItemField(idx, 'taxRate', Number(e.target.value))}
-                        className="w-full px-2 py-1 text-xs bg-white border border-slate-200 rounded-lg"
-                      >
-                        <option value="0">0%</option>
-                        <option value="5">5%</option>
-                        <option value="12">12%</option>
-                        <option value="18">18%</option>
-                        <option value="28">28%</option>
-                      </select>
-                    </div>
+                        {/* Discount Amount */}
+                        <td className="py-2 px-1">
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={row.discountAmount || ''}
+                            onChange={(e) => updateItemField(idx, 'discountAmount', parseFloat(e.target.value) || 0)}
+                            placeholder="0"
+                            className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-right font-mono text-emerald-700"
+                          />
+                        </td>
 
-                    <div className="flex items-end justify-between sm:justify-end gap-2 pt-3 sm:pt-0">
-                      <div className="text-right">
-                        <span className="text-[10px] text-slate-400 block">Item Total</span>
-                        <span className="font-semibold text-xs text-navy-900">
-                          ₹
-                          {(
-                            Math.max(0, row.quantity * row.unitPrice - row.discountAmount) *
-                            (1 + row.taxRate / 100)
-                          ).toFixed(2)}
-                        </span>
-                      </div>
-                      {items.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeItemRow(idx)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
+                        {/* Tax Rate */}
+                        <td className="py-2 px-1">
+                          <select
+                            value={row.taxRate}
+                            onChange={(e) => updateItemField(idx, 'taxRate', parseFloat(e.target.value) || 0)}
+                            className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-right font-mono font-medium"
+                          >
+                            {GST_RATES.map((r) => (
+                              <option key={r} value={r}>
+                                {r}%
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+
+                        {/* Taxable Amount */}
+                        <td className="py-2 px-2 text-right font-mono text-slate-700">
+                          {formatCurrency(rowCalc.taxable)}
+                        </td>
+
+                        {/* Line Total */}
+                        <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
+                          {formatCurrency(rowCalc.lineTot)}
+                        </td>
+
+                        {/* Delete Action */}
+                        <td className="py-2 px-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => removeItemRow(idx)}
+                            disabled={items.length <= 1}
+                            className={`p-1 rounded text-slate-400 hover:text-red-600 transition-colors ${
+                              items.length <= 1 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-red-50'
+                            }`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
 
-          {/* Notes and Grand Total Preview */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start pt-3 border-t border-slate-100">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Terms / Notes
-              </label>
+          {/* Section 3: Notes & Summary Panel */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+            {/* Notes */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-700 block">Notes & Terms of Payment</label>
               <textarea
-                rows={3}
+                rows={4}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg"
+                placeholder="Payment instructions, bank account details or terms..."
+                className="w-full p-3 bg-white border border-slate-300 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
               />
             </div>
 
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-1.5 text-xs">
-              <div className="flex justify-between text-slate-600">
-                <span>Subtotal:</span>
-                <span>₹{estimatedTotals.subtotal.toFixed(2)}</span>
+            {/* Calculations Summary Panel */}
+            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200/90 text-xs space-y-2">
+              <div className="flex justify-between text-slate-600 py-0.5">
+                <span>Subtotal (Before Discount):</span>
+                <span className="font-mono font-semibold">{formatCurrency(clientTotals.subtotal)}</span>
               </div>
-              <div className="flex justify-between text-slate-600">
-                <span>Discounts:</span>
-                <span>-₹{estimatedTotals.discount.toFixed(2)}</span>
+              {clientTotals.discountTotal > 0 && (
+                <div className="flex justify-between text-slate-600 py-0.5">
+                  <span>Total Line Discounts:</span>
+                  <span className="font-mono text-emerald-700 font-semibold">
+                    -{formatCurrency(clientTotals.discountTotal)}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between text-slate-700 font-medium py-0.5">
+                <span>Taxable Subtotal:</span>
+                <span className="font-mono">{formatCurrency(clientTotals.taxableAmount)}</span>
               </div>
-              <div className="flex justify-between text-slate-600">
-                <span>Total Tax (GST):</span>
-                <span>₹{estimatedTotals.tax.toFixed(2)}</span>
+
+              {/* GST Tax Breakdown */}
+              <div className="py-1 border-t border-slate-200 space-y-1">
+                {isInterState ? (
+                  <div className="flex justify-between text-slate-600">
+                    <span>IGST (Integrated GST):</span>
+                    <span className="font-mono">{formatCurrency(clientTotals.igstTotal)}</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex justify-between text-slate-600">
+                      <span>CGST (Central GST):</span>
+                      <span className="font-mono">{formatCurrency(clientTotals.cgstTotal)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-600">
+                      <span>SGST (State GST):</span>
+                      <span className="font-mono">{formatCurrency(clientTotals.sgstTotal)}</span>
+                    </div>
+                  </>
+                )}
+                <div className="flex justify-between text-slate-700 font-semibold pt-0.5">
+                  <span>Total Tax (GST):</span>
+                  <span className="font-mono">{formatCurrency(clientTotals.taxTotal)}</span>
+                </div>
               </div>
-              <div className="flex justify-between text-sm font-bold text-navy-900 pt-2 border-t border-slate-200">
-                <span>Estimated Grand Total:</span>
-                <span className="text-teal-700">₹{estimatedTotals.grandTotal.toFixed(2)}</span>
+
+              {/* Grand Total */}
+              <div className="pt-2 border-t border-slate-300 flex justify-between items-center text-sm font-extrabold text-navy-950">
+                <span>Grand Total:</span>
+                <span className="font-mono text-base text-teal-800">
+                  {formatCurrency(clientTotals.grandTotal)}
+                </span>
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Action buttons */}
-          <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-2">
+        {/* Modal Footer Actions */}
+        <div className="p-4 sm:px-6 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
+          <div className="text-[11px] text-slate-400">
+            Official sequential numbering assigned only upon issuance.
+          </div>
+
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-medium text-slate-600 hover:text-slate-800 bg-slate-100 rounded-lg"
+              disabled={isSubmitting}
+              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
             >
               Cancel
             </button>
+
             <button
-              type="submit"
-              disabled={isSubmitting || customers.length === 0}
-              className="px-5 py-2 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm disabled:opacity-50"
+              type="button"
+              onClick={() => handleSubmit(false)}
+              disabled={isSubmitting}
+              className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg shadow-xs transition-colors"
             >
-              {isSubmitting ? 'Creating Invoice...' : 'Save as Draft Invoice'}
+              {isSubmitting && !isIssueImmediate ? 'Saving Draft...' : 'Save Draft'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSubmit(true)}
+              disabled={isSubmitting}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm transition-all hover:shadow"
+            >
+              <SendHorizontal className="w-3.5 h-3.5" />
+              <span>{isSubmitting && isIssueImmediate ? 'Issuing...' : 'Save & Issue Invoice'}</span>
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

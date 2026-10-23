@@ -108,10 +108,13 @@ export async function createInvoice(data: {
   customerId: string;
   invoiceDate: string;
   dueDate: string;
+  placeOfSupply?: string;
+  isInterState?: boolean;
   notes?: string;
   items: Array<{
     productId?: string | null;
     descriptionSnapshot: string;
+    unit?: string;
     quantity: number;
     unitPrice: number;
     discountAmount?: number;
@@ -131,6 +134,39 @@ export async function createInvoice(data: {
   return json.data;
 }
 
+export async function updateDraftInvoice(
+  id: string,
+  data: {
+    customerId: string;
+    invoiceDate: string;
+    dueDate: string;
+    placeOfSupply?: string;
+    isInterState?: boolean;
+    notes?: string;
+    items: Array<{
+      productId?: string | null;
+      descriptionSnapshot: string;
+      unit?: string;
+      quantity: number;
+      unitPrice: number;
+      discountAmount?: number;
+      taxRate?: number;
+    }>;
+  }
+): Promise<Invoice> {
+  const res = await fetch(`${API_BASE}/invoices/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || 'Failed to update draft invoice');
+  }
+  const json = await res.json();
+  return json.data;
+}
+
 export async function issueInvoice(id: string): Promise<Invoice> {
   const res = await fetch(`${API_BASE}/invoices/${id}/issue`, {
     method: 'POST',
@@ -141,6 +177,26 @@ export async function issueInvoice(id: string): Promise<Invoice> {
   }
   const json = await res.json();
   return json.data;
+}
+
+export function getInvoicePdfUrl(id: string): string {
+  return `${API_BASE}/invoices/${id}/pdf`;
+}
+
+export async function downloadInvoicePdf(id: string, invoiceNumber: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/invoices/${id}/pdf`);
+  if (!res.ok) {
+    throw new Error('Failed to download invoice PDF');
+  }
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `invoice-${invoiceNumber || 'document'}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
 }
 
 export async function recordInvoicePayment(

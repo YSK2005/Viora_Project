@@ -9,6 +9,7 @@ interface InvoicesViewProps {
   onNewInvoice: () => void;
   onIssueInvoice: (inv: Invoice) => void;
   onRecordPayment: (inv: Invoice) => void;
+  onEditDraft?: (inv: Invoice) => void;
   isSimulatedEmpty: boolean;
   onSimulateEmptyToggle: (val: boolean) => void;
 }
@@ -19,6 +20,7 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
   onNewInvoice,
   onIssueInvoice,
   onRecordPayment,
+  onEditDraft,
   isSimulatedEmpty,
   onSimulateEmptyToggle,
 }) => {
@@ -81,6 +83,7 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
         onNewInvoice={onNewInvoice}
         onIssueInvoice={onIssueInvoice}
         onRecordPayment={onRecordPayment}
+        onEditDraft={onEditDraft}
         isSimulatedEmpty={isSimulatedEmpty}
         onSimulateEmptyToggle={onSimulateEmptyToggle}
       />
