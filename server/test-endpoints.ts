@@ -751,8 +751,206 @@ async function runTests() {
       throw new Error(`Test 15 Failed: Empty report produced non-empty records: ${JSON.stringify(emptyReport)}`);
     }
     console.log('✅ 15. Empty database periods produce valid empty summaries (0 sales, 0 collections, 0 invoices, 0 NaN)');
+    console.log('\n🎉 ALL 15 PHASE 4 VERIFICATION TESTS PASSED SUCCESSFULLY!\n');
 
-    console.log('\n🎉 ALL 15 PHASE 4 VERIFICATION TESTS PASSED SUCCESSFULLY!');
+    // =========================================================================
+    // =========================================================================
+    // PHASE 5: FINAL QA, CRUD INTEGRITY, AND SECURITY VERIFICATIONS
+    // =========================================================================
+    // =========================================================================
+    console.log('🧪 Starting Phase 5 Final QA, CRUD Integrity & Security Tests...\n');
+
+    // =========================================================================
+    // TEST 5.1: Customer CRUD, Search & Soft Deletion
+    // =========================================================================
+    const newCustRes = await fetch(`${BASE}/customers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Phase 5 QA Customer',
+        phone: '+91 99999 11111',
+        email: 'qa.test@vioratech.com',
+        billingAddress: 'QA Park, Koramangala 4th Block, Bangalore',
+        state: 'Karnataka',
+        gstin: '29ABCDE1234F1Z5',
+      }),
+    });
+    if (newCustRes.status !== 201) {
+      throw new Error(`Test 5.1 Create Customer Failed: ${newCustRes.status}`);
+    }
+    const newCust = (await newCustRes.json()).data;
+
+    // Get by ID
+    const getCustRes = await fetch(`${BASE}/customers/${newCust.id}`);
+    const getCust = (await getCustRes.json()).data;
+    if (getCust.name !== 'Phase 5 QA Customer' || getCust.email !== 'qa.test@vioratech.com') {
+      throw new Error(`Test 5.1 Get Customer Failed: ${JSON.stringify(getCust)}`);
+    }
+
+    // Update Customer
+    const updateCustRes = await fetch(`${BASE}/customers/${newCust.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Phase 5 QA Customer (Updated)',
+        phone: '+91 99999 22222',
+      }),
+    });
+    const updatedCust = (await updateCustRes.json()).data;
+    if (updatedCust.name !== 'Phase 5 QA Customer (Updated)' || updatedCust.phone !== '+91 99999 22222') {
+      throw new Error(`Test 5.1 Update Customer Failed: ${JSON.stringify(updatedCust)}`);
+    }
+
+    // Search Customer
+    const searchCustRes = await fetch(`${BASE}/customers?search=QA+Customer`);
+    const searchCustJson = (await searchCustRes.json()).data;
+    if (!searchCustJson.customers.some((c: any) => c.id === newCust.id)) {
+      throw new Error(`Test 5.1 Search Customer Failed: ${JSON.stringify(searchCustJson)}`);
+    }
+
+    // Delete unreferenced customer -> clean permanent removal
+    const delCustRes = await fetch(`${BASE}/customers/${newCust.id}`, { method: 'DELETE' });
+    if (delCustRes.status !== 200) {
+      throw new Error(`Test 5.1 Delete Customer Failed: ${delCustRes.status}`);
+    }
+    const custAfterDel = await prisma.customer.findUnique({ where: { id: newCust.id } });
+    if (custAfterDel !== null) {
+      throw new Error(`Test 5.1 Unreferenced customer permanent removal failed: customer still in DB`);
+    }
+
+    // Now test archiving when customer HAS historical invoices (referencing customer created earlier)
+    const delCustWithInvRes = await fetch(`${BASE}/customers/${customerId}`, { method: 'DELETE' });
+    if (delCustWithInvRes.status !== 200) {
+      throw new Error(`Test 5.1 Delete Referenced Customer Failed: ${delCustWithInvRes.status}`);
+    }
+    const custArchived = await prisma.customer.findUnique({ where: { id: customerId } });
+    if (!custArchived || !custArchived.isArchived) {
+      throw new Error(`Test 5.1 Referenced customer soft delete failed: isArchived is false`);
+    }
+    console.log('✅ 5.1 Customer CRUD, Search & Soft Deletion verified (Permanent delete when unused, archive when referenced)');
+
+    // =========================================================================
+    // TEST 5.2: Customer Invalid Input Rejection
+    // =========================================================================
+    const invalidCustRes = await fetch(`${BASE}/customers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'A', // Too short (min 2)
+        phone: '1', // Too short (min 5)
+        email: 'not-an-email',
+        billingAddress: 'AB', // Too short (min 3)
+      }),
+    });
+    if (invalidCustRes.status !== 400) {
+      throw new Error(`Test 5.2 Invalid Customer Input Failed: Expected 400, got ${invalidCustRes.status}`);
+    }
+    console.log('✅ 5.2 Invalid Customer inputs rejected with validation error (HTTP 400)');
+
+    // =========================================================================
+    // TEST 5.3: Product CRUD, Search & Soft Deletion
+    // =========================================================================
+    const newProdRes = await fetch(`${BASE}/products`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Phase 5 Security Auditing Tool',
+        description: 'Comprehensive static and runtime security audit module',
+        unit: 'HRS',
+        unitPrice: 1500,
+        taxRate: 18,
+      }),
+    });
+    if (newProdRes.status !== 201) {
+      throw new Error(`Test 5.3 Create Product Failed: ${newProdRes.status}`);
+    }
+    const newProd = (await newProdRes.json()).data;
+
+    // Get by ID
+    const getProdRes = await fetch(`${BASE}/products/${newProd.id}`);
+    const getProd = (await getProdRes.json()).data;
+    if (getProd.name !== 'Phase 5 Security Auditing Tool' || Number(getProd.unitPrice) !== 1500) {
+      throw new Error(`Test 5.3 Get Product Failed: ${JSON.stringify(getProd)}`);
+    }
+
+    // Update Product
+    const updateProdRes = await fetch(`${BASE}/products/${newProd.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        unitPrice: 1750,
+        taxRate: 12,
+      }),
+    });
+    const updatedProd = (await updateProdRes.json()).data;
+    if (Number(updatedProd.unitPrice) !== 1750 || Number(updatedProd.taxRate) !== 12) {
+      throw new Error(`Test 5.3 Update Product Failed: ${JSON.stringify(updatedProd)}`);
+    }
+
+    // Search Product
+    const searchProdRes = await fetch(`${BASE}/products?search=Security+Auditing`);
+    const searchProdJson = (await searchProdRes.json()).data;
+    if (!searchProdJson.products.some((p: any) => p.id === newProd.id)) {
+      throw new Error(`Test 5.3 Search Product Failed: ${JSON.stringify(searchProdJson)}`);
+    }
+
+    // Delete unreferenced product -> clean permanent removal
+    const delProdRes = await fetch(`${BASE}/products/${newProd.id}`, { method: 'DELETE' });
+    if (delProdRes.status !== 200) {
+      throw new Error(`Test 5.3 Delete Product Failed: ${delProdRes.status}`);
+    }
+    const prodAfterDel = await prisma.product.findUnique({ where: { id: newProd.id } });
+    if (prodAfterDel !== null) {
+      throw new Error(`Test 5.3 Unreferenced product permanent removal failed: product still in DB`);
+    }
+
+    // Now test archiving when product HAS historical invoice items (referencing prod1 created earlier)
+    const delProdWithInvRes = await fetch(`${BASE}/products/${prod1.id}`, { method: 'DELETE' });
+    if (delProdWithInvRes.status !== 200) {
+      throw new Error(`Test 5.3 Delete Referenced Product Failed: ${delProdWithInvRes.status}`);
+    }
+    const prodArchived = await prisma.product.findUnique({ where: { id: prod1.id } });
+    if (!prodArchived || !prodArchived.isArchived) {
+      throw new Error(`Test 5.3 Referenced product soft delete failed: isArchived is false`);
+    }
+    console.log('✅ 5.3 Product CRUD, Search & Soft Deletion verified (Permanent delete when unused, archive when referenced)');
+
+    // =========================================================================
+    // TEST 5.4: Product Invalid Input Rejection
+    // =========================================================================
+    const invalidProdRes = await fetch(`${BASE}/products`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'X',
+        unitPrice: -500, // Negative unit price
+        taxRate: 150, // Invalid tax rate > 100%
+      }),
+    });
+    if (invalidProdRes.status !== 400) {
+      throw new Error(`Test 5.4 Invalid Product Input Failed: Expected 400, got ${invalidProdRes.status}`);
+    }
+    console.log('✅ 5.4 Invalid Product inputs rejected with validation error (HTTP 400)');
+
+    // =========================================================================
+    // TEST 5.5: System Health, Route 404 & Response Envelope Integrity
+    // =========================================================================
+    const healthRes = await fetch(`${BASE}/health`);
+    const healthJson = await healthRes.json();
+    if (healthRes.status !== 200 || healthJson.data?.status !== 'healthy' || healthJson.data?.database?.status !== 'connected') {
+      throw new Error(`Test 5.5 Health check failed: ${JSON.stringify(healthJson)}`);
+    }
+
+    const notFoundRes = await fetch(`${BASE}/non-existent-route-xyz`);
+    const notFoundJson = await notFoundRes.json();
+    if (notFoundRes.status !== 404 || notFoundJson.success !== false || notFoundJson.error?.code !== 'ERR_NOT_FOUND') {
+      throw new Error(`Test 5.5 404 error envelope failed: ${JSON.stringify(notFoundJson)}`);
+    }
+    console.log('✅ 5.5 System Health (/api/health) & Standard Error Envelopes verified');
+
+    console.log('\n=============================================================');
+    console.log('🏆 ALL PHASES (PHASE 1 - PHASE 5) VERIFIED & FULLY PASSING!');
+    console.log('=============================================================\n');
   } catch (err) {
     console.error('❌ Test suite failed:', err);
     process.exit(1);

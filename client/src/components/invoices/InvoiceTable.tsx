@@ -60,12 +60,13 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
     });
   }, [invoices, statusFilter, searchQuery, isSimulatedEmpty]);
 
-  // Format currency in Indian format
+  // Format currency in standard Indian format (INR)
   const formatAmount = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
-      maximumFractionDigits: 0,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     }).format(amount || 0);
   };
 

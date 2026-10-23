@@ -23,12 +23,26 @@ export function errorHandler(
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   next: NextFunction
 ) {
+  const isAppError = err instanceof AppError;
   const statusCode = err.statusCode || (err.status ? Number(err.status) : 500);
-  const message = err.message || 'Internal Server Error';
   const code = err.code || `ERR_${statusCode}`;
-  const details = env.NODE_ENV === 'development' ? err.stack : err.details;
 
-  console.error(`[Error] ${req.method} ${req.url}:`, err);
+  // In production, mask unhandled 500 errors so internal database/stack errors are never leaked
+  const message =
+    env.NODE_ENV === 'production' && !isAppError && statusCode === 500
+      ? 'An unexpected internal error occurred'
+      : err.message || 'Internal Server Error';
+
+  const details =
+    env.NODE_ENV === 'development'
+      ? err.stack
+      : isAppError
+      ? err.details
+      : undefined;
+
+  if (env.NODE_ENV !== 'test') {
+    console.error(`[Error] ${req.method} ${req.url}:`, err);
+  }
 
   return sendError(res, message, statusCode, code, details);
 }

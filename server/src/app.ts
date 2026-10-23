@@ -12,10 +12,24 @@ export function createApp(): Application {
   // Security headers
   app.use(helmet());
 
-  // CORS configuration
+  // CORS configuration supporting single or comma-separated origins
+  const allowedOrigins = [
+    ...env.CLIENT_URL.split(',').map((u) => u.trim().replace(/\/$/, '')),
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+  ].filter(Boolean);
+
   app.use(
     cors({
-      origin: [env.CLIENT_URL, 'http://localhost:5173', 'http://127.0.0.1:5173'],
+      origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps, curl, postman, or server-to-server)
+        if (!origin) return callback(null, true);
+        const normalized = origin.replace(/\/$/, '');
+        if (allowedOrigins.includes(normalized) || env.NODE_ENV === 'development') {
+          return callback(null, true);
+        }
+        return callback(new Error(`Origin ${origin} not allowed by CORS policy`));
+      },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization'],
