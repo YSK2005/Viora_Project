@@ -1,4 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '../generated/prisma-client';
+export { Prisma };
 import { env } from './env';
 
 // Prevent multiple instances of Prisma Client in development

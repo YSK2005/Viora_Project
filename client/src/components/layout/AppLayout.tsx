@@ -20,10 +20,12 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
+  const isDbConnected = systemHealth.database?.status === 'connected';
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-      {/* Top Banner reminding reviewer of Mock Data Preview mode */}
-      <MockDataBanner />
+      {/* Top Banner indicating PostgreSQL live mode */}
+      <MockDataBanner isDbConnected={isDbConnected} />
 
       <div className="flex-1 flex relative">
         {/* Collapsible Sidebar */}
@@ -61,9 +63,11 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                 © {new Date().getFullYear()} Viora Bills. Built for Viora Tech Internship.
               </div>
               <div className="flex items-center gap-4 text-[11px]">
-                <span className="text-teal-700 font-medium">Phase 1: Project Foundation</span>
+                <span className="text-teal-700 font-semibold">
+                  Phase 2: Database and Backend Active
+                </span>
                 <span>•</span>
-                <span>React · TypeScript · Vite · Tailwind · Node · Express · Prisma</span>
+                <span>PostgreSQL 18 · Prisma ORM · Node.js · Express · React · TypeScript</span>
               </div>
             </div>
           </footer>

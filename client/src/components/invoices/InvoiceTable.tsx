@@ -1,22 +1,24 @@
 import React, { useState, useMemo } from 'react';
-import { Invoice, InvoiceStatus } from '../../types';
+import { Invoice } from '../../types';
 import { InvoiceStatusBadge } from './InvoiceStatusBadge';
 import { EmptyState } from './EmptyState';
 import {
   Search,
   Filter,
   Eye,
-  Download,
   FilePlus,
   ArrowUpDown,
-  MoreVertical,
   SlidersHorizontal,
+  CreditCard,
+  SendHorizontal,
 } from 'lucide-react';
 
 interface InvoiceTableProps {
   invoices: Invoice[];
   onSelectInvoice?: (invoice: Invoice) => void;
   onNewInvoice?: () => void;
+  onIssueInvoice?: (invoice: Invoice) => void;
+  onRecordPayment?: (invoice: Invoice) => void;
   onSimulateEmptyToggle?: (isEmpty: boolean) => void;
   isSimulatedEmpty?: boolean;
 }
@@ -25,25 +27,29 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
   invoices,
   onSelectInvoice,
   onNewInvoice,
+  onIssueInvoice,
+  onRecordPayment,
   onSimulateEmptyToggle,
   isSimulatedEmpty = false,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | InvoiceStatus>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'DRAFT' | 'ISSUED' | 'PAID' | 'UNPAID'>('ALL');
 
   // Filtered invoices
   const filteredInvoices = useMemo(() => {
     if (isSimulatedEmpty) return [];
 
     return invoices.filter((inv) => {
-      const matchesStatus =
-        statusFilter === 'ALL' || inv.status === statusFilter;
+      let matchesStatus = true;
+      if (statusFilter === 'DRAFT') matchesStatus = inv.status === 'DRAFT';
+      else if (statusFilter === 'ISSUED') matchesStatus = inv.status === 'ISSUED';
+      else if (statusFilter === 'PAID') matchesStatus = inv.paymentStatus === 'PAID';
+      else if (statusFilter === 'UNPAID') matchesStatus = inv.paymentStatus === 'UNPAID' || inv.paymentStatus === 'PARTIALLY_PAID';
+
       const q = searchQuery.toLowerCase().trim();
-      const matchesSearch =
-        !q ||
-        inv.invoiceNumber.toLowerCase().includes(q) ||
-        inv.customerName.toLowerCase().includes(q) ||
-        inv.customerEmail.toLowerCase().includes(q);
+      const customer = (inv.customerName || '').toLowerCase();
+      const num = (inv.invoiceNumber || '').toLowerCase();
+      const matchesSearch = !q || num.includes(q) || customer.includes(q);
 
       return matchesStatus && matchesSearch;
     });
@@ -55,7 +61,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
       style: 'currency',
       currency: 'INR',
       maximumFractionDigits: 0,
-    }).format(amount);
+    }).format(amount || 0);
   };
 
   return (
@@ -64,13 +70,13 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
       <div className="p-4 sm:p-5 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-base font-semibold text-slate-900">Recent Invoices</h2>
+            <h2 className="text-base font-semibold text-slate-900">Invoices & Receivables</h2>
             <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
               {filteredInvoices.length} {filteredInvoices.length === 1 ? 'record' : 'records'}
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Overview of recently billed accounts and pending receivables
+            PostgreSQL billing registry: drafts, issued invoices, and payment statuses
           </p>
         </div>
 
@@ -94,7 +100,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
 
           <button
             onClick={onNewInvoice}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-medium bg-teal-600 hover:bg-teal-700 text-white shadow-sm transition-all hover:shadow"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white shadow-sm transition-all hover:shadow"
           >
             <FilePlus className="w-3.5 h-3.5" />
             <span>New Invoice</span>
@@ -111,7 +117,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Filter by invoice # or customer name..."
+            placeholder="Search by invoice number or customer name..."
             className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all"
           />
         </div>
@@ -120,21 +126,21 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
           <span className="text-xs text-slate-400 flex items-center gap-1 mr-1">
             <Filter className="w-3 h-3" />
-            Status:
+            Filter:
           </span>
-          {(['ALL', 'PAID', 'PENDING', 'OVERDUE', 'DRAFT'] as const).map((status) => {
-            const isActive = statusFilter === status;
+          {(['ALL', 'ISSUED', 'DRAFT', 'PAID', 'UNPAID'] as const).map((filter) => {
+            const isActive = statusFilter === filter;
             return (
               <button
-                key={status}
-                onClick={() => setStatusFilter(status)}
+                key={filter}
+                onClick={() => setStatusFilter(filter)}
                 className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
                   isActive
                     ? 'bg-navy-900 text-white shadow-xs'
                     : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
                 }`}
               >
-                {status === 'ALL' ? 'All' : status.charAt(0) + status.slice(1).toLowerCase()}
+                {filter === 'ALL' ? 'All' : filter.charAt(0) + filter.slice(1).toLowerCase()}
               </button>
             );
           })}
@@ -164,14 +170,15 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                 <th className="py-3 px-4 sm:px-6">Invoice #</th>
                 <th className="py-3 px-4">Customer</th>
                 <th className="py-3 px-4 hidden sm:table-cell">
-                  <div className="flex items-center gap-1 cursor-pointer hover:text-slate-700">
-                    Date
+                  <div className="flex items-center gap-1">
+                    Invoice Date
                     <ArrowUpDown className="w-3 h-3" />
                   </div>
                 </th>
                 <th className="py-3 px-4 hidden md:table-cell">Due Date</th>
-                <th className="py-3 px-4 text-right">Amount</th>
-                <th className="py-3 px-4 text-center">Payment Status</th>
+                <th className="py-3 px-4 text-right">Grand Total</th>
+                <th className="py-3 px-4 text-center">Lifecycle</th>
+                <th className="py-3 px-4 text-center">Payment</th>
                 <th className="py-3 px-4 sm:px-6 text-right">Actions</th>
               </tr>
             </thead>
@@ -183,21 +190,23 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                   onClick={() => onSelectInvoice?.(inv)}
                 >
                   {/* Invoice Number */}
-                  <td className="py-3.5 px-4 sm:px-6 font-medium text-teal-700 group-hover:underline">
+                  <td className="py-3.5 px-4 sm:px-6 font-semibold text-teal-700 group-hover:underline">
                     {inv.invoiceNumber}
                   </td>
 
                   {/* Customer */}
                   <td className="py-3.5 px-4">
-                    <div className="font-medium text-slate-900">{inv.customerName}</div>
-                    <div className="text-[11px] text-slate-400 truncate max-w-[180px]">
-                      {inv.customerEmail}
-                    </div>
+                    <div className="font-semibold text-slate-900">{inv.customerName || 'Customer'}</div>
+                    {inv.customerEmail && (
+                      <div className="text-[11px] text-slate-400 truncate max-w-[180px]">
+                        {inv.customerEmail}
+                      </div>
+                    )}
                   </td>
 
                   {/* Date */}
                   <td className="py-3.5 px-4 text-slate-500 hidden sm:table-cell">
-                    {inv.issueDate}
+                    {inv.invoiceDate}
                   </td>
 
                   {/* Due Date */}
@@ -206,13 +215,22 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                   </td>
 
                   {/* Amount */}
-                  <td className="py-3.5 px-4 text-right font-semibold text-slate-900">
-                    {formatAmount(inv.amount)}
+                  <td className="py-3.5 px-4 text-right font-bold text-slate-900">
+                    {formatAmount(inv.grandTotal)}
+                  </td>
+
+                  {/* Lifecycle Status Badge */}
+                  <td className="py-3.5 px-4 text-center">
+                    <InvoiceStatusBadge status={inv.status} />
                   </td>
 
                   {/* Payment Status Badge */}
                   <td className="py-3.5 px-4 text-center">
-                    <InvoiceStatusBadge status={inv.status} />
+                    {inv.status === 'ISSUED' ? (
+                      <InvoiceStatusBadge paymentStatus={inv.paymentStatus} />
+                    ) : (
+                      <span className="text-[11px] text-slate-400">—</span>
+                    )}
                   </td>
 
                   {/* Actions */}
@@ -220,7 +238,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                     className="py-3.5 px-4 sm:px-6 text-right"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <div className="flex items-center justify-end gap-1">
+                    <div className="flex items-center justify-end gap-1.5">
                       <button
                         type="button"
                         onClick={() => onSelectInvoice?.(inv)}
@@ -229,21 +247,30 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                       >
                         <Eye className="w-4 h-4" />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => alert(`Phase 2: PDF generation for ${inv.invoiceNumber}`)}
-                        title="Download PDF (Phase 2 Preview)"
-                        className="p-1.5 text-slate-400 hover:text-navy-900 hover:bg-slate-100 rounded-md transition-colors"
-                      >
-                        <Download className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        title="More options"
-                        className="p-1.5 text-slate-400 hover:text-slate-600 rounded-md transition-colors"
-                      >
-                        <MoreVertical className="w-4 h-4" />
-                      </button>
+
+                      {inv.status === 'DRAFT' && onIssueInvoice && (
+                        <button
+                          type="button"
+                          onClick={() => onIssueInvoice(inv)}
+                          title="Issue Official Invoice"
+                          className="px-2 py-1 text-[11px] font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-md flex items-center gap-1"
+                        >
+                          <SendHorizontal className="w-3 h-3" />
+                          Issue
+                        </button>
+                      )}
+
+                      {inv.status === 'ISSUED' && inv.paymentStatus !== 'PAID' && onRecordPayment && (
+                        <button
+                          type="button"
+                          onClick={() => onRecordPayment(inv)}
+                          title="Record Payment"
+                          className="px-2 py-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-md flex items-center gap-1"
+                        >
+                          <CreditCard className="w-3 h-3" />
+                          Pay
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -256,10 +283,10 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
       {/* Footer info */}
       <div className="px-4 py-3 bg-slate-50/50 border-t border-slate-200/80 flex items-center justify-between text-[11px] text-slate-500">
         <div>
-          Showing {filteredInvoices.length} of {invoices.length} total preview invoices
+          Showing {filteredInvoices.length} of {invoices.length} invoices
         </div>
-        <div className="text-slate-400">
-          GST-ready formatting (INR / ₹)
+        <div className="text-teal-700 font-medium">
+          PostgreSQL Database · Decimal Accurate
         </div>
       </div>
     </div>
