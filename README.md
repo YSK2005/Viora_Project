@@ -25,6 +25,8 @@
 | **Product & Service Catalog** | Full CRUD, multi-unit tracking (`PCS`, `HRS`, `MTR`, `KG`, `BOX`, `SET`), custom GST rates (0%, 5%, 12%, 18%, 28%), price precision, unreferenced deletion, and soft-delete archiving. |
 | **GST Calculation Engine** | Decimal-safe arithmetic (via `decimal.js`), line-item discounts applied prior to tax, automatic Intra-State (50% CGST + 50% SGST) vs. Inter-State (100% IGST) tax determination, and banker's half-up paisa rounding (`ROUND_HALF_UP`). |
 | **Invoice Lifecycle** | Two-tier lifecycle: editable `DRAFT` status and immutable `ISSUED` status. Sequential numbering (`INV-YYYY-XXXXXX`) assigned atomically upon issuance. |
+| **Instant Dispatch** | Automated dispatch modal upon invoice issuance triggering one-click WhatsApp API chat (`https://api.whatsapp.com/send?phone=...`) and pre-filled Gmail compose window (`https://mail.google.com/mail/...`) with detailed line-item summary and payment links. |
+| **Contact Validation & Guardrails** | Strict contact validation requiring either a valid 10-digit mobile number or email for every customer. Company WhatsApp and Gmail credentials strictly required in Settings before invoices can be issued. |
 | **Snapshot Audit Integrity** | Customer information, GSTIN, business profile, item descriptions, and unit prices are permanently snapshotted at the moment of invoice issuance, guaranteeing that future catalog or client changes never corrupt historical financial statements. |
 | **PDF Generation & Printing** | On-the-fly streaming PDF generation using `PDFKit` with clean corporate branding, GST tax breakdown tables, and payment status badges. Includes dedicated CSS `@media print` rules for flawless physical A4 printing. |
 | **Payment Ledger & Concurrency** | ACID transaction payment recording with row-level locking (`SELECT ... FOR UPDATE`), idempotency key deduplication (`requestKey`), overpayment rejection, and real-time status transitions (`UNPAID` ➔ `PARTIALLY_PAID` ➔ `PAID`). |
@@ -377,12 +379,17 @@ npm run test:backend
 - **npm**: `v9.0.0` or higher
 - **PostgreSQL**: `v14.0` or higher (tested with PostgreSQL 18)
 
-### 2. Clone & Install Dependencies
+### 2. Clone or Extract & Install Dependencies
 ```bash
-git clone https://github.com/vioratech/viora-bills.git
-cd viora-bills
+# Option A: Clone with Git
+git clone https://github.com/YSK2005/Viora_Project.git
+cd Viora_Project
 
-# Install dependencies across all workspaces
+# Option B: If downloaded as a ZIP from GitHub
+# Extract the ZIP, open PowerShell/Terminal in the extracted root folder:
+# cd Viora_Project-main/Viora_Project-main
+
+# Install dependencies across all workspaces (also auto-generates Prisma client)
 npm install
 ```
 
