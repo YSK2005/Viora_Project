@@ -120,7 +120,7 @@ export const ReportsView: React.FC = () => {
               setStartDate('');
               setEndDate('');
             }}
-            className="text-xs text-teal-700 hover:underline font-medium ml-auto"
+            className="text-xs text-purple-700 hover:underline font-medium ml-auto"
           >
             Clear Date Filters
           </button>

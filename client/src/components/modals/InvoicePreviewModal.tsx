@@ -9,10 +9,14 @@ import {
   FileCheck2,
   Receipt,
   FileText,
+  MessageCircle,
+  Mail,
 } from 'lucide-react';
-import { Invoice } from '../../types';
-import { fetchInvoiceDetails, issueInvoice, downloadInvoicePdf } from '../../services/api';
+import { Invoice, BusinessProfile } from '../../types';
+import { fetchInvoiceDetails, issueInvoice, downloadInvoicePdf, fetchBusiness } from '../../services/api';
 import { InvoiceStatusBadge } from '../invoices/InvoiceStatusBadge';
+import { InvoiceDispatchModal } from './InvoiceDispatchModal';
+import { openWhatsAppDispatch, openGmailDispatch } from '../../utils/dispatchInvoice';
 
 interface InvoicePreviewModalProps {
   invoiceId: string | null;
@@ -35,8 +39,26 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
   const [isIssuing, setIsIssuing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [companyLogo, setCompanyLogo] = useState<string | null>(null);
+  const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
+  const [showDispatchModal, setShowDispatchModal] = useState(false);
 
   useEffect(() => {
+    // Load logo from localStorage whenever modal opens
+    const localLogo = localStorage.getItem('billease_logo');
+    if (localLogo) setCompanyLogo(localLogo);
+
+    // Also fetch current business profile as reliable fallback
+    fetchBusiness()
+      .then((b) => {
+        setBusinessProfile(b);
+        if (b.logoUrl) {
+          setCompanyLogo(b.logoUrl);
+          localStorage.setItem('billease_logo', b.logoUrl);
+        }
+      })
+      .catch(() => {});
+
     if (!isOpen || !invoiceId) {
       setInvoice(null);
       return;
@@ -47,6 +69,10 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
     fetchInvoiceDetails(invoiceId)
       .then((data) => {
         setInvoice(data);
+        const invBusinessLogo = (data as any)?.business?.logoUrl;
+        if (invBusinessLogo) {
+          setCompanyLogo(invBusinessLogo);
+        }
       })
       .catch((err) => {
         setError(err.message || 'Failed to load invoice details');
@@ -87,6 +113,27 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
 
   const handleIssue = async () => {
     if (!invoice) return;
+
+    // Check company WhatsApp & Gmail before issuing
+    const cleanBizPhone = (businessProfile?.phone || '').replace(/\D/g, '');
+    const hasBizWhatsApp = cleanBizPhone.length >= 10;
+    const hasBizEmail = Boolean(businessProfile?.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(businessProfile.email.trim()));
+
+    if (!hasBizWhatsApp || !hasBizEmail) {
+      alert('Company WhatsApp number (min 10 digits) and Gmail/Email are mandatory to issue and send invoices. Please configure them in Settings.');
+      return;
+    }
+
+    // Check customer contact before issuing
+    const custPhoneDigits = (invoice.customerPhoneSnapshot || (invoice as any).customer?.phone || '').replace(/\D/g, '').slice(-10);
+    const hasCustPhone = custPhoneDigits.length === 10;
+    const hasCustEmail = Boolean(invoice.customerEmailSnapshot || (invoice as any).customer?.email);
+
+    if (!hasCustPhone && !hasCustEmail) {
+      alert('Customer must have a 10-digit phone number (for WhatsApp) or email address (for Gmail) to receive the invoice.');
+      return;
+    }
+
     if (!window.confirm(`Issue invoice for ${invoice.customerName}? An official sequential invoice number will be assigned.`)) return;
 
     try {
@@ -94,6 +141,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
       const issued = await issueInvoice(invoice.id);
       setInvoice(issued);
       setActionNotice(`Invoice ${issued.invoiceNumber} has been officially issued!`);
+      setShowDispatchModal(true);
       setTimeout(() => setActionNotice(null), 3000);
       onIssueSuccess?.();
     } catch (err: any) {
@@ -109,8 +157,8 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-navy-950/50 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto">
       {/* Toast Alert */}
       {actionNotice && (
-        <div className="fixed top-6 right-6 z-50 bg-teal-900 text-white text-xs px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2 animate-in slide-in-from-top-2 no-print">
-          <FileCheck2 className="w-4 h-4 text-teal-400" />
+        <div className="fixed top-6 right-6 z-50 bg-navy-950 text-white text-xs px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2 animate-in slide-in-from-top-2 no-print">
+          <FileCheck2 className="w-4 h-4 text-brand-400" />
           <span>{actionNotice}</span>
         </div>
       )}
@@ -119,11 +167,11 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
         {/* Top Action Toolbar (Hidden in print) */}
         <div className="no-print p-4 sm:px-6 bg-slate-50 border-b border-slate-200/90 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center border border-teal-200">
+            <div className="w-8 h-8 rounded-lg bg-brand-400/10 text-brand-600 flex items-center justify-center border border-brand-200">
               <Receipt className="w-4 h-4" />
             </div>
             <div>
-              <div className="text-[10px] font-bold tracking-wider text-teal-700 uppercase">
+              <div className="text-[10px] font-bold tracking-wider text-brand-600 uppercase">
                 Invoice Preview
               </div>
               <h2 className="text-base font-bold text-slate-900 leading-tight">
@@ -141,7 +189,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
                   disabled={isDownloadingPdf}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg shadow-xs transition-colors"
                 >
-                  <Download className="w-3.5 h-3.5 text-teal-600" />
+                  <Download className="w-3.5 h-3.5 text-purple-600" />
                   <span>{isDownloadingPdf ? 'Generating...' : 'Download PDF'}</span>
                 </button>
 
@@ -159,11 +207,35 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
                     type="button"
                     onClick={handleIssue}
                     disabled={isIssuing}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-black bg-brand-400 hover:bg-brand-500 rounded-lg shadow-sm transition-colors"
                   >
                     <SendHorizontal className="w-3.5 h-3.5" />
                     <span>{isIssuing ? 'Issuing...' : 'Issue Invoice'}</span>
                   </button>
+                )}
+
+                {invoice.status === 'ISSUED' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => openWhatsAppDispatch(invoice)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg shadow-xs transition-colors"
+                      title="Send on WhatsApp to customer"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>WhatsApp</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => openGmailDispatch(invoice)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-300 rounded-lg shadow-xs transition-colors"
+                      title="Send via Gmail to customer"
+                    >
+                      <Mail className="w-3.5 h-3.5 text-rose-600" />
+                      <span>Gmail</span>
+                    </button>
+                  </>
                 )}
 
                 {invoice.status === 'ISSUED' && invoice.paymentStatus !== 'PAID' && onOpenPayment && (
@@ -173,7 +245,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
                       onClose();
                       onOpenPayment(invoice);
                     }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-lg shadow-sm transition-colors"
                   >
                     <CreditCard className="w-3.5 h-3.5" />
                     <span>Record Payment</span>
@@ -196,7 +268,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
         <div className="flex-1 overflow-y-auto p-6 sm:p-10 bg-slate-100/60 print:bg-white print:p-0">
           {isLoading && (
             <div className="py-20 text-center">
-              <div className="w-8 h-8 border-3 border-teal-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              <div className="w-8 h-8 border-3 border-brand-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
               <p className="text-xs text-slate-500 font-medium">Fetching invoice and tax details from PostgreSQL...</p>
             </div>
           )}
@@ -210,15 +282,23 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
           {invoice && (
             <div className="print-only-container bg-white rounded-xl shadow-xs border border-slate-200/80 p-6 sm:p-8 max-w-3xl mx-auto space-y-6">
               {/* Top Accent Strip */}
-              <div className="h-1 bg-gradient-to-r from-teal-500 to-teal-700 rounded-t -mt-6 sm:-mt-8 -mx-6 sm:-mx-8 mb-6" />
+              <div className="h-1 bg-gradient-to-r from-brand-400 to-accent-600 rounded-t -mt-6 sm:-mt-8 -mx-6 sm:-mx-8 mb-6" />
 
               {/* Header: Company & Invoice Info */}
               <div className="flex flex-col sm:flex-row justify-between items-start gap-4 pb-6 border-b border-slate-200">
                 <div className="space-y-1.5 max-w-sm">
-                  <div className="flex items-center gap-2">
-                    <Building2 className="w-6 h-6 text-teal-600" />
+                  <div className="flex items-center gap-3">
+                    {companyLogo ? (
+                      <img
+                        src={companyLogo}
+                        alt="Company logo"
+                        className="h-12 w-auto max-w-[120px] object-contain flex-shrink-0"
+                      />
+                    ) : (
+                      <Building2 className="w-6 h-6 text-brand-500 flex-shrink-0" />
+                    )}
                     <h1 className="text-xl font-extrabold text-navy-950 tracking-tight">
-                      {invoice.businessNameSnapshot || 'Viora Tech Solutions Pvt Ltd'}
+                      {invoice.businessNameSnapshot || 'Your Business Name'}
                     </h1>
                   </div>
                   <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed">
@@ -242,7 +322,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
 
                 <div className="sm:text-right space-y-1 w-full sm:w-auto">
                   <div className="inline-flex items-center gap-2 mb-1">
-                    <span className="text-sm font-extrabold tracking-wider text-teal-700 uppercase">
+                    <span className="text-sm font-extrabold tracking-wider text-brand-600 uppercase">
                       TAX INVOICE
                     </span>
                     <InvoiceStatusBadge status={invoice.status} />
@@ -262,7 +342,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
                     <span className="text-slate-400">Place of Supply: </span>
                     <span className="font-medium text-slate-800">{invoice.placeOfSupply || 'Karnataka'}</span>
                   </div>
-                  <div className="text-xs font-semibold text-teal-800 bg-teal-50/80 px-2.5 py-1 rounded-md inline-block border border-teal-200/60 mt-1">
+                  <div className="text-xs font-semibold text-accent-800 bg-accent-50 px-2.5 py-1 rounded-md inline-block border border-accent-200 mt-1">
                     {isInterState ? 'Inter-State Supply (IGST)' : 'Intra-State Supply (CGST + SGST)'}
                   </div>
                 </div>
@@ -421,7 +501,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
                   {/* Grand Total Highlight */}
                   <div className="pt-2 border-t border-slate-300 flex justify-between items-center text-sm font-extrabold text-navy-950">
                     <span>Grand Total:</span>
-                    <span className="font-mono text-base text-teal-800">
+                    <span className="font-mono text-base text-brand-700">
                       {formatCurrency(invoice.grandTotal)}
                     </span>
                   </div>
@@ -478,12 +558,19 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
 
               {/* Bottom Computer-Generated Notice */}
               <div className="pt-6 border-t border-slate-200 text-center text-[10px] text-slate-400">
-                Thank you for your business. This is a computer-generated tax invoice generated via Viora Bills.
+                Thank you for your business. This is a computer-generated tax invoice generated via BillEase.
               </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* Direct WhatsApp and Gmail Dispatch Modal */}
+      <InvoiceDispatchModal
+        isOpen={showDispatchModal}
+        invoice={invoice}
+        onClose={() => setShowDispatchModal(false)}
+      />
     </div>
   );
 };

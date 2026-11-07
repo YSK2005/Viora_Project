@@ -15,7 +15,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   return (
     <div className="flex flex-col items-center justify-center p-12 text-center bg-white rounded-xl border border-slate-200/80 shadow-card">
       <div className="relative mb-4">
-        <div className="w-16 h-16 rounded-2xl bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-700">
+        <div className="w-16 h-16 rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-700">
           <ReceiptText className="w-8 h-8" />
         </div>
         <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-navy-800 text-white flex items-center justify-center text-xs shadow-md">
@@ -44,7 +44,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
         )}
         <button
           onClick={onNewInvoice}
-          className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm transition-all hover:shadow"
+          className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg shadow-sm transition-all hover:shadow"
         >
           <FilePlus2 className="w-4 h-4" />
           Create First Invoice

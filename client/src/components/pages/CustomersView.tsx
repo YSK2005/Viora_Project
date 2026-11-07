@@ -6,6 +6,7 @@ import {
   updateCustomer,
   deleteCustomer,
 } from '../../services/api';
+import { StateSelect } from '../common/StateSelect';
 import {
   Users,
   Search,
@@ -31,6 +32,7 @@ export const CustomersView: React.FC = () => {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Form fields
   const [name, setName] = useState('');
@@ -38,6 +40,7 @@ export const CustomersView: React.FC = () => {
   const [email, setEmail] = useState('');
   const [billingAddress, setBillingAddress] = useState('');
   const [gstin, setGstin] = useState('');
+  const [customerState, setCustomerState] = useState('Karnataka');
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -66,41 +69,70 @@ export const CustomersView: React.FC = () => {
     setEmail('');
     setBillingAddress('');
     setGstin('');
+    setCustomerState('Karnataka');
+    setFormError(null);
     setIsModalOpen(true);
   };
 
   const handleOpenEditModal = (c: Customer) => {
     setEditingCustomer(c);
     setName(c.name);
-    setPhone(c.phone);
+    setPhone(c.phone ? c.phone.replace(/\D/g, '').slice(-10) : '');
     setEmail(c.email || '');
     setBillingAddress(c.billingAddress);
     setGstin(c.gstin || '');
+    setCustomerState(c.state || 'Karnataka');
+    setFormError(null);
     setIsModalOpen(true);
   };
 
   const handleSaveCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !phone.trim() || !billingAddress.trim()) return;
+    setFormError(null);
+
+    if (!name.trim()) {
+      setFormError('Customer name is required.');
+      return;
+    }
+    if (!billingAddress.trim()) {
+      setFormError('Billing address is required.');
+      return;
+    }
+
+    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+    const hasPhone = cleanPhone.length === 10;
+    const hasEmail = Boolean(email.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()));
+
+    if (!hasPhone && !hasEmail) {
+      setFormError('At least one contact method (10-digit Phone Number or valid Email) is mandatory so invoices can be sent to this customer.');
+      return;
+    }
+
+    if (phone.trim() && cleanPhone.length !== 10) {
+      setFormError('Phone number must be exactly 10 digits.');
+      return;
+    }
 
     setIsSubmitting(true);
     try {
       if (editingCustomer) {
         await updateCustomer(editingCustomer.id, {
           name: name.trim(),
-          phone: phone.trim(),
+          phone: cleanPhone || '',
           email: email.trim() || undefined,
           billingAddress: billingAddress.trim(),
           gstin: gstin.trim() || undefined,
+          state: customerState.trim() || undefined,
         });
         setToastMessage('Customer details updated successfully');
       } else {
         await createCustomer({
           name: name.trim(),
-          phone: phone.trim(),
+          phone: cleanPhone || '',
           email: email.trim() || undefined,
           billingAddress: billingAddress.trim(),
           gstin: gstin.trim() || undefined,
+          state: customerState.trim() || undefined,
         });
         setToastMessage('Customer created successfully');
       }
@@ -113,9 +145,11 @@ export const CustomersView: React.FC = () => {
       setEmail('');
       setBillingAddress('');
       setGstin('');
+      setCustomerState('Karnataka');
+      setFormError(null);
       loadData();
     } catch (err: any) {
-      alert(`Error saving customer: ${err.message}`);
+      setFormError(err.message || 'Failed to save customer');
     } finally {
       setIsSubmitting(false);
     }
@@ -165,7 +199,7 @@ export const CustomersView: React.FC = () => {
 
         <button
           onClick={handleOpenAddModal}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white shadow-sm transition-all hover:shadow"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-sm transition-all hover:shadow"
         >
           <Plus className="w-4 h-4" />
           <span>Add Customer</span>
@@ -220,7 +254,7 @@ export const CustomersView: React.FC = () => {
           </p>
           <button
             onClick={handleOpenAddModal}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm"
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-lg shadow-sm"
           >
             <Plus className="w-4 h-4" />
             Add Customer
@@ -252,13 +286,17 @@ export const CustomersView: React.FC = () => {
                       )}
                     </td>
                     <td className="py-3.5 px-4">
-                      <div className="flex items-center gap-1.5 text-slate-600">
-                        <Phone className="w-3.5 h-3.5 text-slate-400" />
-                        <span>{c.phone}</span>
-                      </div>
+                      {c.phone ? (
+                        <div className="flex items-center gap-1.5 text-slate-700 font-mono text-xs">
+                          <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>+91 {c.phone.replace(/\D/g, '').slice(-10)}</span>
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-slate-400 italic">No phone</span>
+                      )}
                       {c.email && (
-                        <div className="flex items-center gap-1.5 text-slate-400 text-[11px] mt-0.5">
-                          <Mail className="w-3.5 h-3.5" />
+                        <div className="flex items-center gap-1.5 text-slate-500 text-[11px] mt-0.5">
+                          <Mail className="w-3.5 h-3.5 text-rose-500" />
                           <span>{c.email}</span>
                         </div>
                       )}
@@ -290,7 +328,7 @@ export const CustomersView: React.FC = () => {
                           onClick={() => handleOpenEditModal(c)}
                           title="Edit Customer Details"
                           aria-label={`Edit ${c.name}`}
-                          className="p-1.5 text-slate-400 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition-colors"
+                          className="p-1.5 text-slate-400 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-colors"
                         >
                           <FileEdit className="w-4 h-4" />
                         </button>
@@ -342,6 +380,18 @@ export const CustomersView: React.FC = () => {
             </div>
 
             <form onSubmit={handleSaveCustomer} className="p-6 space-y-4">
+              {formError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{formError}</span>
+                </div>
+              )}
+
+              <div className="p-2.5 bg-purple-50/70 border border-purple-100 rounded-lg text-[11px] text-purple-900">
+                <span className="font-semibold text-purple-700">Contact Requirement: </span>
+                At least one contact method (<strong>10-digit Phone</strong> for WhatsApp or <strong>Email</strong> for Gmail) is mandatory to send invoices.
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Customer / Business Name <span className="text-rose-500">*</span>
@@ -352,36 +402,53 @@ export const CustomersView: React.FC = () => {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Tata Consultancy Services Ltd"
-                  className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                  className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Phone Number <span className="text-rose-500">*</span>
+                    Phone Number (10 Digits) {!email.trim() && <span className="text-rose-500">*</span>}
                   </label>
-                  <input
-                    type="text"
-                    required
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+91 98765 43210"
-                    className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3 top-2 text-xs font-medium text-slate-400 select-none">
+                      +91
+                    </span>
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/\D/g, '');
+                        let clean = digits;
+                        if (digits.length > 10 && digits.startsWith('91')) {
+                          clean = digits.slice(-10);
+                        } else if (digits.length === 11 && digits.startsWith('0')) {
+                          clean = digits.slice(1);
+                        } else {
+                          clean = digits.slice(0, 10);
+                        }
+                        setPhone(clean);
+                      }}
+                      placeholder="9876543210"
+                      className="w-full pl-10 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 font-mono"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-0.5">10 digits used for WhatsApp delivery</p>
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Email Address
+                    Email Address (Gmail) {!phone.trim() && <span className="text-rose-500">*</span>}
                   </label>
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="accounts@tata.com"
-                    className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600"
                   />
+                  <p className="text-[10px] text-slate-400 mt-0.5">Used for direct Gmail delivery</p>
                 </div>
               </div>
 
@@ -395,20 +462,29 @@ export const CustomersView: React.FC = () => {
                   value={billingAddress}
                   onChange={(e) => setBillingAddress(e.target.value)}
                   placeholder="Street address, City, State, PIN code"
-                  className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                  className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600"
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  GSTIN (Tax Identifier, optional)
-                </label>
-                <input
-                  type="text"
-                  value={gstin}
-                  onChange={(e) => setGstin(e.target.value.toUpperCase())}
-                  placeholder="29ABCDE1234F1Z5"
-                  className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    GSTIN (Tax Identifier, optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={gstin}
+                    onChange={(e) => setGstin(e.target.value.toUpperCase())}
+                    placeholder="29ABCDE1234F1Z5"
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600"
+                  />
+                </div>
+
+                <StateSelect
+                  id="customerState"
+                  label="State (Place of Supply)"
+                  value={customerState}
+                  onChange={(val) => setCustomerState(val)}
                 />
               </div>
 
@@ -426,7 +502,7 @@ export const CustomersView: React.FC = () => {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-4 py-2 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm disabled:opacity-50"
+                  className="px-4 py-2 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-lg shadow-sm disabled:opacity-50"
                 >
                   {isSubmitting ? 'Saving...' : editingCustomer ? 'Save Changes' : 'Save Customer'}
                 </button>

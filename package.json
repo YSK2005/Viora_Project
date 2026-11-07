@@ -17,6 +17,7 @@
     "type-check": "npm run type-check --workspace=server && npm run type-check --workspace=client",
     "lint": "npm run lint --workspace=server && npm run lint --workspace=client",
     "test:backend": "npm run test:backend --workspace=server",
+    "db:reset": "npm run db:reset --workspace=server",
     "start": "npm run start --workspace=server"
   },
   "devDependencies": {

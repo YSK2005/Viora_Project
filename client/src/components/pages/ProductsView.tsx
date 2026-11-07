@@ -181,7 +181,7 @@ export const ProductsView: React.FC = () => {
 
         <button
           onClick={handleOpenAddModal}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white shadow-sm transition-all hover:shadow"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-sm transition-all hover:shadow"
         >
           <Plus className="w-4 h-4" />
           <span>Add Product</span>
@@ -236,7 +236,7 @@ export const ProductsView: React.FC = () => {
           </p>
           <button
             onClick={handleOpenAddModal}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm"
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-lg shadow-sm"
           >
             <Plus className="w-4 h-4" />
             Add First Product
@@ -306,7 +306,7 @@ export const ProductsView: React.FC = () => {
                           onClick={() => handleOpenEditModal(p)}
                           title="Edit Product Details"
                           aria-label={`Edit ${p.name}`}
-                          className="p-1.5 text-slate-400 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition-colors"
+                          className="p-1.5 text-slate-400 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-colors"
                         >
                           <FileEdit className="w-4 h-4" />
                         </button>
@@ -453,7 +453,7 @@ export const ProductsView: React.FC = () => {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-4 py-2 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm disabled:opacity-50"
+                  className="px-4 py-2 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-lg shadow-sm disabled:opacity-50"
                 >
                   {isSubmitting ? 'Saving...' : editingProduct ? 'Save Changes' : 'Save Product'}
                 </button>

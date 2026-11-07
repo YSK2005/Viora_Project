@@ -227,7 +227,7 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
                 type="checkbox"
                 checked={confirmed}
                 onChange={(e) => setConfirmed(e.target.checked)}
-                className="mt-0.5 rounded text-teal-600 focus:ring-teal-500/20 border-slate-300"
+                className="mt-0.5 rounded text-purple-600 focus:ring-purple-500/20 border-slate-300"
               />
               <span className="text-[11px] text-slate-600 leading-tight">
                 I confirm that payment of <strong className="text-slate-900">{formatCurrency(payAmt)}</strong> was physically received from <strong className="text-slate-900">{invoice.customerName}</strong> via {method.replace('_', ' ')}.
@@ -246,7 +246,7 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
             <button
               type="submit"
               disabled={isSubmitting || invoice.balanceRemaining <= 0 || !confirmed || isOverpaying || payAmt <= 0}
-              className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm disabled:opacity-50 transition-colors"
+              className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-lg shadow-sm disabled:opacity-50 transition-colors"
             >
               <CheckCircle2 className="w-3.5 h-3.5" />
               {isSubmitting ? 'Recording...' : 'Record Payment'}

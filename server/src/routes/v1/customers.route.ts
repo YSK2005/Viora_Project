@@ -8,16 +8,87 @@ import { getOrCreateDefaultBusiness } from '../../utils/businessHelper';
 
 const router = Router();
 
-const createCustomerSchema = z.object({
-  name: z.string().min(2, 'Customer name must be at least 2 characters'),
-  phone: z.string().min(5, 'Phone number must be at least 5 characters'),
-  email: z.string().email('Invalid email address').optional().nullable(),
-  billingAddress: z.string().min(3, 'Billing address must be at least 3 characters'),
-  gstin: z.string().optional().nullable(),
-  state: z.string().optional().nullable(),
-});
+const clean10DigitPhone = (val: unknown): string => {
+  if (typeof val !== 'string') return '';
+  const digits = val.replace(/\D/g, '');
+  if (digits.length === 10) return digits;
+  if (digits.length === 11 && digits.startsWith('0')) return digits.slice(1);
+  if (digits.length > 10 && digits.startsWith('91')) return digits.slice(-10);
+  return digits.length > 10 ? digits.slice(-10) : digits;
+};
 
-const updateCustomerSchema = createCustomerSchema.partial();
+const createCustomerSchema = z
+  .object({
+    name: z.string().min(2, 'Customer name must be at least 2 characters'),
+    phone: z
+      .string()
+      .optional()
+      .nullable()
+      .transform((val) => (val ? clean10DigitPhone(val) : '')),
+    email: z
+      .string()
+      .email('Invalid email address')
+      .optional()
+      .nullable()
+      .or(z.literal('')),
+    billingAddress: z.string().min(3, 'Billing address must be at least 3 characters'),
+    gstin: z.string().optional().nullable(),
+    state: z.string().optional().nullable(),
+  })
+  .refine(
+    (data) => {
+      const hasPhone = Boolean(data.phone && /^\d{10}$/.test(data.phone));
+      const hasEmail = Boolean(data.email && data.email.trim().length > 0);
+      return hasPhone || hasEmail;
+    },
+    {
+      message: 'At least one contact method (10-digit Phone Number or valid Email) is mandatory',
+      path: ['phone'],
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.phone && data.phone.length > 0) {
+        return /^\d{10}$/.test(data.phone);
+      }
+      return true;
+    },
+    {
+      message: 'Phone number must be exactly 10 digits',
+      path: ['phone'],
+    }
+  );
+
+const updateCustomerSchema = z
+  .object({
+    name: z.string().min(2).optional(),
+    phone: z
+      .string()
+      .optional()
+      .nullable()
+      .transform((val) => (val !== undefined && val !== null ? clean10DigitPhone(val) : undefined)),
+    email: z
+      .string()
+      .email('Invalid email address')
+      .optional()
+      .nullable()
+      .or(z.literal('')),
+    billingAddress: z.string().min(3).optional(),
+    gstin: z.string().optional().nullable(),
+    state: z.string().optional().nullable(),
+  })
+  .refine(
+    (data) => {
+      if (data.phone !== undefined && data.phone !== null && data.phone.length > 0) {
+        return /^\d{10}$/.test(data.phone);
+      }
+      return true;
+    },
+    {
+      message: 'Phone number must be exactly 10 digits',
+      path: ['phone'],
+    }
+  );
 
 const customerQuerySchema = z.object({
   search: z.string().optional(),
@@ -165,6 +236,17 @@ router.put(
       const existing = await prisma.customer.findUnique({ where: { id } });
       if (!existing) {
         throw new AppError('Customer not found', 404, 'ERR_CUSTOMER_NOT_FOUND');
+      }
+
+      const candidatePhone = req.body.phone !== undefined ? req.body.phone.trim() : existing.phone;
+      const candidateEmail = req.body.email !== undefined ? (req.body.email ? req.body.email.trim() : null) : existing.email;
+
+      if (!candidatePhone && !candidateEmail) {
+        throw new AppError(
+          'At least one contact method (10-digit Phone Number or valid Email) is mandatory',
+          400,
+          'ERR_CONTACT_MANDATORY'
+        );
       }
 
       const updated = await prisma.customer.update({

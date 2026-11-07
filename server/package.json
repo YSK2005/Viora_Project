@@ -14,6 +14,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "prisma:seed": "tsx prisma/seed.ts",
+    "db:reset": "tsx prisma/reset-db.ts",
     "test:backend": "tsx test-endpoints.ts"
   },
   "dependencies": {

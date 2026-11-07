@@ -24,7 +24,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-      {/* Top Banner indicating PostgreSQL live mode */}
+      {/* MockDataBanner returns null — kept for code compatibility */}
       <MockDataBanner isDbConnected={isDbConnected} />
 
       <div className="flex-1 flex relative">
@@ -56,18 +56,11 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             {children}
           </main>
 
-          {/* Minimal Enterprise Footer */}
+          {/* Footer */}
           <footer className="py-4 px-6 border-t border-slate-200/80 bg-white text-center text-xs text-slate-400">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-2 max-w-7xl mx-auto">
               <div>
-                © {new Date().getFullYear()} Viora Bills. Built for Viora Tech Internship.
-              </div>
-              <div className="flex items-center gap-4 text-[11px]">
-                <span className="text-teal-700 font-semibold">
-                  Phase 5: Production Verified
-                </span>
-                <span>•</span>
-                <span>PostgreSQL 18 · Prisma ORM · Node.js · Express · React · TypeScript</span>
+                © {new Date().getFullYear()} Billy. Smart Business Invoicing.
               </div>
             </div>
           </footer>

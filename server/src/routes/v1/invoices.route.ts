@@ -288,6 +288,7 @@ router.get('/:id/pdf', async (req: Request, res: Response, next: NextFunction) =
       paymentStatus: paymentInfo.paymentStatus,
       business: {
         name: inv.businessNameSnapshot || inv.business.name,
+        logoUrl: inv.business.logoUrl || null,
         address: inv.businessAddressSnapshot || inv.business.address,
         phone: inv.businessPhoneSnapshot || inv.business.phone,
         email: inv.businessEmailSnapshot || inv.business.email,
@@ -605,6 +606,40 @@ router.post('/:id/issue', async (req: Request, res: Response, next: NextFunction
 
     if (existing.items.length === 0) {
       throw new AppError('Cannot issue an invoice with zero items', 400, 'ERR_EMPTY_INVOICE');
+    }
+
+    // Verify company WhatsApp & Gmail are configured before issuing (strictly mandatory)
+    const business = await prisma.business.findUnique({
+      where: { id: existing.businessId },
+    });
+
+    if (!business) {
+      throw new AppError('Business profile not found', 404, 'ERR_BUSINESS_NOT_FOUND');
+    }
+
+    const cleanBizPhone = (business.phone || '').replace(/\D/g, '');
+    const hasBizWhatsApp = cleanBizPhone.length >= 10;
+    const hasBizGmail = Boolean(business.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(business.email.trim()));
+
+    if (!hasBizWhatsApp || !hasBizGmail) {
+      throw new AppError(
+        'Company WhatsApp number (min 10 digits) and Gmail/Email are mandatory to issue and send invoices. Please configure them in Settings.',
+        400,
+        'ERR_COMPANY_CONTACT_MANDATORY'
+      );
+    }
+
+    // Customer contact (10-digit phone or email) is mandatory to send the invoice
+    const cleanCustPhone = (existing.customer?.phone || '').replace(/\D/g, '');
+    const hasCustPhone = cleanCustPhone.length >= 10;
+    const hasCustEmail = Boolean(existing.customer?.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(existing.customer.email.trim()));
+
+    if (!hasCustPhone && !hasCustEmail) {
+      throw new AppError(
+        'Customer must have at least one contact method (10-digit phone number or email) to receive the invoice.',
+        400,
+        'ERR_CUSTOMER_CONTACT_MANDATORY'
+      );
     }
 
     // Atomic transaction for number assignment and status transition

@@ -116,7 +116,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
           {onOpenRecordPayment && (
             <button
               onClick={onOpenRecordPayment}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white shadow-sm transition-all"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-sm transition-all"
             >
               <PlusCircle className="w-4 h-4" />
               <span>Record Payment</span>
@@ -192,7 +192,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
         {hasActiveFilters && (
           <button
             onClick={handleClearFilters}
-            className="text-xs text-teal-700 hover:underline font-medium ml-auto"
+            className="text-xs text-purple-700 hover:underline font-medium ml-auto"
           >
             Clear Filters
           </button>
@@ -202,7 +202,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
       {/* Content Area */}
       {isLoading ? (
         <div className="p-16 flex flex-col items-center justify-center bg-white rounded-xl border border-slate-200/80">
-          <Loader2 className="w-8 h-8 text-teal-600 animate-spin mb-3" />
+          <Loader2 className="w-8 h-8 text-purple-600 animate-spin mb-3" />
           <p className="text-xs text-slate-500 font-medium">Loading payments ledger...</p>
         </div>
       ) : error ? (
@@ -219,7 +219,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
         </div>
       ) : payments.length === 0 ? (
         <div className="p-12 text-center bg-white rounded-xl border border-slate-200/80 shadow-card">
-          <div className="w-14 h-14 rounded-2xl bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-700 mx-auto mb-3">
+          <div className="w-14 h-14 rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-700 mx-auto mb-3">
             <CreditCard className="w-7 h-7" />
           </div>
           <h3 className="text-base font-semibold text-slate-900 mb-1">
@@ -233,7 +233,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
           {hasActiveFilters && (
             <button
               onClick={handleClearFilters}
-              className="px-3.5 py-1.5 text-xs font-medium text-teal-700 bg-teal-50 hover:bg-teal-100 rounded-lg border border-teal-200"
+              className="px-3.5 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg border border-purple-200"
             >
               Reset Filters
             </button>
@@ -261,13 +261,13 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                       {onSelectInvoice ? (
                         <button
                           onClick={() => onSelectInvoice(p.invoiceId)}
-                          className="inline-flex items-center gap-1 font-semibold text-teal-700 hover:text-teal-900 hover:underline"
+                          className="inline-flex items-center gap-1 font-semibold text-purple-700 hover:text-purple-900 hover:underline"
                         >
                           <span>{p.invoiceNumber || 'INV'}</span>
-                          <ExternalLink className="w-3 h-3 text-teal-500" />
+                          <ExternalLink className="w-3 h-3 text-purple-500" />
                         </button>
                       ) : (
-                        <span className="font-semibold text-teal-700">{p.invoiceNumber || 'INV'}</span>
+                        <span className="font-semibold text-purple-700">{p.invoiceNumber || 'INV'}</span>
                       )}
                     </td>
                     <td className="py-3.5 px-4 font-medium text-navy-900">

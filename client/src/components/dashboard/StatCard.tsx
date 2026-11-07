@@ -4,13 +4,13 @@ import { LucideIcon, TrendingUp, TrendingDown } from 'lucide-react';
 interface StatCardProps {
   title: string;
   value: string;
-  subtext: string;
+  subtext?: string;
   trend?: {
     value: string;
     isPositive: boolean;
   };
   icon: LucideIcon;
-  accent: 'teal' | 'navy' | 'emerald' | 'amber';
+  accent: 'teal' | 'navy' | 'emerald' | 'amber' | 'purple';
 }
 
 export const StatCard: React.FC<StatCardProps> = ({
@@ -25,6 +25,10 @@ export const StatCard: React.FC<StatCardProps> = ({
     teal: {
       bgIcon: 'bg-teal-50 text-teal-700 border-teal-200/60',
       badge: 'bg-teal-50 text-teal-700',
+    },
+    purple: {
+      bgIcon: 'bg-purple-50 text-purple-700 border-purple-200/60',
+      badge: 'bg-purple-50 text-purple-700',
     },
     navy: {
       bgIcon: 'bg-navy-100 text-navy-800 border-navy-200/60',
@@ -52,23 +56,25 @@ export const StatCard: React.FC<StatCardProps> = ({
         </div>
       </div>
 
-      <div className="mt-4 flex items-center justify-between text-xs pt-3 border-t border-slate-100">
-        <span className="text-slate-500">{subtext}</span>
-        {trend && (
-          <span
-            className={`inline-flex items-center gap-1 font-semibold ${
-              trend.isPositive ? 'text-emerald-600' : 'text-amber-600'
-            }`}
-          >
-            {trend.isPositive ? (
-              <TrendingUp className="w-3.5 h-3.5" />
-            ) : (
-              <TrendingDown className="w-3.5 h-3.5" />
-            )}
-            {trend.value}
-          </span>
-        )}
-      </div>
+      {(subtext || trend) && (
+        <div className="mt-4 flex items-center justify-between text-xs pt-3 border-t border-slate-100">
+          {subtext && <span className="text-slate-500">{subtext}</span>}
+          {trend && (
+            <span
+              className={`inline-flex items-center gap-1 font-semibold ${
+                trend.isPositive ? 'text-emerald-600' : 'text-amber-600'
+              }`}
+            >
+              {trend.isPositive ? (
+                <TrendingUp className="w-3.5 h-3.5" />
+              ) : (
+                <TrendingDown className="w-3.5 h-3.5" />
+              )}
+              {trend.value}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 };

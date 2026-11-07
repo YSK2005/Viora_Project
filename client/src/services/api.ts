@@ -259,6 +259,7 @@ export async function createCustomer(data: {
   email?: string;
   billingAddress: string;
   gstin?: string;
+  state?: string;
 }): Promise<Customer> {
   const res = await fetch(`${API_BASE}/customers`, {
     method: 'POST',
@@ -281,6 +282,7 @@ export async function updateCustomer(
     email?: string;
     billingAddress: string;
     gstin?: string;
+    state?: string;
   }>
 ): Promise<Customer> {
   const res = await fetch(`${API_BASE}/customers/${id}`, {

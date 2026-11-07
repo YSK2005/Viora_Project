@@ -4,10 +4,6 @@ import { InvoiceTable } from '../invoices/InvoiceTable';
 import { Invoice, DashboardSummary } from '../../types';
 import {
   FilePlus,
-  Sparkles,
-  Database,
-  Layers,
-  FileCheck2,
   Users,
   Package,
 } from 'lucide-react';
@@ -69,34 +65,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Welcome & Quick Action Bar */}
-      <div className="bg-white rounded-xl border border-slate-200/80 p-5 shadow-card flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-bold text-navy-900 tracking-tight">
-              {summary?.business?.name || 'Viora Tech Solutions'}
-            </h2>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-800 border border-teal-200">
-              <Sparkles className="w-3 h-3 text-teal-600" />
-              Real-time Analytics Active
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 mt-1 max-w-2xl">
-            Live PostgreSQL database active. Sales, collections, outstanding balances, and customer ledger entries are persisted and calculated with strict decimal precision.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2.5">
-          <button
-            onClick={onNewInvoice}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white shadow-sm transition-all hover:shadow"
-          >
-            <FilePlus className="w-4 h-4" />
-            <span>Create Invoice</span>
-          </button>
-        </div>
-      </div>
-
       {/* Date Range Selector Toolbar */}
       <div className="bg-white rounded-xl border border-slate-200/80 p-3.5 shadow-card flex flex-wrap items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-2">
@@ -145,24 +113,32 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
+        <button
+          onClick={onNewInvoice}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold bg-brand-400 hover:bg-brand-500 text-black shadow-sm transition-all hover:shadow"
+        >
+          <FilePlus className="w-4 h-4" />
+          <span>Create Invoice</span>
+        </button>
+
         {selectedPreset === 'CUSTOM' && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             <input
               type="date"
               value={customStart}
               onChange={(e) => setCustomStart(e.target.value)}
-              className="px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+              className="px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-400/30"
             />
             <span className="text-slate-400">to</span>
             <input
               type="date"
               value={customEnd}
               onChange={(e) => setCustomEnd(e.target.value)}
-              className="px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+              className="px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-400/30"
             />
             <button
               onClick={handleApplyCustomDates}
-              className="px-3 py-1 font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg"
+              className="px-3 py-1 font-semibold text-black bg-brand-400 hover:bg-brand-500 rounded-lg"
             >
               Apply
             </button>
@@ -175,18 +151,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="p-6 bg-slate-50 border border-slate-200 rounded-xl text-center">
           <h4 className="text-sm font-semibold text-navy-900 mb-1">No invoices found for this reporting period</h4>
           <p className="text-xs text-slate-500 max-w-md mx-auto mb-3">
-            All analytics and financial summaries reflect real persisted database records. Create and issue your first invoice to populate real-time sales and payment analytics.
+            Create and issue your first invoice to populate real-time sales and payment analytics.
           </p>
           <button
             onClick={onNewInvoice}
-            className="px-3 py-1.5 text-xs font-semibold text-teal-700 bg-white border border-teal-300 hover:bg-teal-50 rounded-lg shadow-xs"
+            className="px-3 py-1.5 text-xs font-bold text-black bg-brand-400 hover:bg-brand-500 rounded-lg shadow-xs border border-brand-500"
           >
             + Create New Invoice
           </button>
         </div>
       )}
 
-      {/* Overview Metric Cards (Real PostgreSQL Calculations) */}
+      {/* Overview Metric Cards */}
       <section aria-label="Financial Overview">
         <MetricsGrid summary={summary} />
       </section>
@@ -195,10 +171,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div
           onClick={onNavigateToCustomers}
-          className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-card hover:border-teal-300 transition-colors cursor-pointer flex items-center justify-between"
+          className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-card hover:border-brand-400 transition-colors cursor-pointer flex items-center justify-between"
         >
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center border border-teal-200">
+            <div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-700 flex items-center justify-center border border-brand-200">
               <Users className="w-5 h-5" />
             </div>
             <div>
@@ -208,15 +184,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             </div>
           </div>
-          <span className="text-xs font-semibold text-teal-700 hover:underline">Manage →</span>
+          <span className="text-xs font-semibold text-brand-600 hover:underline">Manage →</span>
         </div>
 
         <div
           onClick={onNavigateToProducts}
-          className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-card hover:border-teal-300 transition-colors cursor-pointer flex items-center justify-between"
+          className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-card hover:border-brand-400 transition-colors cursor-pointer flex items-center justify-between"
         >
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center border border-teal-200">
+            <div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-700 flex items-center justify-center border border-brand-200">
               <Package className="w-5 h-5" />
             </div>
             <div>
@@ -226,7 +202,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             </div>
           </div>
-          <span className="text-xs font-semibold text-teal-700 hover:underline">Manage →</span>
+          <span className="text-xs font-semibold text-brand-600 hover:underline">Manage →</span>
         </div>
       </section>
 
@@ -239,39 +215,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           isSimulatedEmpty={isSimulatedEmpty}
           onSimulateEmptyToggle={onSimulateEmptyToggle}
         />
-      </section>
-
-      {/* Phase 2 Architecture Verification */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-card">
-          <div className="flex items-center gap-2 text-xs font-bold text-navy-900 mb-2">
-            <Database className="w-4 h-4 text-teal-600" />
-            PostgreSQL 18 & Prisma ORM
-          </div>
-          <p className="text-xs text-slate-500">
-            6 core relational models with foreign keys, indexes, and soft deletion protection for audited historical records.
-          </p>
-        </div>
-
-        <div className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-card">
-          <div className="flex items-center gap-2 text-xs font-bold text-navy-900 mb-2">
-            <FileCheck2 className="w-4 h-4 text-teal-600" />
-            Decimal-Safe Arithmetic
-          </div>
-          <p className="text-xs text-slate-500">
-            All money calculations use PostgreSQL NUMERIC and decimal.js without floating-point inaccuracies.
-          </p>
-        </div>
-
-        <div className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-card">
-          <div className="flex items-center gap-2 text-xs font-bold text-navy-900 mb-2">
-            <Layers className="w-4 h-4 text-teal-600" />
-            Atomic Transactions
-          </div>
-          <p className="text-xs text-slate-500">
-            Invoice issuance, sequential numbering, and idempotency-locked payment settlements run within ACID transactions.
-          </p>
-        </div>
       </section>
     </div>
   );

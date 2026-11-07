@@ -1,5 +1,6 @@
 import PDFDocument from 'pdfkit';
 import { Readable } from 'stream';
+import fs from 'fs';
 
 export interface InvoicePdfData {
   invoiceNumber: string;
@@ -102,8 +103,35 @@ export function generateInvoicePdfStream(invoice: InvoicePdfData): NodeJS.Readab
 
   let currentY = margin + 12;
 
+  // Render business logo if available
+  let busNameX = margin;
+  let hasLogo = false;
+
+  if (invoice.business.logoUrl) {
+    try {
+      let imgBuffer: Buffer | null = null;
+      if (invoice.business.logoUrl.startsWith('data:image/')) {
+        const parts = invoice.business.logoUrl.split('base64,');
+        if (parts[1]) {
+          imgBuffer = Buffer.from(parts[1], 'base64');
+        }
+      } else if (invoice.business.logoUrl.startsWith('/') || invoice.business.logoUrl.includes(':\\')) {
+        if (fs.existsSync(invoice.business.logoUrl)) {
+          imgBuffer = fs.readFileSync(invoice.business.logoUrl);
+        }
+      }
+      if (imgBuffer) {
+        doc.image(imgBuffer, margin, currentY, { fit: [60, 36] });
+        busNameX = margin + 68;
+        hasLogo = true;
+      }
+    } catch (imgErr) {
+      console.warn('PDF logo rendering notice:', imgErr);
+    }
+  }
+
   // Header Title & Business Details
-  doc.fillColor(primaryColor).fontSize(18).font('Helvetica-Bold').text(invoice.business.name, margin, currentY);
+  doc.fillColor(primaryColor).fontSize(16).font('Helvetica-Bold').text(invoice.business.name, busNameX, currentY + (hasLogo ? 4 : 0), { width: 230 });
   
   // Right header: TAX INVOICE
   doc.fontSize(16).fillColor(brandTeal).text('TAX INVOICE', margin, currentY, {
@@ -111,7 +139,7 @@ export function generateInvoicePdfStream(invoice: InvoicePdfData): NodeJS.Readab
     width: contentWidth,
   });
 
-  currentY += 22;
+  const busDetailsY = hasLogo ? currentY + 42 : currentY + 22;
 
   // Business metadata on left
   doc.fontSize(8.5).font('Helvetica').fillColor(textColor);
@@ -122,25 +150,25 @@ export function generateInvoicePdfStream(invoice: InvoicePdfData): NodeJS.Readab
     invoice.business.state ? `State: ${invoice.business.state}` : null,
   ].filter(Boolean) as string[];
 
-  doc.text(busLines.join('\n'), margin, currentY, { width: 300, lineGap: 2 });
+  doc.text(busLines.join('\n'), margin, busDetailsY, { width: 300, lineGap: 2 });
 
   // Invoice Meta Box on right
   const metaBoxWidth = 190;
   const metaBoxX = pageWidth - margin - metaBoxWidth;
   doc.fontSize(9).font('Helvetica-Bold').fillColor(primaryColor);
-  doc.text(`Invoice No: ${invoice.invoiceNumber}`, metaBoxX, currentY, { align: 'right', width: metaBoxWidth });
+  doc.text(`Invoice No: ${invoice.invoiceNumber}`, metaBoxX, currentY + 20, { align: 'right', width: metaBoxWidth });
   doc.font('Helvetica').fontSize(8.5).fillColor(textColor);
-  doc.text(`Date: ${invoice.invoiceDate}`, metaBoxX, currentY + 14, { align: 'right', width: metaBoxWidth });
-  doc.text(`Due Date: ${invoice.dueDate}`, metaBoxX, currentY + 26, { align: 'right', width: metaBoxWidth });
-  doc.text(`Place of Supply: ${invoice.placeOfSupply || 'Karnataka'}`, metaBoxX, currentY + 38, { align: 'right', width: metaBoxWidth });
+  doc.text(`Date: ${invoice.invoiceDate}`, metaBoxX, currentY + 33, { align: 'right', width: metaBoxWidth });
+  doc.text(`Due Date: ${invoice.dueDate}`, metaBoxX, currentY + 45, { align: 'right', width: metaBoxWidth });
+  doc.text(`Place of Supply: ${invoice.placeOfSupply || 'Karnataka'}`, metaBoxX, currentY + 57, { align: 'right', width: metaBoxWidth });
   doc.text(
     `Supply Type: ${invoice.isInterState ? 'Inter-State (IGST)' : 'Intra-State (CGST + SGST)'}`,
     metaBoxX,
-    currentY + 50,
+    currentY + 69,
     { align: 'right', width: metaBoxWidth }
   );
 
-  currentY += 68;
+  currentY = hasLogo ? currentY + 88 : currentY + 68;
 
   // Divider line
   doc.strokeColor(borderColor).lineWidth(0.75).moveTo(margin, currentY).lineTo(pageWidth - margin, currentY).stroke();
