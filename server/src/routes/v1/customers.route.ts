@@ -8,6 +8,7 @@ import { getOrCreateDefaultBusiness } from '../../utils/businessHelper';
 import {
   validateAndNormalizeIndianPhone,
   validateAndNormalizeGSTIN,
+  sanitizePlainText,
 } from '../../utils/validators';
 
 const router = Router();
@@ -18,7 +19,8 @@ const createCustomerSchema = z
       .string()
       .trim()
       .min(2, 'Customer name must be at least 2 characters')
-      .max(200, 'Customer name cannot exceed 200 characters'),
+      .max(200, 'Customer name cannot exceed 200 characters')
+      .transform((val) => sanitizePlainText(val)),
     phone: z
       .string()
       .optional()
@@ -50,7 +52,8 @@ const createCustomerSchema = z
       .string()
       .trim()
       .min(3, 'Billing address must be at least 3 characters')
-      .max(500, 'Billing address cannot exceed 500 characters'),
+      .max(500, 'Billing address cannot exceed 500 characters')
+      .transform((val) => sanitizePlainText(val)),
     gstin: z
       .string()
       .optional()
@@ -89,6 +92,7 @@ const updateCustomerSchema = z
       .trim()
       .min(2, 'Customer name must be at least 2 characters')
       .max(200, 'Customer name cannot exceed 200 characters')
+      .transform((val) => (val ? sanitizePlainText(val) : val))
       .optional(),
     phone: z
       .string()
@@ -123,6 +127,7 @@ const updateCustomerSchema = z
       .trim()
       .min(3, 'Billing address must be at least 3 characters')
       .max(500, 'Billing address cannot exceed 500 characters')
+      .transform((val) => (val ? sanitizePlainText(val) : val))
       .optional(),
     gstin: z
       .string()

@@ -73,3 +73,15 @@ export function validateAndNormalizeGSTIN(val: unknown): string | null {
   return trimmed;
 }
 
+/**
+ * Sanitizes user text by stripping dangerous HTML and script tags to prevent Stored XSS.
+ */
+export function sanitizePlainText(val: unknown): string {
+  if (val === null || val === undefined) return '';
+  if (typeof val !== 'string') return String(val);
+  return val
+    .replace(/<[^>]*>/g, '') // Strip HTML tags
+    .replace(/[<>]/g, '')     // Strip any loose angle brackets
+    .trim();
+}
+

@@ -25,7 +25,8 @@ export function createApp(): Application {
         // Allow requests with no origin (like mobile apps, curl, postman, or server-to-server)
         if (!origin) return callback(null, true);
         const normalized = origin.replace(/\/$/, '');
-        if (allowedOrigins.includes(normalized) || env.NODE_ENV === 'development') {
+        const isLocalDevelopment = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(normalized);
+        if (allowedOrigins.includes(normalized) || (env.NODE_ENV === 'development' && isLocalDevelopment)) {
           return callback(null, true);
         }
         return callback(new Error(`Origin ${origin} not allowed by CORS policy`));
