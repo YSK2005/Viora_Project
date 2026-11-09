@@ -335,6 +335,11 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
         return;
       }
 
+      if (dueDate && invoiceDate && dueDate < invoiceDate) {
+        setError('Due date cannot be before invoice date.');
+        return;
+      }
+
       if (shouldIssueNow) {
         // Enforce company WhatsApp & Gmail before issuing
         const cleanBizPhone = (businessProfile?.phone || '').replace(/\D/g, '');

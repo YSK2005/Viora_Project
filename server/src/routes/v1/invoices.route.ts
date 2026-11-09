@@ -35,7 +35,13 @@ const createInvoiceSchema = z.object({
   isInterState: z.boolean().optional(),
   notes: z.string().max(1000).optional().nullable(),
   items: z.array(invoiceItemSchema).min(1, 'At least one line item is required').max(100),
-});
+}).refine(
+  (data) => data.dueDate >= data.invoiceDate,
+  {
+    message: 'Due date cannot be before invoice date',
+    path: ['dueDate'],
+  }
+);
 
 const updateInvoiceSchema = createInvoiceSchema;
 

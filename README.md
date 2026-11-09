@@ -9,7 +9,7 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791.svg)](https://www.postgresql.org/)
 [![Prisma](https://img.shields.io/badge/Prisma-5.18-2d3748.svg)](https://www.prisma.io/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4-38b2ac.svg)](https://tailwindcss.com/)
-[![Tests Passing](https://img.shields.io/badge/Tests-36%20Passed-success.svg)](#-automated-testing-results)
+[![Tests Passing](https://img.shields.io/badge/Tests-44%20QA%20%2B%2034%20Stabilization%20Passing-success.svg)](#-automated-testing-results)
 
 ---
 
@@ -307,67 +307,42 @@ All responses follow a consistent JSend-style JSON envelope:
 
 ## 🧪 Automated Testing Results
 
-The automated verification suite tests 36 comprehensive real-world scenarios across the entire financial lifecycle.
+The automated verification suite tests **44 comprehensive real-world scenarios** across Phase 3, 4, 5, and Master QA (A–H), plus a dedicated **34-test stabilization suite** for Bugs B1 through B23.
 
-**Execution Command:**
+**Execution Commands:**
 ```bash
+# Run Master End-to-End QA Test Suite (44 scenarios)
 npm run test:backend
+
+# Run Bug-Fix Stabilization Test Suite (34 tests covering B1-B23)
+npm run test:backend --workspace=server -- test-stabilization.ts
 ```
 
-**Real Execution Output:**
+**Real Execution Summary:**
 ```text
-🧪 Starting Phase 3 Comprehensive Verification & Test Suite...
-
-✅ 1. Correct specification invoice totals verified: Gross ₹1,000, Taxable ₹900, Tax ₹90, Total ₹990
-✅ 2. Multiple products calculation verified: Subtotal ₹4,000, Tax ₹594, Grand Total ₹4,294
-✅ 3. Mixed tax rates verified across 0%, 5%, 18%, 28%: Total Tax ₹760, Grand Total ₹4,660
-✅ 4. Fixed discounts verified: Gross ₹1,000, Discount ₹250, Taxable ₹750, Tax ₹135, Total ₹885
-✅ 5. Fractional quantities verified (2.75 hrs @ ₹1,200): Gross ₹3,300, Tax ₹594, Total ₹3,894
-✅ 6. Rounding edge case verified: 1 @ ₹33.33 @ 18% tax => Tax ₹6.00, Line Total ₹39.33
-✅ 7. Missing customer correctly rejected with HTTP 404 ERR_CUSTOMER_NOT_FOUND
-✅ 8. Empty invoice items correctly rejected with HTTP 400
-✅ 9. Negative/zero quantity correctly rejected with HTTP 400
-✅ 10. Excessive discount (> gross amount) correctly rejected with HTTP 400
-✅ 11. Unique invoice numbering verified upon issuance: INV-2026-000001 (Status: ISSUED)
-✅ 12. Concurrent invoice issuance verified: Serialized unique numbers (INV-2026-000002, INV-2026-000003)
-✅ 13. Draft editing verified: Total recalculated from ₹1,000 to ₹1,500
-✅ 14. Prevention of issued invoice modification verified: Rejected with HTTP 400 ERR_INVOICE_NOT_DRAFT
-✅ 15. PDF generation stream verified: HTTP 200, Content-Type application/pdf, %PDF-1.3 header
-✅ 16. Historical snapshot integrity verified: Stored unit price remains ₹500 despite product price update to ₹9,999
-
-🎉 ALL 16 PHASE 3 VERIFICATION TESTS PASSED SUCCESSFULLY!
-
-🧪 Starting Phase 4 Payment Tracking, Dashboard Analytics & Reports Tests...
-
-✅ 1. No payment produces UNPAID (Total: ₹1,000, Paid: ₹0, Remaining: ₹1,000)
-✅ 2. Partial payment produces PARTIALLY_PAID (Paid: ₹400, Balance: ₹600)
-✅ 3. Final payment produces PAID (Paid: ₹1,000, Balance: ₹0)
-✅ 4. Outstanding balance arithmetic reconciled: grandTotal (₹1,000) === totalPaid (₹1,000) + balanceRemaining (₹0)
-✅ 5. Zero, negative, and malformed payment amounts strictly rejected (HTTP 400)
-✅ 6. Overpayment strictly rejected (Attempted ₹2,500 on ₹2,000 balance -> HTTP 400 ERR_OVERPAYMENT_REJECTED)
-✅ 7. Duplicate idempotency keys do not double-post payments (Single record in DB, HTTP 409 Conflict on retry)
-✅ 8. Concurrent payment requests serialized via row locking (One accepted: ₹1,000, one rejected: overpayment prevented)
-✅ 9. Draft invoices cannot receive payments (HTTP 400 ERR_INVALID_INVOICE_STATUS)
-✅ 10. Dashboard sales exclude drafts (Drafts count: 9, Draft sales excluded from ₹368,800)
-✅ 11. Sales attributed by invoice date (₹3,500 reported under period 2026-04)
-✅ 12. Collections attributed by payment date (₹3,500 reported under period 2026-05, not April)
-✅ 13. Daily and monthly aggregates reconcile with source records (Sales: ₹372,300, Collections: ₹146,000)
-✅ 14. Date filters operate across month and year boundaries seamlessly
-✅ 15. Empty database periods produce valid empty summaries (0 sales, 0 collections, 0 invoices, 0 NaN)
-
-🎉 ALL 15 PHASE 4 VERIFICATION TESTS PASSED SUCCESSFULLY!
-
-🧪 Starting Phase 5 Final QA, CRUD Integrity & Security Tests...
-
-✅ 5.1 Customer CRUD, Search & Soft Deletion verified (Permanent delete when unused, archive when referenced)
-✅ 5.2 Invalid Customer inputs rejected with validation error (HTTP 400)
-✅ 5.3 Product CRUD, Search & Soft Deletion verified (Permanent delete when unused, archive when referenced)
-✅ 5.4 Invalid Product inputs rejected with validation error (HTTP 400)
-✅ 5.5 System Health (/api/health) & Standard Error Envelopes verified
-
+🧪 Phase 3 Financial Calculations & Integrity: 16 / 16 PASSED
+🧪 Phase 4 Payments, Ledger, Idempotency & Reports: 15 / 15 PASSED
+🧪 Phase 5 CRUD Lifecycle, Soft Delete & Health: 5 / 5 PASSED
+🚀 Master QA Scenarios (TEST A through TEST H): 8 / 8 PASSED
 =============================================================
-🏆 ALL PHASES (PHASE 1 - PHASE 5) VERIFIED & FULLY PASSING!
+🏆 ALL 44 BACKEND QA SCENARIOS FULLY PASSED!
 =============================================================
+
+🧪 Bug-Fix & Stabilization Suite (B1 - B23):
+✅ B1: Concurrent Invoice Issuance (Row Locking)
+✅ B2: 50 Parallel Draft Creations (Collision-safe IDs)
+✅ B3: Quantity Precision (3 decimals: 0.125 preserved)
+✅ B5 & B22: IST Timezone Boundaries & Receivables Split
+✅ B6: 10-Digit Indian Phone Normalization & Rejection
+✅ B7: PDF Pagination Margins (Single-page clean render)
+✅ B8: Snapshot Freezing on Issuance
+✅ B9: 15-character GSTIN Validation
+✅ B11: Draft Deletion & Issued Cancellation
+✅ B17: Duplicate Customer Rejection & Sub-Paisa Validation
+✅ B20: Zero-Total Invoice Issue Blocking
+======================================================
+🎉 ALL 34 STABILIZATION TESTS PASSED!
+======================================================
 ```
 
 ---
