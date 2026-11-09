@@ -172,9 +172,9 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
       setBusinessState(bState);
 
       if (editingInvoice) {
-        setCustomerId(editingInvoice.customerId);
-        setInvoiceDate(editingInvoice.invoiceDate);
-        setDueDate(editingInvoice.dueDate);
+        setCustomerId(editingInvoice.customerId || '');
+        setInvoiceDate(editingInvoice.invoiceDate || new Date().toISOString().split('T')[0]);
+        setDueDate(editingInvoice.dueDate || new Date().toISOString().split('T')[0]);
         setPlaceOfSupply(editingInvoice.placeOfSupply || bState);
         setIsInterState(Boolean(editingInvoice.isInterState));
         setNotes(editingInvoice.notes || '');
@@ -182,12 +182,12 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
           setItems(
             editingInvoice.items.map((it) => ({
               productId: it.productId || '',
-              description: it.descriptionSnapshot,
-              unit: it.unit || 'PCS',
-              quantity: it.quantity,
-              unitPrice: it.unitPrice,
-              discountAmount: it.discountAmount || 0,
-              taxRate: it.taxRate || 0,
+              description: it.descriptionSnapshot || (it as any).description || '',
+              unit: it.unit || (it as any).unitSnapshot || 'PCS',
+              quantity: Number(it.quantity) || 1,
+              unitPrice: Number(it.unitPrice) || 0,
+              discountAmount: Number(it.discountAmount) || 0,
+              taxRate: Number(it.taxRate) || 0,
             }))
           );
         }

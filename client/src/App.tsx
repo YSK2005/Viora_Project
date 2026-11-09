@@ -14,6 +14,7 @@ import { RecordPaymentModal } from './components/modals/RecordPaymentModal';
 import { InvoiceDispatchModal } from './components/modals/InvoiceDispatchModal';
 import {
   fetchInvoices,
+  fetchInvoiceDetails,
   fetchDashboardSummary,
   fetchBusiness,
   fetchHealth,
@@ -177,9 +178,21 @@ export const App: React.FC = () => {
     setIsNewInvoiceOpen(true);
   };
 
-  const handleEditDraft = (inv: Invoice) => {
-    setEditingInvoice(inv);
-    setIsNewInvoiceOpen(true);
+  const handleEditDraft = async (inv: Invoice) => {
+    try {
+      // If invoice doesn't have items array populated (e.g. from invoice list), fetch full details
+      if (!inv.items || inv.items.length === 0) {
+        const full = await fetchInvoiceDetails(inv.id);
+        setEditingInvoice(full);
+      } else {
+        setEditingInvoice(inv);
+      }
+      setIsNewInvoiceOpen(true);
+    } catch (err: any) {
+      console.error('Failed to load full invoice for editing:', err);
+      setEditingInvoice(inv);
+      setIsNewInvoiceOpen(true);
+    }
   };
 
   return (
