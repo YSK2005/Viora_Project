@@ -278,10 +278,11 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                         <button
                           type="button"
                           onClick={() => onEditDraft(inv)}
-                          title="Edit Draft"
-                          className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors"
+                          title="Edit Draft Invoice"
+                          className="px-2 py-1 text-[11px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-md flex items-center gap-1 transition-colors"
                         >
-                          <FileEdit className="w-4 h-4" />
+                          <FileEdit className="w-3.5 h-3.5 text-slate-600" />
+                          <span>Edit</span>
                         </button>
                       )}
 
@@ -289,7 +290,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                         <button
                           type="button"
                           onClick={() => onDeleteDraft(inv)}
-                          title="Delete Draft"
+                          title="Delete Draft Invoice"
                           className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
                         >
                           <Trash2 className="w-4 h-4" />

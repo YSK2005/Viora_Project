@@ -13,6 +13,11 @@ interface DashboardViewProps {
   invoices: Invoice[];
   onSelectInvoice: (inv: Invoice) => void;
   onNewInvoice: () => void;
+  onIssueInvoice?: (inv: Invoice) => void;
+  onRecordPayment?: (inv: Invoice) => void;
+  onEditDraft?: (inv: Invoice) => void;
+  onDeleteDraft?: (inv: Invoice) => void;
+  onCancelInvoice?: (inv: Invoice) => void;
   onNavigateToCustomers?: () => void;
   onNavigateToProducts?: () => void;
   onDateRangeChange?: (startDate?: string, endDate?: string) => void;
@@ -23,6 +28,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   invoices,
   onSelectInvoice,
   onNewInvoice,
+  onIssueInvoice,
+  onRecordPayment,
+  onEditDraft,
+  onDeleteDraft,
+  onCancelInvoice,
   onNavigateToCustomers,
   onNavigateToProducts,
   onDateRangeChange,
@@ -208,6 +218,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           invoices={invoices}
           onSelectInvoice={onSelectInvoice}
           onNewInvoice={onNewInvoice}
+          onIssueInvoice={onIssueInvoice}
+          onRecordPayment={onRecordPayment}
+          onEditDraft={onEditDraft}
+          onDeleteDraft={onDeleteDraft}
+          onCancelInvoice={onCancelInvoice}
         />
       </section>
     </div>

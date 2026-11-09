@@ -203,6 +203,11 @@ export const App: React.FC = () => {
             invoices={invoices}
             onSelectInvoice={(inv) => setPreviewInvoiceId(inv.id)}
             onNewInvoice={handleOpenNewInvoice}
+            onIssueInvoice={handleIssueInvoice}
+            onRecordPayment={(inv) => setPaymentInvoice(inv)}
+            onEditDraft={handleEditDraft}
+            onDeleteDraft={handleDeleteDraft}
+            onCancelInvoice={handleCancelInvoice}
             onNavigateToCustomers={() => setCurrentNav('customers')}
             onNavigateToProducts={() => setCurrentNav('products')}
             onDateRangeChange={handleDashboardDateRangeChange}
@@ -298,6 +303,7 @@ export const App: React.FC = () => {
           setPreviewInvoiceId(null);
           setPaymentInvoice(inv);
         }}
+        onEditDraft={handleEditDraft}
       />
 
       {/* Post-Issue Direct Dispatch Modal */}

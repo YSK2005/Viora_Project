@@ -9,6 +9,7 @@ import {
   FileCheck2,
   Receipt,
   FileText,
+  FileEdit,
   MessageCircle,
   Mail,
 } from 'lucide-react';
@@ -24,6 +25,7 @@ interface InvoicePreviewModalProps {
   onClose: () => void;
   onIssueSuccess?: () => void;
   onOpenPayment?: (inv: Invoice) => void;
+  onEditDraft?: (inv: Invoice) => void;
 }
 
 export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
@@ -32,6 +34,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
   onClose,
   onIssueSuccess,
   onOpenPayment,
+  onEditDraft,
 }) => {
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -213,6 +216,20 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
                   <Printer className="w-3.5 h-3.5 text-white" />
                   <span>Print Invoice (1 Page)</span>
                 </button>
+
+                {invoice.status === 'DRAFT' && onEditDraft && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onEditDraft(invoice);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg shadow-xs transition-colors"
+                  >
+                    <FileEdit className="w-3.5 h-3.5 text-slate-600" />
+                    <span>Edit Draft</span>
+                  </button>
+                )}
 
                 {invoice.status === 'DRAFT' && (
                   <button
