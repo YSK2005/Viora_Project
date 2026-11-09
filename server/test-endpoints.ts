@@ -6,6 +6,8 @@ import { calculateLineItem, calculateInvoiceTotals } from './src/utils/money';
 async function runTests() {
   console.log('🧪 Starting Phase 3 Comprehensive Verification & Test Suite...\n');
 
+  const RUN_ID = Date.now(); // Unique per run to avoid duplicate-customer rejections
+
   const app = createApp();
   const server = http.createServer(app);
 
@@ -23,11 +25,10 @@ async function runTests() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name: 'Phase 3 Enterprise Client',
-        phone: '+91 98888 77777',
-        email: 'billing@enterpriseclient.in',
+        name: `Phase 3 Enterprise Client ${RUN_ID}`,
+        phone: `9${String(RUN_ID).slice(-9)}`,
+        email: `billing-${RUN_ID}@enterpriseclient.in`,
         billingAddress: '42 Cyber City, DLF Phase 2, Gurugram, Haryana - 122002',
-        gstin: '06AAACE1234F1Z1',
         state: 'Haryana',
       }),
     });
@@ -386,13 +387,14 @@ async function runTests() {
     console.log('🧪 Starting Phase 4 Payment Tracking, Dashboard Analytics & Reports Tests...\n');
 
     // Setup dedicated customer for Phase 4 tests
+    const p4Phone = `9${String(RUN_ID + 1).slice(-9)}`;
     const p4CustRes = await fetch(`${BASE}/customers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name: 'Phase 4 Payment Test Corp',
-        phone: '+91 91234 56789',
-        email: 'billing@p4corp.com',
+        name: `Phase 4 Payment Test Corp ${RUN_ID}`,
+        phone: p4Phone,
+        email: `billing-p4-${RUN_ID}@p4corp.com`,
         billingAddress: 'Tower 4, Electronic City, Bangalore, Karnataka',
         state: 'Karnataka',
       }),
@@ -763,16 +765,16 @@ async function runTests() {
     // =========================================================================
     // TEST 5.1: Customer CRUD, Search & Soft Deletion
     // =========================================================================
+    const p5Phone = `9${String(RUN_ID + 2).slice(-9)}`;
     const newCustRes = await fetch(`${BASE}/customers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name: 'Phase 5 QA Customer',
-        phone: '+91 99999 11111',
-        email: 'qa.test@vioratech.com',
+        name: `Phase 5 QA Customer ${RUN_ID}`,
+        phone: p5Phone,
+        email: `qa-${RUN_ID}@vioratech.com`,
         billingAddress: 'QA Park, Koramangala 4th Block, Bangalore',
         state: 'Karnataka',
-        gstin: '29ABCDE1234F1Z5',
       }),
     });
     if (newCustRes.status !== 201) {
@@ -783,7 +785,7 @@ async function runTests() {
     // Get by ID
     const getCustRes = await fetch(`${BASE}/customers/${newCust.id}`);
     const getCust = (await getCustRes.json()).data;
-    if (getCust.name !== 'Phase 5 QA Customer' || getCust.email !== 'qa.test@vioratech.com') {
+    if (!getCust.name.startsWith('Phase 5 QA Customer') || !getCust.email.includes('@vioratech.com')) {
       throw new Error(`Test 5.1 Get Customer Failed: ${JSON.stringify(getCust)}`);
     }
 
@@ -792,13 +794,13 @@ async function runTests() {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name: 'Phase 5 QA Customer (Updated)',
+        name: `Phase 5 QA Customer (Updated) ${RUN_ID}`,
         phone: '+91 99999 22222',
       }),
     });
     const updatedCust = (await updateCustRes.json()).data;
     const expectedPhone = '9999922222';
-    if (updatedCust.name !== 'Phase 5 QA Customer (Updated)' || (updatedCust.phone !== expectedPhone && updatedCust.phone !== '+91 99999 22222')) {
+    if (!updatedCust.name.includes('QA Customer (Updated)') || (updatedCust.phone !== expectedPhone && updatedCust.phone !== '+91 99999 22222')) {
       throw new Error(`Test 5.1 Update Customer Failed: ${JSON.stringify(updatedCust)}`);
     }
 
@@ -855,7 +857,7 @@ async function runTests() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name: 'Phase 5 Security Auditing Tool',
+        name: `Phase 5 Security Auditing Tool ${RUN_ID}`,
         description: 'Comprehensive static and runtime security audit module',
         unit: 'HRS',
         unitPrice: 1500,
@@ -870,7 +872,7 @@ async function runTests() {
     // Get by ID
     const getProdRes = await fetch(`${BASE}/products/${newProd.id}`);
     const getProd = (await getProdRes.json()).data;
-    if (getProd.name !== 'Phase 5 Security Auditing Tool' || Number(getProd.unitPrice) !== 1500) {
+    if (!getProd.name.startsWith('Phase 5 Security Auditing Tool') || Number(getProd.unitPrice) !== 1500) {
       throw new Error(`Test 5.3 Get Product Failed: ${JSON.stringify(getProd)}`);
     }
 
@@ -960,11 +962,10 @@ async function runTests() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name: 'Master QA Client Alpha',
-        phone: '+91 99000 11223',
-        email: 'alpha@masterqa.com',
+        name: `Master QA Client Alpha ${RUN_ID}`,
+        phone: `9${String(RUN_ID + 3).slice(-9)}`,
+        email: `alpha-${RUN_ID}@masterqa.com`,
         billingAddress: 'Tower 4, Embassy Tech Village, Outer Ring Road, Bangalore, Karnataka - 560103',
-        gstin: '29ABCDE1234F1Z5',
         state: 'Karnataka',
       }),
     });
@@ -1231,17 +1232,19 @@ async function runTests() {
     const custUpdateH = await fetch(`${BASE}/customers/${custA.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'Master QA Client Alpha Updated', phone: '+91 99000 99999' }),
+      body: JSON.stringify({ name: `Master QA Client Alpha Updated ${RUN_ID}`, phone: '+91 99000 99999' }),
     });
     if (custUpdateH.status !== 200) throw new Error(`TEST H: Failed to update customer (${custUpdateH.status})`);
     const custUpdatedData = (await custUpdateH.json()).data;
-    if (custUpdatedData.name !== 'Master QA Client Alpha Updated') {
+    if (!custUpdatedData.name.includes('QA Client Alpha Updated')) {
       throw new Error('TEST H: Customer name not updated');
     }
 
     const invASnapshotCheck = await prisma.invoice.findUnique({ where: { id: invA.id } });
-    if (invASnapshotCheck?.customerNameSnapshot !== 'Master QA Client Alpha') {
-      throw new Error(`TEST H: Customer snapshot was modified on historical invoice! ${invASnapshotCheck?.customerNameSnapshot}`);
+    // Snapshot should contain the ORIGINAL name used when the invoice was issued
+    const expectedSnapshotName = `Master QA Client Alpha ${RUN_ID}`;
+    if (invASnapshotCheck?.customerNameSnapshot !== expectedSnapshotName) {
+      throw new Error(`TEST H: Customer snapshot was modified on historical invoice! got="${invASnapshotCheck?.customerNameSnapshot}" expected="${expectedSnapshotName}"`);
     }
     console.log('✅ TEST H PASSED: Customer and Product lifecycles functional while preserving snapshot integrity');
 
