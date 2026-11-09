@@ -76,6 +76,10 @@ export async function fetchInvoices(params?: {
   status?: string;
   paymentStatus?: string;
   search?: string;
+  customerId?: string;
+  startDate?: string;
+  endDate?: string;
+  limit?: number;
   page?: number;
 }): Promise<{ invoices: Invoice[]; totalCount: number; isBackendConnected: boolean }> {
   try {
@@ -83,6 +87,10 @@ export async function fetchInvoices(params?: {
     if (params?.status && params.status !== 'ALL') query.append('status', params.status);
     if (params?.paymentStatus && params.paymentStatus !== 'ALL') query.append('paymentStatus', params.paymentStatus);
     if (params?.search) query.append('search', params.search);
+    if (params?.customerId) query.append('customerId', params.customerId);
+    if (params?.startDate) query.append('startDate', params.startDate);
+    if (params?.endDate) query.append('endDate', params.endDate);
+    if (params?.limit) query.append('limit', String(params.limit));
     if (params?.page) query.append('page', String(params.page));
 
     const res = await fetch(`${API_BASE}/invoices?${query.toString()}`);

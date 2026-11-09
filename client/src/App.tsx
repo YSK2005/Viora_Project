@@ -40,6 +40,7 @@ export const App: React.FC = () => {
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isStale, setIsStale] = useState(false);
+  const [selectedCustomerFilter, setSelectedCustomerFilter] = useState('');
 
   const loadData = useCallback(async () => {
     try {
@@ -237,13 +238,21 @@ export const App: React.FC = () => {
             onEditDraft={handleEditDraft}
             onDeleteDraft={handleDeleteDraft}
             onCancelInvoice={handleCancelInvoice}
+            initialCustomerFilter={selectedCustomerFilter}
             error={loadError}
             isStale={isStale}
             onRetry={loadData}
           />
         )}
 
-        {currentNav === 'customers' && <CustomersView />}
+        {currentNav === 'customers' && (
+          <CustomersView
+            onViewCustomerInvoices={(custName) => {
+              setSelectedCustomerFilter(custName);
+              setCurrentNav('invoices');
+            }}
+          />
+        )}
 
         {currentNav === 'products' && <ProductsView />}
 

@@ -23,7 +23,13 @@ import {
   FileEdit,
 } from 'lucide-react';
 
-export const CustomersView: React.FC = () => {
+interface CustomersViewProps {
+  onViewCustomerInvoices?: (customerName: string) => void;
+}
+
+export const CustomersView: React.FC<CustomersViewProps> = ({
+  onViewCustomerInvoices,
+}) => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -317,10 +323,15 @@ export const CustomersView: React.FC = () => {
                       )}
                     </td>
                     <td className="py-3.5 px-4 text-center">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-800 border border-teal-200">
-                        <FileText className="w-3 h-3" />
-                        {c._count?.invoices ?? 0}
-                      </span>
+                      <button
+                        type="button"
+                        onClick={() => onViewCustomerInvoices?.(c.name)}
+                        title={`View all invoices for ${c.name} sorted by date`}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 hover:text-purple-900 transition-colors cursor-pointer"
+                      >
+                        <FileText className="w-3 h-3 text-purple-600" />
+                        <span>{c._count?.invoices ?? 0}</span>
+                      </button>
                     </td>
                     <td className="py-3.5 px-4 sm:px-6 text-right">
                       <div className="flex items-center justify-end gap-1">

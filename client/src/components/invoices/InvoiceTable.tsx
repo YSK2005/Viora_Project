@@ -16,6 +16,7 @@ import {
   Trash2,
   Ban,
   Calendar,
+  User,
 } from 'lucide-react';
 import { downloadInvoicePdf } from '../../services/api';
 import { openWhatsAppDispatch, openGmailDispatch } from '../../utils/dispatchInvoice';
@@ -29,6 +30,7 @@ interface InvoiceTableProps {
   onEditDraft?: (invoice: Invoice) => void;
   onDeleteDraft?: (invoice: Invoice) => void;
   onCancelInvoice?: (invoice: Invoice) => void;
+  initialCustomerFilter?: string;
 }
 
 export const InvoiceTable: React.FC<InvoiceTableProps> = ({
@@ -40,36 +42,68 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
   onEditDraft,
   onDeleteDraft,
   onCancelInvoice,
+  initialCustomerFilter = '',
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [customerFilter, setCustomerFilter] = useState(initialCustomerFilter);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'DRAFT' | 'ISSUED' | 'CANCELLED' | 'PAID' | 'UNPAID'>('ALL');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
-  // Filtered invoices (B4: Apply search, status, and date filters)
-  const filteredInvoices = useMemo(() => {
-    return invoices.filter((inv) => {
-      let matchesStatus = true;
-      if (statusFilter === 'DRAFT') matchesStatus = inv.status === 'DRAFT';
-      else if (statusFilter === 'ISSUED') matchesStatus = inv.status === 'ISSUED';
-      else if (statusFilter === 'CANCELLED') matchesStatus = inv.status === 'CANCELLED';
-      else if (statusFilter === 'PAID') matchesStatus = inv.paymentStatus === 'PAID';
-      else if (statusFilter === 'UNPAID')
-        matchesStatus = inv.paymentStatus === 'UNPAID' || inv.paymentStatus === 'PARTIALLY_PAID';
+  // Synchronize initialCustomerFilter prop changes
+  React.useEffect(() => {
+    if (initialCustomerFilter !== undefined) {
+      setCustomerFilter(initialCustomerFilter);
+    }
+  }, [initialCustomerFilter]);
 
-      const q = searchQuery.toLowerCase().trim();
-      const customer = (inv.customerName || '').toLowerCase();
-      const num = (inv.invoiceNumber || '').toLowerCase();
-      const matchesSearch = !q || num.includes(q) || customer.includes(q);
-
-      let matchesDate = true;
-      const invDate = inv.invoiceDate;
-      if (startDate && invDate < startDate) matchesDate = false;
-      if (endDate && invDate > endDate) matchesDate = false;
-
-      return matchesStatus && matchesSearch && matchesDate;
+  // Extract list of unique customers for the dropdown
+  const uniqueCustomers = useMemo(() => {
+    const map = new Map<string, string>();
+    invoices.forEach((inv) => {
+      const name = inv.customerName || '';
+      if (name) map.set(name, name);
     });
-  }, [invoices, statusFilter, searchQuery, startDate, endDate]);
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b));
+  }, [invoices]);
+
+  // Filtered invoices (B4: Apply search, customer dropdown, status, and date filters, sorted by date descending)
+  const filteredInvoices = useMemo(() => {
+    return invoices
+      .filter((inv) => {
+        let matchesStatus = true;
+        if (statusFilter === 'DRAFT') matchesStatus = inv.status === 'DRAFT';
+        else if (statusFilter === 'ISSUED') matchesStatus = inv.status === 'ISSUED';
+        else if (statusFilter === 'CANCELLED') matchesStatus = inv.status === 'CANCELLED';
+        else if (statusFilter === 'PAID') matchesStatus = inv.paymentStatus === 'PAID';
+        else if (statusFilter === 'UNPAID')
+          matchesStatus = inv.paymentStatus === 'UNPAID' || inv.paymentStatus === 'PARTIALLY_PAID';
+
+        const q = searchQuery.toLowerCase().trim();
+        const customer = (inv.customerName || '').toLowerCase();
+        const num = (inv.invoiceNumber || '').toLowerCase();
+        const matchesSearch = !q || num.includes(q) || customer.includes(q);
+
+        let matchesCustomer = true;
+        if (customerFilter && customerFilter !== 'ALL') {
+          matchesCustomer = (inv.customerName || '').toLowerCase() === customerFilter.toLowerCase();
+        }
+
+        let matchesDate = true;
+        const invDate = inv.invoiceDate;
+        if (startDate && invDate < startDate) matchesDate = false;
+        if (endDate && invDate > endDate) matchesDate = false;
+
+        return matchesStatus && matchesSearch && matchesCustomer && matchesDate;
+      })
+      .sort((a, b) => {
+        // Primary sort: Invoice Date descending (newest first)
+        const dateCompare = (b.invoiceDate || '').localeCompare(a.invoiceDate || '');
+        if (dateCompare !== 0) return dateCompare;
+        // Secondary sort: Invoice Number descending
+        return (b.invoiceNumber || '').localeCompare(a.invoiceNumber || '');
+      });
+  }, [invoices, statusFilter, searchQuery, customerFilter, startDate, endDate]);
 
   const formatAmount = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -122,6 +156,36 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 placeholder:text-slate-400 transition-all"
             />
+          </div>
+
+          {/* Customer Dropdown Filter (R10) */}
+          <div className="relative min-w-[160px] max-w-xs">
+            <div className="flex items-center gap-1 text-xs text-slate-700 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5">
+              <User className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+              <select
+                aria-label="Filter by customer"
+                value={customerFilter}
+                onChange={(e) => setCustomerFilter(e.target.value)}
+                className="w-full border-0 bg-transparent p-0 text-xs text-slate-700 focus:ring-0 cursor-pointer"
+              >
+                <option value="">All Customers</option>
+                {uniqueCustomers.map((cust) => (
+                  <option key={cust} value={cust}>
+                    {cust}
+                  </option>
+                ))}
+              </select>
+              {customerFilter && (
+                <button
+                  type="button"
+                  onClick={() => setCustomerFilter('')}
+                  className="text-[10px] text-slate-400 hover:text-slate-600 font-bold ml-1"
+                  title="Clear customer filter"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Date Range Filters (B4) */}
@@ -191,11 +255,12 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
           onNewInvoice={onNewInvoice}
           onResetFilters={() => {
             setSearchQuery('');
+            setCustomerFilter('');
             setStatusFilter('ALL');
             setStartDate('');
             setEndDate('');
           }}
-          isFiltered={Boolean(searchQuery || statusFilter !== 'ALL' || startDate || endDate)}
+          isFiltered={Boolean(searchQuery || customerFilter || statusFilter !== 'ALL' || startDate || endDate)}
         />
       ) : (
         <div className="overflow-x-auto">

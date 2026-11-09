@@ -191,6 +191,11 @@ router.get(
         skip: (page - 1) * limit,
         take: limit,
         orderBy: { createdAt: 'desc' },
+        include: {
+          _count: {
+            select: { invoices: true },
+          },
+        },
       });
 
       return sendSuccess(

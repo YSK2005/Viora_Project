@@ -49,6 +49,7 @@ export default {
       },
       fontFamily: {
         sans: [
+          'Outfit',
           'Inter',
           '-apple-system',
           'BlinkMacSystemFont',
