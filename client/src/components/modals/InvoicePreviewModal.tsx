@@ -166,7 +166,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
   const isInterState = invoice?.isInterState ?? false;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-navy-950/50 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-navy-950/50 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto print:static print:bg-transparent print:p-0 print:overflow-visible print:block">
       {/* Toast Alert */}
       {actionNotice && (
         <div className="fixed top-6 right-6 z-50 bg-navy-950 text-white text-xs px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2 animate-in slide-in-from-top-2 no-print">
@@ -175,7 +175,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
         </div>
       )}
 
-      <div className="bg-white rounded-2xl shadow-popover border border-slate-200/90 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden my-auto">
+      <div className="bg-white rounded-2xl shadow-popover border border-slate-200/90 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden my-auto print:border-none print:shadow-none print:max-w-none print:max-h-none print:overflow-visible print:w-full print:m-0 print:rounded-none">
         {/* Top Action Toolbar (Hidden in print) */}
         <div className="no-print p-4 sm:px-6 bg-slate-50 border-b border-slate-200/90 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -208,10 +208,10 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
                 <button
                   type="button"
                   onClick={handlePrint}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg shadow-xs transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-lg shadow-xs transition-colors"
                 >
-                  <Printer className="w-3.5 h-3.5 text-slate-600" />
-                  <span>Print</span>
+                  <Printer className="w-3.5 h-3.5 text-white" />
+                  <span>Print Invoice (1 Page)</span>
                 </button>
 
                 {invoice.status === 'DRAFT' && (
@@ -292,9 +292,9 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
           )}
 
           {invoice && (
-            <div className="print-only-container bg-white rounded-xl shadow-xs border border-slate-200/80 p-6 sm:p-8 max-w-3xl mx-auto space-y-6">
-              {/* Top Accent Strip */}
-              <div className="h-1 bg-gradient-to-r from-brand-400 to-accent-600 rounded-t -mt-6 sm:-mt-8 -mx-6 sm:-mx-8 mb-6" />
+            <div className="print-only-container bg-white rounded-xl shadow-xs border border-slate-200/80 p-6 sm:p-8 max-w-3xl mx-auto space-y-6 print:border-none print:shadow-none print:max-w-none print:p-0 print:m-0 print:rounded-none">
+              {/* Top Accent Strip (hidden in print) */}
+              <div className="h-1 bg-gradient-to-r from-brand-400 to-accent-600 rounded-t -mt-6 sm:-mt-8 -mx-6 sm:-mx-8 mb-6 print:hidden" />
 
               {/* Header: Company & Invoice Info */}
               <div className="flex flex-col sm:flex-row justify-between items-start gap-4 pb-6 border-b border-slate-200">
@@ -569,7 +569,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
               )}
 
               {/* Bottom Computer-Generated Notice */}
-              <div className="pt-6 border-t border-slate-200 text-center text-[10px] text-slate-400">
+              <div className="pt-6 border-t border-slate-200 text-center text-[10px] text-slate-400 print:pt-2 print:text-[8pt]">
                 Thank you for your business. This is a computer-generated tax invoice generated via Viora Bills.
               </div>
             </div>
