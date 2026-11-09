@@ -17,6 +17,16 @@ export function formatINR(amount: number): string {
   }).format(amount || 0);
 }
 
+export function formatHumanDate(dateStr: string | undefined): string {
+  if (!dateStr) return '';
+  const clean = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+  const [y, m, d] = clean.split('-');
+  if (!y || !m || !d) return dateStr;
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const monthIdx = parseInt(m, 10) - 1;
+  return `${parseInt(d, 10)} ${months[monthIdx] || m} ${y}`;
+}
+
 export function getInvoiceDispatchUrls(
   invoice: Invoice,
   customer?: Partial<Customer> | null,
@@ -62,8 +72,8 @@ Your invoice *#${invoice.invoiceNumber}* has been officially issued.
 
 📄 *Invoice Details:*
 • *Invoice Number:* ${invoice.invoiceNumber}
-• *Invoice Date:* ${invoice.invoiceDate}
-• *Due Date:* ${invoice.dueDate}
+• *Invoice Date:* ${formatHumanDate(invoice.invoiceDate)}
+• *Due Date:* ${formatHumanDate(invoice.dueDate)}
 • *Total Amount:* ${formatINR(Number(invoice.grandTotal))}
 • *Payment Status:* ${invoice.paymentStatus || 'UNPAID'}
 
@@ -95,8 +105,8 @@ Thank you for your business. Please find below the details for Tax Invoice #${in
 INVOICE SUMMARY
 --------------------------------------------------
 Invoice Number : ${invoice.invoiceNumber}
-Invoice Date   : ${invoice.invoiceDate}
-Due Date       : ${invoice.dueDate}
+Invoice Date   : ${formatHumanDate(invoice.invoiceDate)}
+Due Date       : ${formatHumanDate(invoice.dueDate)}
 Grand Total    : ${formatINR(Number(invoice.grandTotal))}
 Payment Status : ${invoice.paymentStatus || 'UNPAID'}
 --------------------------------------------------

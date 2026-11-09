@@ -15,10 +15,33 @@ const salesReportQuerySchema = z.object({
 });
 
 /**
+ * Converts a YYYY-MM-DD string into a UTC Date object
+ * using canonical Indian Standard Time (IST, UTC+5:30) day boundaries.
+ * B5: Resolves mismatch between date filtering and daily grouping.
+ */
+function istDateToUtcBoundary(dateStr: string, isEnd: boolean = false): Date {
+  const parts = dateStr.trim().split('-');
+  const y = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10) - 1;
+  const d = parseInt(parts[2], 10);
+
+  if (isEnd) {
+    // 23:59:59.999 in IST corresponds to 18:29:59.999 UTC
+    const utcMillis = Date.UTC(y, m, d, 23, 59, 59, 999) - (5 * 60 + 30) * 60 * 1000;
+    return new Date(utcMillis);
+  } else {
+    // 00:00:00.000 in IST corresponds to 18:30:00.000 UTC of previous calendar day
+    const utcMillis = Date.UTC(y, m, d, 0, 0, 0, 0) - (5 * 60 + 30) * 60 * 1000;
+    return new Date(utcMillis);
+  }
+}
+
+/**
  * GET /api/reports/sales
  * Generates sales and collections report with daily or monthly aggregation.
- * Excludes DRAFT invoices from sales calculations.
- * Keeps sales (by invoice date) distinct from collections (by payment date).
+ * Canonical Timezone: Asia/Kolkata (IST).
+ * B5: Date boundaries and aggregation keys strictly match.
+ * B22: Distinguishes period net activity from cumulative outstanding receivables.
  */
 router.get(
   '/sales',
@@ -36,8 +59,12 @@ router.get(
 
       if (startDate || endDate) {
         invoiceWhere.invoiceDate = {};
-        if (startDate) invoiceWhere.invoiceDate.gte = new Date(`${startDate}T00:00:00.000Z`);
-        if (endDate) invoiceWhere.invoiceDate.lte = new Date(`${endDate}T23:59:59.999Z`);
+        if (startDate) {
+          invoiceWhere.invoiceDate.gte = istDateToUtcBoundary(startDate, false);
+        }
+        if (endDate) {
+          invoiceWhere.invoiceDate.lte = istDateToUtcBoundary(endDate, true);
+        }
       }
 
       const invoices = await prisma.invoice.findMany({
@@ -64,8 +91,12 @@ router.get(
 
       if (startDate || endDate) {
         paymentWhere.paymentDate = {};
-        if (startDate) paymentWhere.paymentDate.gte = new Date(`${startDate}T00:00:00.000Z`);
-        if (endDate) paymentWhere.paymentDate.lte = new Date(`${endDate}T23:59:59.999Z`);
+        if (startDate) {
+          paymentWhere.paymentDate.gte = istDateToUtcBoundary(startDate, false);
+        }
+        if (endDate) {
+          paymentWhere.paymentDate.lte = istDateToUtcBoundary(endDate, true);
+        }
       }
 
       const payments = await prisma.payment.findMany({
@@ -179,6 +210,33 @@ router.get(
         a.period.localeCompare(b.period)
       );
 
+      // B22: Calculate actual cumulative outstanding receivables up to report boundary
+      const allIssuedUpToDate = await prisma.invoice.findMany({
+        where: {
+          businessId: business.id,
+          status: 'ISSUED',
+          invoiceDate: invoiceWhere.invoiceDate?.lte ? { lte: invoiceWhere.invoiceDate.lte } : undefined,
+        },
+        select: {
+          grandTotal: true,
+          payments: {
+            select: { amount: true },
+          },
+        },
+      });
+
+      let totalReceivables = toDecimal(0);
+      for (const inv of allIssuedUpToDate) {
+        const paid = inv.payments.reduce((acc, p) => acc.plus(toDecimal(p.amount)), toDecimal(0));
+        const remaining = toDecimal(inv.grandTotal).minus(paid);
+        if (remaining.greaterThan(0)) {
+          totalReceivables = totalReceivables.plus(remaining);
+        }
+      }
+
+      const periodNet = Number(round2(totalSales.minus(totalCollected)));
+      const closingReceivables = Number(round2(totalReceivables));
+
       return sendSuccess(
         res,
         {
@@ -186,6 +244,7 @@ router.get(
             startDate: startDate || null,
             endDate: endDate || null,
             groupBy,
+            timezone: 'Asia/Kolkata (IST)',
           },
           summary: {
             totalIssuedInvoices: invoices.length,
@@ -194,7 +253,9 @@ router.get(
             totalDiscount: Number(round2(totalDiscount)),
             totalCollected: Number(round2(totalCollected)),
             totalPayments: payments.length,
-            netOutstanding: Number(round2(totalSales.minus(totalCollected))),
+            periodNetSalesLessCollections: periodNet,
+            netOutstanding: closingReceivables, // True cumulative receivables
+            totalOutstandingReceivables: closingReceivables,
           },
           salesTimeline,
           collectionsTimeline,

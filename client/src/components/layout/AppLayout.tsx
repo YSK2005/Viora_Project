@@ -60,7 +60,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           <footer className="py-4 px-6 border-t border-slate-200/80 bg-white text-center text-xs text-slate-400">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-2 max-w-7xl mx-auto">
               <div>
-                © {new Date().getFullYear()} Billy. Smart Business Invoicing.
+                © {new Date().getFullYear()} Viora Bills. Smart Business Invoicing.
               </div>
             </div>
           </footer>

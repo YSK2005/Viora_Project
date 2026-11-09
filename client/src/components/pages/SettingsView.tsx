@@ -17,7 +17,7 @@ import {
   X,
 } from 'lucide-react';
 
-const LOGO_STORAGE_KEY = 'billease_logo';
+const LOGO_STORAGE_KEY = 'viora_bills_logo';
 
 export const SettingsView: React.FC = () => {
   const [business, setBusiness] = useState<BusinessProfile | null>(null);

@@ -43,9 +43,21 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
   const [showDispatchModal, setShowDispatchModal] = useState(false);
 
+  // B14: Escape key closes modal
   useEffect(() => {
-    // Load logo from localStorage whenever modal opens
-    const localLogo = localStorage.getItem('billease_logo');
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isIssuing && !isDownloadingPdf) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose, isIssuing, isDownloadingPdf]);
+
+  useEffect(() => {
+    // Load logo from localStorage whenever modal opens (B16: Viora Bills brand)
+    const localLogo = localStorage.getItem('viora_bills_logo') || localStorage.getItem('billease_logo');
     if (localLogo) setCompanyLogo(localLogo);
 
     // Also fetch current business profile as reliable fallback
@@ -54,7 +66,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
         setBusinessProfile(b);
         if (b.logoUrl) {
           setCompanyLogo(b.logoUrl);
-          localStorage.setItem('billease_logo', b.logoUrl);
+          localStorage.setItem('viora_bills_logo', b.logoUrl);
         }
       })
       .catch(() => {});
@@ -558,7 +570,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
 
               {/* Bottom Computer-Generated Notice */}
               <div className="pt-6 border-t border-slate-200 text-center text-[10px] text-slate-400">
-                Thank you for your business. This is a computer-generated tax invoice generated via BillEase.
+                Thank you for your business. This is a computer-generated tax invoice generated via Viora Bills.
               </div>
             </div>
           )}

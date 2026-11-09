@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   X,
   CheckCircle2,
-  Send,
   Mail,
   MessageCircle,
   ExternalLink,
@@ -17,6 +16,7 @@ import {
   openWhatsAppDispatch,
   openGmailDispatch,
   formatINR,
+  formatHumanDate,
 } from '../../utils/dispatchInvoice';
 
 interface InvoiceDispatchModalProps {
@@ -34,43 +34,34 @@ export const InvoiceDispatchModal: React.FC<InvoiceDispatchModalProps> = ({
   invoice,
   customer,
   business,
-  autoDispatch = true,
 }) => {
-  const [waSent, setWaSent] = useState(false);
-  const [gmailSent, setGmailSent] = useState(false);
+  const [waOpened, setWaOpened] = useState(false);
+  const [gmailOpened, setGmailOpened] = useState(false);
 
-  const { whatsAppUrl, gmailUrl, customerPhone10, customerEmail } =
-    invoice ? getInvoiceDispatchUrls(invoice, customer, business) : {
-      whatsAppUrl: null,
-      gmailUrl: null,
-      customerPhone10: null,
-      customerEmail: null,
-    };
-
-  // Automatically trigger WhatsApp & Gmail dispatch on issuance
+  // B14: Escape key closes modal
   useEffect(() => {
-    if (!isOpen || !invoice) {
-      setWaSent(false);
-      setGmailSent(false);
-      return;
-    }
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
-    if (autoDispatch) {
-      if (whatsAppUrl) {
-        window.open(whatsAppUrl, '_blank', 'noopener,noreferrer');
-        setWaSent(true);
-      }
-      if (gmailUrl) {
-        const timer = setTimeout(() => {
-          window.open(gmailUrl, '_blank', 'noopener,noreferrer');
-          setGmailSent(true);
-        }, 400);
-        return () => clearTimeout(timer);
-      }
+  // Reset status when invoice changes
+  useEffect(() => {
+    if (!isOpen) {
+      setWaOpened(false);
+      setGmailOpened(false);
     }
-  }, [isOpen, invoice?.id, autoDispatch, whatsAppUrl, gmailUrl]);
+  }, [isOpen, invoice?.id]);
 
   if (!isOpen || !invoice) return null;
+
+  const { customerPhone10, customerEmail } =
+    getInvoiceDispatchUrls(invoice, customer, business);
 
   const businessHasPhone = Boolean(
     invoice.businessPhoneSnapshot || business?.phone
@@ -79,28 +70,15 @@ export const InvoiceDispatchModal: React.FC<InvoiceDispatchModalProps> = ({
     invoice.businessEmailSnapshot || business?.email
   );
 
-  const handleSendWhatsApp = () => {
+  const handleOpenWhatsApp = () => {
     if (openWhatsAppDispatch(invoice, customer, business)) {
-      setWaSent(true);
+      setWaOpened(true);
     }
   };
 
-  const handleSendGmail = () => {
+  const handleOpenGmail = () => {
     if (openGmailDispatch(invoice, customer, business)) {
-      setGmailSent(true);
-    }
-  };
-
-  const handleSendBoth = () => {
-    if (whatsAppUrl) {
-      window.open(whatsAppUrl, '_blank', 'noopener,noreferrer');
-      setWaSent(true);
-    }
-    if (gmailUrl) {
-      setTimeout(() => {
-        window.open(gmailUrl, '_blank', 'noopener,noreferrer');
-        setGmailSent(true);
-      }, 350);
+      setGmailOpened(true);
     }
   };
 
@@ -111,41 +89,41 @@ export const InvoiceDispatchModal: React.FC<InvoiceDispatchModalProps> = ({
     'Customer';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-navy-950/50 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="bg-white rounded-2xl shadow-popover border border-slate-200/90 w-full max-w-lg overflow-hidden flex flex-col my-auto animate-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="p-5 bg-gradient-to-r from-purple-700 via-purple-800 to-indigo-900 text-white flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-xs border border-white/20 flex items-center justify-center flex-shrink-0 text-white">
-              <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+        <div className="px-6 py-4 bg-gradient-to-r from-purple-700 via-purple-600 to-indigo-700 text-white flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+              <CheckCircle2 className="w-5 h-5 text-emerald-300" />
             </div>
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-purple-200">
-                Invoice Officially Issued
-              </div>
-              <h2 className="text-base font-bold text-white leading-tight">
-                Direct Dispatch to Customer
-              </h2>
+              <h3 className="text-base font-bold text-white">
+                Invoice Issued Successfully
+              </h3>
+              <p className="text-xs text-purple-200">
+                Share prefilled invoice details with customer
+              </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+            className="p-1.5 text-white/80 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Content Body */}
-        <div className="p-6 space-y-5 overflow-y-auto max-h-[75vh]">
-          {/* Invoice Summary Pill */}
-          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs">
+        {/* Body */}
+        <div className="p-6 space-y-4">
+          {/* Invoice Summary Card */}
+          <div className="p-4 rounded-xl bg-purple-50/60 border border-purple-100 flex items-center justify-between">
             <div>
-              <div className="text-[10px] uppercase font-bold text-slate-400">
-                Invoice Number
+              <div className="text-[10px] uppercase font-bold text-purple-600">
+                Official Invoice
               </div>
               <div className="font-mono font-bold text-slate-800 text-sm">
-                {invoice.invoiceNumber}
+                #{invoice.invoiceNumber}
               </div>
               <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1">
                 <User className="w-3 h-3 text-slate-400" />
@@ -161,7 +139,8 @@ export const InvoiceDispatchModal: React.FC<InvoiceDispatchModalProps> = ({
               </div>
               <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1 justify-end">
                 <Calendar className="w-3 h-3 text-slate-400" />
-                <span>Due: {invoice.dueDate}</span>
+                {/* B15: Format due date nicely */}
+                <span>Due: {formatHumanDate(invoice.dueDate)}</span>
               </div>
             </div>
           </div>
@@ -169,7 +148,7 @@ export const InvoiceDispatchModal: React.FC<InvoiceDispatchModalProps> = ({
           {/* Dispatch Cards */}
           <div className="space-y-3">
             <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-              Send Directly via Channels:
+              Share via Communication Channels:
             </div>
 
             {/* 1. WhatsApp Card */}
@@ -187,10 +166,10 @@ export const InvoiceDispatchModal: React.FC<InvoiceDispatchModalProps> = ({
                   </div>
                   <div>
                     <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                      <span>WhatsApp Dispatch</span>
-                      {waSent && (
+                      <span>WhatsApp Share</span>
+                      {waOpened && (
                         <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-semibold inline-flex items-center gap-0.5">
-                          <Check className="w-2.5 h-2.5" /> Sent
+                          <Check className="w-2.5 h-2.5" /> Opened in WhatsApp
                         </span>
                       )}
                     </div>
@@ -198,7 +177,7 @@ export const InvoiceDispatchModal: React.FC<InvoiceDispatchModalProps> = ({
                       {customerPhone10 ? (
                         <span>+91 {customerPhone10}</span>
                       ) : (
-                        <span className="text-rose-500 text-[10px]">
+                        <span className="italic text-slate-400">
                           No 10-digit phone on customer profile
                         </span>
                       )}
@@ -208,16 +187,15 @@ export const InvoiceDispatchModal: React.FC<InvoiceDispatchModalProps> = ({
 
                 {customerPhone10 ? (
                   <button
-                    type="button"
-                    onClick={handleSendWhatsApp}
-                    className="px-3.5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-95 rounded-lg shadow-xs flex items-center gap-1.5 transition-all flex-shrink-0"
+                    onClick={handleOpenWhatsApp}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 shadow-xs transition-colors flex-shrink-0"
                   >
-                    <Send className="w-3.5 h-3.5" />
-                    <span>Send on WhatsApp</span>
+                    <span>{waOpened ? 'Reopen WhatsApp' : 'Share via WhatsApp'}</span>
+                    <ExternalLink className="w-3 h-3" />
                   </button>
                 ) : (
-                  <span className="text-[11px] text-slate-400 font-medium">
-                    Unavailable
+                  <span className="text-[10px] text-slate-400 font-medium">
+                    Phone unavailable
                   </span>
                 )}
               </div>
@@ -227,29 +205,29 @@ export const InvoiceDispatchModal: React.FC<InvoiceDispatchModalProps> = ({
             <div
               className={`p-4 rounded-xl border transition-all ${
                 customerEmail
-                  ? 'border-rose-200 bg-rose-50/40 hover:bg-rose-50/70'
+                  ? 'border-indigo-200 bg-indigo-50/50 hover:bg-indigo-50'
                   : 'border-slate-200 bg-slate-50/50 opacity-60'
               }`}
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-rose-600 text-white flex items-center justify-center shadow-xs flex-shrink-0">
+                  <div className="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-xs flex-shrink-0">
                     <Mail className="w-5 h-5" />
                   </div>
                   <div>
                     <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                      <span>Gmail / Email Dispatch</span>
-                      {gmailSent && (
-                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-rose-100 text-rose-800 font-semibold inline-flex items-center gap-0.5">
-                          <Check className="w-2.5 h-2.5" /> Sent
+                      <span>Gmail Compose</span>
+                      {gmailOpened && (
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-800 font-semibold inline-flex items-center gap-0.5">
+                          <Check className="w-2.5 h-2.5" /> Email Draft Opened
                         </span>
                       )}
                     </div>
-                    <div className="text-[11px] text-slate-600 mt-0.5 truncate max-w-[210px] sm:max-w-[240px]">
+                    <div className="text-[11px] font-mono text-slate-600 mt-0.5 truncate max-w-[200px]">
                       {customerEmail ? (
                         <span>{customerEmail}</span>
                       ) : (
-                        <span className="text-rose-500 text-[10px]">
+                        <span className="italic text-slate-400">
                           No email address on customer profile
                         </span>
                       )}
@@ -259,53 +237,42 @@ export const InvoiceDispatchModal: React.FC<InvoiceDispatchModalProps> = ({
 
                 {customerEmail ? (
                   <button
-                    type="button"
-                    onClick={handleSendGmail}
-                    className="px-3.5 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 active:scale-95 rounded-lg shadow-xs flex items-center gap-1.5 transition-all flex-shrink-0"
+                    onClick={handleOpenGmail}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 shadow-xs transition-colors flex-shrink-0"
                   >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    <span>Send via Gmail</span>
+                    <span>{gmailOpened ? 'Reopen Gmail' : 'Compose in Gmail'}</span>
+                    <ExternalLink className="w-3 h-3" />
                   </button>
                 ) : (
-                  <span className="text-[11px] text-slate-400 font-medium">
-                    Unavailable
+                  <span className="text-[10px] text-slate-400 font-medium">
+                    Email unavailable
                   </span>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Quick Dual Dispatch Button */}
-          {customerPhone10 && customerEmail && (
-            <button
-              type="button"
-              onClick={handleSendBoth}
-              className="w-full py-2.5 px-4 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-sm flex items-center justify-center gap-2 transition-all active:scale-98"
-            >
-              <Send className="w-4 h-4" />
-              <span>Instant Dispatch to Both (WhatsApp & Gmail)</span>
-            </button>
-          )}
-
-          {/* Company Settings Warning if company phone or email is missing */}
+          {/* Mandatory verification notices */}
           {(!businessHasPhone || !businessHasEmail) && (
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-start gap-2">
+            <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
               <div>
-                <span className="font-semibold">Company Profile Incomplete: </span>
-                Ensure your company WhatsApp and Gmail are filled in{' '}
-                <strong>Settings</strong> so customers have your contact details.
+                <span className="font-bold">Company profile warning:</span> Configure
+                your company WhatsApp and Gmail in Settings so customers know how to
+                contact you.
               </div>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-200/80 flex items-center justify-end">
+        <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+          <p className="text-[11px] text-slate-400">
+            Clicking opens prefilled message in WhatsApp or Gmail.
+          </p>
           <button
-            type="button"
             onClick={onClose}
-            className="px-4 py-2 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-white border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
+            className="px-4 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-white hover:border-slate-400 transition-colors"
           >
             Done
           </button>

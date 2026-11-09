@@ -188,6 +188,28 @@ export async function issueInvoice(id: string): Promise<Invoice> {
   return json.data;
 }
 
+export async function deleteDraftInvoice(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/invoices/${id}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || 'Failed to delete draft invoice');
+  }
+}
+
+export async function cancelInvoice(id: string): Promise<Invoice> {
+  const res = await fetch(`${API_BASE}/invoices/${id}/cancel`, {
+    method: 'POST',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || 'Failed to cancel invoice');
+  }
+  const json = await res.json();
+  return json.data;
+}
+
 export function getInvoicePdfUrl(id: string): string {
   return `${API_BASE}/invoices/${id}/pdf`;
 }

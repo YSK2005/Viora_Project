@@ -13,8 +13,6 @@ interface DashboardViewProps {
   invoices: Invoice[];
   onSelectInvoice: (inv: Invoice) => void;
   onNewInvoice: () => void;
-  isSimulatedEmpty: boolean;
-  onSimulateEmptyToggle: (val: boolean) => void;
   onNavigateToCustomers?: () => void;
   onNavigateToProducts?: () => void;
   onDateRangeChange?: (startDate?: string, endDate?: string) => void;
@@ -25,8 +23,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   invoices,
   onSelectInvoice,
   onNewInvoice,
-  isSimulatedEmpty,
-  onSimulateEmptyToggle,
   onNavigateToCustomers,
   onNavigateToProducts,
   onDateRangeChange,
@@ -212,8 +208,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           invoices={invoices}
           onSelectInvoice={onSelectInvoice}
           onNewInvoice={onNewInvoice}
-          isSimulatedEmpty={isSimulatedEmpty}
-          onSimulateEmptyToggle={onSimulateEmptyToggle}
         />
       </section>
     </div>

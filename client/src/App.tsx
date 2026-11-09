@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { NavigationKey, Invoice, DashboardSummary, BusinessProfile, SystemHealth } from './types';
 import { AppLayout } from './components/layout/AppLayout';
 import { DashboardView } from './components/pages/DashboardView';
 import { InvoicesView } from './components/pages/InvoicesView';
@@ -8,33 +9,26 @@ import { PaymentsView } from './components/pages/PaymentsView';
 import { ReportsView } from './components/pages/ReportsView';
 import { SettingsView } from './components/pages/SettingsView';
 import { NewInvoiceModal } from './components/modals/NewInvoiceModal';
-import { RecordPaymentModal } from './components/modals/RecordPaymentModal';
 import { InvoicePreviewModal } from './components/modals/InvoicePreviewModal';
+import { RecordPaymentModal } from './components/modals/RecordPaymentModal';
 import { InvoiceDispatchModal } from './components/modals/InvoiceDispatchModal';
 import {
-  NavigationKey,
-  Invoice,
-  DashboardSummary,
-  SystemHealth,
-  BusinessProfile,
-} from './types';
-import {
-  fetchHealth,
   fetchInvoices,
   fetchDashboardSummary,
   fetchBusiness,
+  fetchHealth,
   issueInvoice,
+  deleteDraftInvoice,
+  cancelInvoice,
 } from './services/api';
 import {
   FileCheck2,
 } from 'lucide-react';
-import { useEffect, useCallback } from 'react';
 
 export const App: React.FC = () => {
   const [currentNav, setCurrentNav] = useState<NavigationKey>('dashboard');
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [dashboardSummary, setDashboardSummary] = useState<DashboardSummary | null>(null);
-  const [isSimulatedEmpty, setIsSimulatedEmpty] = useState(false);
   const [isNewInvoiceOpen, setIsNewInvoiceOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [previewInvoiceId, setPreviewInvoiceId] = useState<string | null>(null);
@@ -43,19 +37,29 @@ export const App: React.FC = () => {
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
   const [systemHealth, setSystemHealth] = useState<SystemHealth>({ status: 'checking' });
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [isStale, setIsStale] = useState(false);
 
   const loadData = useCallback(async () => {
-    const [health, invData, summary, biz] = await Promise.all([
-      fetchHealth(),
-      fetchInvoices(),
-      fetchDashboardSummary(),
-      fetchBusiness().catch(() => null),
-    ]);
+    try {
+      setLoadError(null);
+      const [health, invData, summary, biz] = await Promise.all([
+        fetchHealth(),
+        fetchInvoices(),
+        fetchDashboardSummary(),
+        fetchBusiness().catch(() => null),
+      ]);
 
-    setSystemHealth(health);
-    setInvoices(invData.invoices);
-    setDashboardSummary(summary);
-    if (biz) setBusinessProfile(biz);
+      setSystemHealth(health);
+      setInvoices(invData.invoices);
+      setDashboardSummary(summary);
+      if (biz) setBusinessProfile(biz);
+      setIsStale(false);
+    } catch (err: any) {
+      console.error('Failed to load data:', err);
+      setLoadError(err.message || 'Failed to connect to backend server');
+      setIsStale(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -63,8 +67,12 @@ export const App: React.FC = () => {
 
     // Health poll every 20s
     const timer = setInterval(async () => {
-      const health = await fetchHealth();
-      setSystemHealth(health);
+      try {
+        const health = await fetchHealth();
+        setSystemHealth(health);
+      } catch {
+        setSystemHealth({ status: 'offline' });
+      }
     }, 20000);
 
     return () => clearInterval(timer);
@@ -74,10 +82,15 @@ export const App: React.FC = () => {
     // Check company WhatsApp & Gmail before issuing
     const cleanBizPhone = (businessProfile?.phone || '').replace(/\D/g, '');
     const hasBizWhatsApp = cleanBizPhone.length >= 10;
-    const hasBizEmail = Boolean(businessProfile?.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(businessProfile.email.trim()));
+    const hasBizEmail = Boolean(
+      businessProfile?.email &&
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(businessProfile.email.trim())
+    );
 
     if (!hasBizWhatsApp || !hasBizEmail) {
-      alert('Company WhatsApp number (min 10 digits) and Gmail/Email are mandatory to issue and send invoices. Opening Settings to configure them.');
+      alert(
+        'Company WhatsApp number (min 10 digits) and Gmail/Email are mandatory to issue and send invoices. Opening Settings to configure them.'
+      );
       setCurrentNav('settings');
       return;
     }
@@ -85,14 +98,23 @@ export const App: React.FC = () => {
     // Check customer contact
     const custDigits = (inv.customerPhoneSnapshot || '').replace(/\D/g, '').slice(-10);
     const hasCustPhone = custDigits.length === 10;
-    const hasCustEmail = Boolean(inv.customerEmailSnapshot && inv.customerEmailSnapshot.trim().length > 0);
+    const hasCustEmail = Boolean(
+      inv.customerEmailSnapshot && inv.customerEmailSnapshot.trim().length > 0
+    );
 
     if (!hasCustPhone && !hasCustEmail) {
-      alert('Customer must have at least one valid contact method (10-digit phone for WhatsApp or email for Gmail) to receive the invoice.');
+      alert(
+        'Customer must have at least one valid contact method (10-digit phone for WhatsApp or email for Gmail) to receive the invoice.'
+      );
       return;
     }
 
-    if (!window.confirm(`Issue invoice for ${inv.customerName}? An official sequential invoice number will be assigned.`)) return;
+    if (
+      !window.confirm(
+        `Issue invoice for ${inv.customerName}? An official sequential invoice number will be assigned.`
+      )
+    )
+      return;
 
     try {
       const issued = await issueInvoice(inv.id);
@@ -102,6 +124,42 @@ export const App: React.FC = () => {
       setDispatchingInvoice(issued);
     } catch (err: any) {
       alert(`Error issuing invoice: ${err.message}`);
+    }
+  };
+
+  const handleDeleteDraft = async (inv: Invoice) => {
+    if (
+      !window.confirm(
+        `Are you sure you want to delete draft invoice ${inv.invoiceNumber}? This action cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await deleteDraftInvoice(inv.id);
+      setActionNotice(`Draft invoice ${inv.invoiceNumber} deleted successfully`);
+      setTimeout(() => setActionNotice(null), 3000);
+      loadData();
+    } catch (err: any) {
+      alert(`Error deleting draft: ${err.message}`);
+    }
+  };
+
+  const handleCancelInvoice = async (inv: Invoice) => {
+    if (
+      !window.confirm(
+        `Are you sure you want to cancel invoice ${inv.invoiceNumber}? It will be marked as CANCELLED and remain in records for audit purposes.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await cancelInvoice(inv.id);
+      setActionNotice(`Invoice ${inv.invoiceNumber} has been cancelled`);
+      setTimeout(() => setActionNotice(null), 3000);
+      loadData();
+    } catch (err: any) {
+      alert(`Error cancelling invoice: ${err.message}`);
     }
   };
 
@@ -128,8 +186,8 @@ export const App: React.FC = () => {
     <>
       {/* Toast Alert */}
       {actionNotice && (
-        <div className="fixed bottom-6 right-6 z-50 bg-navy-950 text-white text-xs px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2 animate-in slide-in-from-bottom-2 no-print">
-          <FileCheck2 className="w-4 h-4 text-brand-400" />
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white text-xs px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2 animate-in slide-in-from-bottom-2 no-print">
+          <FileCheck2 className="w-4 h-4 text-purple-400" />
           <span>{actionNotice}</span>
         </div>
       )}
@@ -145,8 +203,6 @@ export const App: React.FC = () => {
             invoices={invoices}
             onSelectInvoice={(inv) => setPreviewInvoiceId(inv.id)}
             onNewInvoice={handleOpenNewInvoice}
-            isSimulatedEmpty={isSimulatedEmpty}
-            onSimulateEmptyToggle={setIsSimulatedEmpty}
             onNavigateToCustomers={() => setCurrentNav('customers')}
             onNavigateToProducts={() => setCurrentNav('products')}
             onDateRangeChange={handleDashboardDateRangeChange}
@@ -161,8 +217,11 @@ export const App: React.FC = () => {
             onIssueInvoice={handleIssueInvoice}
             onRecordPayment={(inv) => setPaymentInvoice(inv)}
             onEditDraft={handleEditDraft}
-            isSimulatedEmpty={isSimulatedEmpty}
-            onSimulateEmptyToggle={setIsSimulatedEmpty}
+            onDeleteDraft={handleDeleteDraft}
+            onCancelInvoice={handleCancelInvoice}
+            error={loadError}
+            isStale={isStale}
+            onRetry={loadData}
           />
         )}
 
@@ -175,12 +234,16 @@ export const App: React.FC = () => {
             onSelectInvoice={(invId) => setPreviewInvoiceId(invId)}
             onOpenRecordPayment={() => {
               const payable = invoices.find(
-                (inv) => inv.status === 'ISSUED' && (inv.balanceRemaining === undefined || inv.balanceRemaining > 0)
+                (inv) =>
+                  inv.status === 'ISSUED' &&
+                  (inv.balanceRemaining === undefined || inv.balanceRemaining > 0)
               );
               if (payable) {
                 setPaymentInvoice(payable);
               } else {
-                alert('No outstanding issued invoices available for payment. Please issue an invoice first.');
+                alert(
+                  'No outstanding issued invoices available for payment. Please issue an invoice first.'
+                );
               }
             }}
           />
@@ -218,12 +281,12 @@ export const App: React.FC = () => {
         onClose={() => setPaymentInvoice(null)}
         onSuccess={() => {
           loadData();
-          setActionNotice('Payment recorded and applied to invoice balance');
+          setActionNotice('Payment recorded successfully');
           setTimeout(() => setActionNotice(null), 3000);
         }}
       />
 
-      {/* Professional Invoice Preview & Print Modal */}
+      {/* Preview Invoice Modal */}
       <InvoicePreviewModal
         invoiceId={previewInvoiceId}
         isOpen={Boolean(previewInvoiceId)}
@@ -232,14 +295,16 @@ export const App: React.FC = () => {
           loadData();
         }}
         onOpenPayment={(inv) => {
+          setPreviewInvoiceId(null);
           setPaymentInvoice(inv);
         }}
       />
 
-      {/* Direct WhatsApp and Gmail Dispatch Modal upon Issuance */}
+      {/* Post-Issue Direct Dispatch Modal */}
       <InvoiceDispatchModal
         isOpen={Boolean(dispatchingInvoice)}
         invoice={dispatchingInvoice}
+        business={businessProfile}
         onClose={() => setDispatchingInvoice(null)}
       />
     </>

@@ -46,11 +46,29 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
   const projectedBalance = Math.max(0, invoice.balanceRemaining - payAmt);
   const isOverpaying = payAmt > invoice.balanceRemaining;
 
+  // B14: Escape key closes modal
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isSubmitting) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose, isSubmitting]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (isNaN(payAmt) || payAmt <= 0) {
       setError('Payment amount must be greater than zero');
+      return;
+    }
+
+    // B17: Sub-paisa validation
+    if (amount.includes('.') && amount.split('.')[1].length > 2) {
+      setError('Payment amount cannot have more than 2 decimal places (sub-paisa is not permitted)');
       return;
     }
 

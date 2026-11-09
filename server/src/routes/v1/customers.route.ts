@@ -5,35 +5,69 @@ import { sendSuccess } from '../../utils/response';
 import { validateRequest } from '../../middlewares/validate';
 import { AppError } from '../../middlewares/errorHandler';
 import { getOrCreateDefaultBusiness } from '../../utils/businessHelper';
+import {
+  validateAndNormalizeIndianPhone,
+  validateAndNormalizeGSTIN,
+} from '../../utils/validators';
 
 const router = Router();
 
-const clean10DigitPhone = (val: unknown): string => {
-  if (typeof val !== 'string') return '';
-  const digits = val.replace(/\D/g, '');
-  if (digits.length === 10) return digits;
-  if (digits.length === 11 && digits.startsWith('0')) return digits.slice(1);
-  if (digits.length > 10 && digits.startsWith('91')) return digits.slice(-10);
-  return digits.length > 10 ? digits.slice(-10) : digits;
-};
-
 const createCustomerSchema = z
   .object({
-    name: z.string().min(2, 'Customer name must be at least 2 characters'),
+    name: z
+      .string()
+      .trim()
+      .min(2, 'Customer name must be at least 2 characters')
+      .max(200, 'Customer name cannot exceed 200 characters'),
     phone: z
       .string()
       .optional()
       .nullable()
-      .transform((val) => (val ? clean10DigitPhone(val) : '')),
+      .superRefine((val, ctx) => {
+        if (!val || val.trim() === '') return;
+        try {
+          validateAndNormalizeIndianPhone(val);
+        } catch (err: any) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: err.message,
+          });
+        }
+      })
+      .transform((val) => {
+        if (!val || val.trim() === '') return '';
+        return validateAndNormalizeIndianPhone(val);
+      }),
     email: z
       .string()
+      .trim()
+      .max(255, 'Email cannot exceed 255 characters')
       .email('Invalid email address')
       .optional()
       .nullable()
       .or(z.literal('')),
-    billingAddress: z.string().min(3, 'Billing address must be at least 3 characters'),
-    gstin: z.string().optional().nullable(),
-    state: z.string().optional().nullable(),
+    billingAddress: z
+      .string()
+      .trim()
+      .min(3, 'Billing address must be at least 3 characters')
+      .max(500, 'Billing address cannot exceed 500 characters'),
+    gstin: z
+      .string()
+      .optional()
+      .nullable()
+      .superRefine((val, ctx) => {
+        if (!val || val.trim() === '') return;
+        try {
+          validateAndNormalizeGSTIN(val);
+        } catch (err: any) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: err.message,
+          });
+        }
+      })
+      .transform((val) => validateAndNormalizeGSTIN(val)),
+    state: z.string().max(100).optional().nullable(),
   })
   .refine(
     (data) => {
@@ -42,53 +76,72 @@ const createCustomerSchema = z
       return hasPhone || hasEmail;
     },
     {
-      message: 'At least one contact method (10-digit Phone Number or valid Email) is mandatory',
-      path: ['phone'],
-    }
-  )
-  .refine(
-    (data) => {
-      if (data.phone && data.phone.length > 0) {
-        return /^\d{10}$/.test(data.phone);
-      }
-      return true;
-    },
-    {
-      message: 'Phone number must be exactly 10 digits',
+      message:
+        'At least one contact method (10-digit Phone Number or valid Email) is mandatory',
       path: ['phone'],
     }
   );
 
 const updateCustomerSchema = z
   .object({
-    name: z.string().min(2).optional(),
+    name: z
+      .string()
+      .trim()
+      .min(2, 'Customer name must be at least 2 characters')
+      .max(200, 'Customer name cannot exceed 200 characters')
+      .optional(),
     phone: z
       .string()
       .optional()
       .nullable()
-      .transform((val) => (val !== undefined && val !== null ? clean10DigitPhone(val) : undefined)),
+      .superRefine((val, ctx) => {
+        if (!val || val.trim() === '') return;
+        try {
+          validateAndNormalizeIndianPhone(val);
+        } catch (err: any) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: err.message,
+          });
+        }
+      })
+      .transform((val) => {
+        if (val === undefined) return undefined;
+        if (!val || val.trim() === '') return '';
+        return validateAndNormalizeIndianPhone(val);
+      }),
     email: z
       .string()
+      .trim()
+      .max(255, 'Email cannot exceed 255 characters')
       .email('Invalid email address')
       .optional()
       .nullable()
       .or(z.literal('')),
-    billingAddress: z.string().min(3).optional(),
-    gstin: z.string().optional().nullable(),
-    state: z.string().optional().nullable(),
-  })
-  .refine(
-    (data) => {
-      if (data.phone !== undefined && data.phone !== null && data.phone.length > 0) {
-        return /^\d{10}$/.test(data.phone);
-      }
-      return true;
-    },
-    {
-      message: 'Phone number must be exactly 10 digits',
-      path: ['phone'],
-    }
-  );
+    billingAddress: z
+      .string()
+      .trim()
+      .min(3, 'Billing address must be at least 3 characters')
+      .max(500, 'Billing address cannot exceed 500 characters')
+      .optional(),
+    gstin: z
+      .string()
+      .optional()
+      .nullable()
+      .superRefine((val, ctx) => {
+        if (!val || val.trim() === '') return;
+        try {
+          validateAndNormalizeGSTIN(val);
+        } catch (err: any) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: err.message,
+          });
+        }
+      })
+      .transform((val) => (val !== undefined ? validateAndNormalizeGSTIN(val) : undefined)),
+    state: z.string().max(100).optional().nullable(),
+  });
 
 const customerQuerySchema = z.object({
   search: z.string().optional(),
@@ -133,11 +186,6 @@ router.get(
         skip: (page - 1) * limit,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        include: {
-          _count: {
-            select: { invoices: true },
-          },
-        },
       });
 
       return sendSuccess(
@@ -161,27 +209,13 @@ router.get(
 
 /**
  * GET /api/customers/:id
- * Returns single customer with recent invoices
+ * Retrieves single customer by ID
  */
 router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
     const customer = await prisma.customer.findUnique({
       where: { id },
-      include: {
-        invoices: {
-          take: 10,
-          orderBy: { invoiceDate: 'desc' },
-          select: {
-            id: true,
-            invoiceNumber: true,
-            invoiceDate: true,
-            dueDate: true,
-            status: true,
-            grandTotal: true,
-          },
-        },
-      },
     });
 
     if (!customer) {
@@ -196,7 +230,7 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
 
 /**
  * POST /api/customers
- * Creates a new customer
+ * Creates a new customer for default business
  */
 router.post(
   '/',
@@ -204,15 +238,47 @@ router.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const business = await getOrCreateDefaultBusiness();
+      const { name, phone, email, billingAddress, gstin, state } = req.body;
+
+      // Duplicate customer detection (B17)
+      const duplicateConditions: any[] = [];
+      if (phone && phone.trim()) {
+        duplicateConditions.push({ phone: phone.trim() });
+      }
+      if (email && email.trim()) {
+        duplicateConditions.push({ email: { equals: email.trim(), mode: 'insensitive' } });
+      }
+      if (gstin && gstin.trim()) {
+        duplicateConditions.push({ gstin: gstin.trim() });
+      }
+
+      if (duplicateConditions.length > 0) {
+        const existingDuplicate = await prisma.customer.findFirst({
+          where: {
+            businessId: business.id,
+            isArchived: false,
+            OR: duplicateConditions,
+          },
+        });
+
+        if (existingDuplicate) {
+          throw new AppError(
+            `A customer with matching contact details already exists: ${existingDuplicate.name}`,
+            409,
+            'ERR_DUPLICATE_CUSTOMER'
+          );
+        }
+      }
+
       const customer = await prisma.customer.create({
         data: {
           businessId: business.id,
-          name: req.body.name.trim(),
-          phone: req.body.phone.trim(),
-          email: req.body.email ? req.body.email.trim() : null,
-          billingAddress: req.body.billingAddress.trim(),
-          gstin: req.body.gstin ? req.body.gstin.trim() : null,
-          state: req.body.state ? req.body.state.trim() : 'Karnataka',
+          name,
+          phone: phone || '',
+          email: email && email.trim() !== '' ? email.trim() : null,
+          billingAddress,
+          gstin: gstin || null,
+          state: state || 'Karnataka',
         },
       });
 
@@ -233,31 +299,43 @@ router.put(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
-      const existing = await prisma.customer.findUnique({ where: { id } });
-      if (!existing) {
+
+      const current = await prisma.customer.findUnique({
+        where: { id },
+      });
+
+      if (!current) {
         throw new AppError('Customer not found', 404, 'ERR_CUSTOMER_NOT_FOUND');
       }
 
-      const candidatePhone = req.body.phone !== undefined ? req.body.phone.trim() : existing.phone;
-      const candidateEmail = req.body.email !== undefined ? (req.body.email ? req.body.email.trim() : null) : existing.email;
+      const candidatePhone = req.body.phone !== undefined ? req.body.phone : current.phone;
+      const candidateEmail = req.body.email !== undefined ? req.body.email : current.email;
 
-      if (!candidatePhone && !candidateEmail) {
+      const hasCandidatePhone = Boolean(candidatePhone && /^\d{10}$/.test(candidatePhone));
+      const hasCandidateEmail = Boolean(candidateEmail && candidateEmail.trim().length > 0);
+
+      if (!hasCandidatePhone && !hasCandidateEmail) {
         throw new AppError(
-          'At least one contact method (10-digit Phone Number or valid Email) is mandatory',
+          'Customer must have at least one contact method (10-digit Phone Number or valid Email)',
           400,
-          'ERR_CONTACT_MANDATORY'
+          'ERR_CONTACT_METHOD_REQUIRED'
         );
       }
 
       const updated = await prisma.customer.update({
         where: { id },
         data: {
-          name: req.body.name !== undefined ? req.body.name.trim() : undefined,
-          phone: req.body.phone !== undefined ? req.body.phone.trim() : undefined,
-          email: req.body.email !== undefined ? (req.body.email ? req.body.email.trim() : null) : undefined,
-          billingAddress: req.body.billingAddress !== undefined ? req.body.billingAddress.trim() : undefined,
-          gstin: req.body.gstin !== undefined ? (req.body.gstin ? req.body.gstin.trim() : null) : undefined,
-          state: req.body.state !== undefined ? (req.body.state ? req.body.state.trim() : null) : undefined,
+          name: req.body.name,
+          phone: req.body.phone !== undefined ? req.body.phone : undefined,
+          email:
+            req.body.email !== undefined
+              ? req.body.email && req.body.email.trim() !== ''
+                ? req.body.email.trim()
+                : null
+              : undefined,
+          billingAddress: req.body.billingAddress,
+          gstin: req.body.gstin !== undefined ? req.body.gstin : undefined,
+          state: req.body.state,
         },
       });
 
@@ -270,22 +348,26 @@ router.put(
 
 /**
  * DELETE /api/customers/:id
- * Soft deletes/archives customer to preserve historical invoice records
+ * Soft deletes if referenced in invoices, permanently removes if unreferenced
  */
 router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const existing = await prisma.customer.findUnique({
+
+    const customer = await prisma.customer.findUnique({
       where: { id },
-      include: { _count: { select: { invoices: true } } },
+      include: {
+        _count: {
+          select: { invoices: true },
+        },
+      },
     });
 
-    if (!existing) {
+    if (!customer) {
       throw new AppError('Customer not found', 404, 'ERR_CUSTOMER_NOT_FOUND');
     }
 
-    if (existing._count.invoices > 0) {
-      // Historical references exist - soft delete/archive
+    if (customer._count.invoices > 0) {
       const archived = await prisma.customer.update({
         where: { id },
         data: { isArchived: true },
@@ -293,13 +375,15 @@ router.delete('/:id', async (req: Request, res: Response, next: NextFunction) =>
       return sendSuccess(
         res,
         archived,
-        'Customer has historical invoices and was archived successfully'
+        'Customer has associated invoices; successfully archived'
       );
-    } else {
-      // No historical invoices - permanent removal is safe
-      await prisma.customer.delete({ where: { id } });
-      return sendSuccess(res, { id, deleted: true }, 'Customer removed successfully');
     }
+
+    await prisma.customer.delete({
+      where: { id },
+    });
+
+    return sendSuccess(res, { id }, 'Customer permanently deleted');
   } catch (error) {
     next(error);
   }

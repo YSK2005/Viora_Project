@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+import { randomBytes } from 'crypto';
 import { prisma } from '../../config/prisma';
 import { sendSuccess } from '../../utils/response';
 import { validateRequest } from '../../middlewares/validate';
@@ -18,7 +19,7 @@ const router = Router();
 
 const invoiceItemSchema = z.object({
   productId: z.string().optional().nullable(),
-  descriptionSnapshot: z.string().min(1, 'Item description is required'),
+  descriptionSnapshot: z.string().trim().min(1, 'Item description is required').max(300),
   unit: z.string().optional().default('PCS'),
   quantity: z.coerce.number().positive('Quantity must be greater than zero'),
   unitPrice: z.coerce.number().min(0, 'Unit price cannot be negative'),
@@ -32,8 +33,8 @@ const createInvoiceSchema = z.object({
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/, 'Invalid due date format (YYYY-MM-DD)'),
   placeOfSupply: z.string().optional().nullable(),
   isInterState: z.boolean().optional(),
-  notes: z.string().optional().nullable(),
-  items: z.array(invoiceItemSchema).min(1, 'At least one line item is required'),
+  notes: z.string().max(1000).optional().nullable(),
+  items: z.array(invoiceItemSchema).min(1, 'At least one line item is required').max(100),
 });
 
 const updateInvoiceSchema = createInvoiceSchema;
@@ -46,12 +47,12 @@ const getInvoicesQuerySchema = z.object({
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   page: z.coerce.number().int().positive().optional().default(1),
-  limit: z.coerce.number().int().positive().max(100).optional().default(20),
+  limit: z.coerce.number().int().positive().max(500).optional().default(20),
 });
 
 /**
  * GET /api/invoices
- * Lists invoices with search, status filters, pagination, and derived payment statuses
+ * Lists invoices with search, status filters, paymentStatus filtering before paging, and pagination
  */
 router.get(
   '/',
@@ -78,14 +79,18 @@ router.get(
         where.status = status;
       }
 
-      if (customerId) {
-        where.customerId = customerId;
+      if (customerId && customerId.trim() !== '') {
+        where.customerId = customerId.trim();
       }
 
       if (startDate || endDate) {
         where.invoiceDate = {};
-        if (startDate) where.invoiceDate.gte = new Date(startDate);
-        if (endDate) where.invoiceDate.lte = new Date(`${endDate}T23:59:59.999Z`);
+        if (startDate) {
+          where.invoiceDate.gte = new Date(`${startDate}T00:00:00.000Z`);
+        }
+        if (endDate) {
+          where.invoiceDate.lte = new Date(`${endDate}T23:59:59.999Z`);
+        }
       }
 
       if (search && search.trim() !== '') {
@@ -97,12 +102,10 @@ router.get(
         ];
       }
 
-      const totalCount = await prisma.invoice.count({ where });
-      const rawInvoices = await prisma.invoice.findMany({
+      // Fetch matching invoices to apply derived payment status filtering BEFORE pagination
+      const allMatching = await prisma.invoice.findMany({
         where,
-        skip: (page - 1) * limit,
-        take: limit,
-        orderBy: { invoiceDate: 'desc' },
+        orderBy: [{ invoiceDate: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
         include: {
           customer: {
             select: { id: true, name: true, email: true, phone: true, state: true },
@@ -113,15 +116,18 @@ router.get(
         },
       });
 
-      // Augment invoices with derived payment status
-      const invoices = rawInvoices.map((inv) => {
+      // Augment invoices with derived payment status and freeze issue-time snapshots if issued
+      const augmented = allMatching.map((inv) => {
         const paymentInfo = derivePaymentStatus(inv.grandTotal, inv.payments);
+        const isIssued = inv.status === 'ISSUED' || inv.status === 'CANCELLED';
+
         return {
           id: inv.id,
           invoiceNumber: inv.invoiceNumber,
           customerId: inv.customerId,
-          customerName: inv.customerNameSnapshot || inv.customer.name,
-          customerEmail: inv.customerEmailSnapshot || inv.customer.email,
+          customerName: isIssued && inv.customerNameSnapshot ? inv.customerNameSnapshot : inv.customer.name,
+          customerEmail: isIssued && inv.customerEmailSnapshot ? inv.customerEmailSnapshot : inv.customer.email,
+          customerPhone: isIssued && inv.customerPhoneSnapshot ? inv.customerPhoneSnapshot : inv.customer.phone,
           invoiceDate: inv.invoiceDate.toISOString().split('T')[0],
           dueDate: inv.dueDate.toISOString().split('T')[0],
           status: inv.status,
@@ -142,21 +148,25 @@ router.get(
         };
       });
 
-      // Filter by paymentStatus if requested
+      // Filter by paymentStatus BEFORE paging (B4)
       const filtered =
         paymentStatus === 'ALL'
-          ? invoices
-          : invoices.filter((i) => i.paymentStatus === paymentStatus);
+          ? augmented
+          : augmented.filter((i) => i.paymentStatus === paymentStatus);
+
+      const totalCount = filtered.length;
+      const totalPages = Math.ceil(totalCount / limit) || 1;
+      const pagedInvoices = filtered.slice((page - 1) * limit, page * limit);
 
       return sendSuccess(
         res,
         {
-          invoices: filtered,
+          invoices: pagedInvoices,
           pagination: {
             totalCount,
             page,
             limit,
-            totalPages: Math.ceil(totalCount / limit) || 1,
+            totalPages,
           },
         },
         'Invoices retrieved successfully'
@@ -170,6 +180,7 @@ router.get(
 /**
  * GET /api/invoices/:id
  * Returns single invoice with line items, payments, snapshots and derived balance
+ * When ISSUED, returns frozen snapshot details for customer and business (B8)
  */
 router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -196,11 +207,41 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
     }
 
     const paymentInfo = derivePaymentStatus(inv.grandTotal, inv.payments);
+    const isIssued = inv.status === 'ISSUED' || inv.status === 'CANCELLED';
+
+    // B8: Freeze customer and business details for issued invoices
+    const customerData = isIssued
+      ? {
+          id: inv.customerId,
+          name: inv.customerNameSnapshot || inv.customer.name,
+          phone: inv.customerPhoneSnapshot || inv.customer.phone,
+          email: inv.customerEmailSnapshot || inv.customer.email,
+          billingAddress: inv.customerAddressSnapshot || inv.customer.billingAddress,
+          gstin: inv.customerGstinSnapshot || inv.customer.gstin,
+          state: inv.customerStateSnapshot || inv.customer.state,
+        }
+      : inv.customer;
+
+    const businessData = isIssued
+      ? {
+          id: inv.businessId,
+          name: inv.businessNameSnapshot || inv.business.name,
+          address: inv.businessAddressSnapshot || inv.business.address,
+          phone: inv.businessPhoneSnapshot || inv.business.phone,
+          email: inv.businessEmailSnapshot || inv.business.email,
+          gstin: inv.businessGstinSnapshot || inv.business.gstin,
+          state: inv.businessStateSnapshot || inv.business.state,
+          logoUrl: inv.business.logoUrl,
+        }
+      : inv.business;
 
     return sendSuccess(
       res,
       {
         ...inv,
+        customer: customerData,
+        business: businessData,
+        customerName: isIssued && inv.customerNameSnapshot ? inv.customerNameSnapshot : inv.customer.name,
         invoiceDate: inv.invoiceDate.toISOString().split('T')[0],
         dueDate: inv.dueDate.toISOString().split('T')[0],
         subtotal: Number(inv.subtotal),
@@ -254,10 +295,16 @@ router.get('/:id/pdf', async (req: Request, res: Response, next: NextFunction) =
     const inv = await prisma.invoice.findUnique({
       where: { id },
       include: {
-        business: true,
         customer: true,
-        items: true,
-        payments: { orderBy: { paymentDate: 'desc' } },
+        business: true,
+        items: {
+          include: {
+            product: { select: { id: true, name: true, unit: true } },
+          },
+        },
+        payments: {
+          orderBy: { paymentDate: 'desc' },
+        },
       },
     });
 
@@ -272,7 +319,7 @@ router.get('/:id/pdf', async (req: Request, res: Response, next: NextFunction) =
       invoiceDate: inv.invoiceDate.toISOString().split('T')[0],
       dueDate: inv.dueDate.toISOString().split('T')[0],
       status: inv.status,
-      placeOfSupply: inv.placeOfSupply || 'Karnataka',
+      placeOfSupply: inv.placeOfSupply,
       isInterState: inv.isInterState,
       notes: inv.notes,
       subtotal: Number(inv.subtotal),
@@ -340,7 +387,7 @@ router.get('/:id/pdf', async (req: Request, res: Response, next: NextFunction) =
 
 /**
  * POST /api/invoices
- * Creates a DRAFT invoice with full server-side GST financial calculations
+ * Creates a DRAFT invoice with collision-free draft identifier (B2)
  */
 router.post(
   '/',
@@ -364,6 +411,9 @@ router.post(
       // Validate dates
       const invDateObj = new Date(invoiceDate);
       const dueDateObj = new Date(dueDate);
+      if (isNaN(invDateObj.getTime()) || isNaN(dueDateObj.getTime())) {
+        throw new AppError('Invalid date provided', 400, 'ERR_INVALID_DATE_FORMAT');
+      }
       if (dueDateObj < invDateObj) {
         throw new AppError('Due date cannot precede invoice date', 400, 'ERR_INVALID_DATES');
       }
@@ -382,8 +432,8 @@ router.post(
         throw new AppError(calcErr.message || 'Invoice calculation error', 400, 'ERR_INVALID_INVOICE_CALCULATION');
       }
 
-      // Temporary draft identifier
-      const draftNumber = `DRAFT-${Date.now().toString().slice(-6)}`;
+      // B2: Collision-safe unique draft identifier
+      const draftNumber = `DRAFT-${Date.now().toString().slice(-4)}-${randomBytes(4).toString('hex').toUpperCase()}`;
 
       const invoice = await prisma.$transaction(async (tx) => {
         const created = await tx.invoice.create({
@@ -405,7 +455,6 @@ router.post(
             taxTotal: calculated.taxTotal,
             grandTotal: calculated.grandTotal,
             notes: notes ? notes.trim() : null,
-            // Pre-seed customer snapshots
             customerNameSnapshot: customer.name,
             customerPhoneSnapshot: customer.phone,
             customerEmailSnapshot: customer.email,
@@ -458,7 +507,7 @@ router.post(
 
 /**
  * PUT /api/invoices/:id
- * Strictly draft invoices can be edited. Issued invoices are IMMUTABLE.
+ * Updates an existing DRAFT invoice. Issued invoices are immutable.
  */
 router.put(
   '/:id',
@@ -466,11 +515,12 @@ router.put(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
+      const business = await getOrCreateDefaultBusiness();
       const { customerId, invoiceDate, dueDate, placeOfSupply, isInterState: explicitInterState, notes, items } = req.body;
 
       const existing = await prisma.invoice.findUnique({
         where: { id },
-        include: { business: true },
+        include: { items: true },
       });
 
       if (!existing) {
@@ -479,10 +529,17 @@ router.put(
 
       if (existing.status !== 'DRAFT') {
         throw new AppError(
-          `Only draft invoices can be edited. This invoice is already ${existing.status}.`,
+          'Issued or cancelled invoices cannot be edited. Create a new invoice or credit note.',
           400,
-          'ERR_INVOICE_NOT_DRAFT'
+          'ERR_IMMUTABLE_INVOICE'
         );
+      }
+
+      const customer = await prisma.customer.findFirst({
+        where: { id: customerId, businessId: business.id },
+      });
+      if (!customer) {
+        throw new AppError('Customer not found', 404, 'ERR_CUSTOMER_NOT_FOUND');
       }
 
       const invDateObj = new Date(invoiceDate);
@@ -491,32 +548,18 @@ router.put(
         throw new AppError('Due date cannot precede invoice date', 400, 'ERR_INVALID_DATES');
       }
 
-      const customer = await prisma.customer.findUnique({ where: { id: customerId } });
-      if (!customer) {
-        throw new AppError('Customer not found', 404, 'ERR_CUSTOMER_NOT_FOUND');
-      }
-      if (customer.isArchived) {
-        throw new AppError('Cannot update an invoice with an archived customer', 400, 'ERR_CUSTOMER_ARCHIVED');
-      }
-
-      const business = existing.business;
       const resolvedSupplyPlace = placeOfSupply ? placeOfSupply.trim() : (customer.state || business.state || 'Karnataka');
       const isInterState = typeof explicitInterState === 'boolean'
         ? explicitInterState
         : resolvedSupplyPlace.toLowerCase() !== (business.state || 'karnataka').toLowerCase();
 
-      let calculated;
-      try {
-        calculated = calculateInvoiceTotals(items, isInterState);
-      } catch (calcErr: any) {
-        throw new AppError(calcErr.message || 'Invoice calculation error', 400, 'ERR_INVALID_INVOICE_CALCULATION');
-      }
+      const calculated = calculateInvoiceTotals(items, isInterState);
 
       const updated = await prisma.$transaction(async (tx) => {
-        // Remove existing items
-        await tx.invoiceItem.deleteMany({ where: { invoiceId: id } });
+        await tx.invoiceItem.deleteMany({
+          where: { invoiceId: id },
+        });
 
-        // Update invoice and re-create items
         return tx.invoice.update({
           where: { id },
           data: {
@@ -540,6 +583,12 @@ router.put(
             customerAddressSnapshot: customer.billingAddress,
             customerGstinSnapshot: customer.gstin,
             customerStateSnapshot: customer.state || resolvedSupplyPlace,
+            businessNameSnapshot: business.name,
+            businessAddressSnapshot: business.address,
+            businessPhoneSnapshot: business.phone,
+            businessEmailSnapshot: business.email,
+            businessGstinSnapshot: business.gstin,
+            businessStateSnapshot: business.state,
             items: {
               create: calculated.items.map((item) => ({
                 productId: item.productId,
@@ -577,100 +626,199 @@ router.put(
 );
 
 /**
+ * DELETE /api/invoices/:id
+ * Deletes a DRAFT invoice. Issued invoices cannot be deleted (B11)
+ */
+router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const inv = await prisma.invoice.findUnique({
+      where: { id },
+      include: { payments: true },
+    });
+
+    if (!inv) {
+      throw new AppError('Invoice not found', 404, 'ERR_INVOICE_NOT_FOUND');
+    }
+
+    if (inv.status !== 'DRAFT') {
+      throw new AppError(
+        'Only draft invoices can be deleted. Issued invoices cannot be deleted.',
+        409,
+        'ERR_CANNOT_DELETE_NON_DRAFT'
+      );
+    }
+
+    await prisma.invoice.delete({
+      where: { id },
+    });
+
+    return sendSuccess(res, { id }, 'Draft invoice deleted successfully');
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/invoices/:id/cancel
+ * Cancels an ISSUED invoice. Cancelled invoices preserve their number for audit trail (B11)
+ */
+router.post('/:id/cancel', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const inv = await prisma.invoice.findUnique({
+      where: { id },
+      include: { payments: true },
+    });
+
+    if (!inv) {
+      throw new AppError('Invoice not found', 404, 'ERR_INVOICE_NOT_FOUND');
+    }
+
+    if (inv.status === 'CANCELLED') {
+      throw new AppError('Invoice is already cancelled', 400, 'ERR_ALREADY_CANCELLED');
+    }
+
+    if (inv.status === 'DRAFT') {
+      throw new AppError('Draft invoices should be deleted, not cancelled', 400, 'ERR_CANNOT_CANCEL_DRAFT');
+    }
+
+    if (inv.payments && inv.payments.length > 0) {
+      throw new AppError(
+        'Invoices with recorded payments cannot be cancelled directly. Please refund or remove payments first.',
+        400,
+        'ERR_INVOICE_HAS_PAYMENTS'
+      );
+    }
+
+    const updated = await prisma.invoice.update({
+      where: { id },
+      data: { status: 'CANCELLED' },
+    });
+
+    return sendSuccess(res, updated, `Invoice ${updated.invoiceNumber} has been cancelled`);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * POST /api/invoices/:id/issue
- * Issues a draft invoice: locks snapshots, assigns sequential official invoice number in transaction
+ * Issues a draft invoice: locks invoice row in database, assigns sequential official number atomically (B1, B20)
  */
 router.post('/:id/issue', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
 
-    const existing = await prisma.invoice.findUnique({
-      where: { id },
-      include: {
-        customer: true,
-        items: true,
-      },
-    });
-
-    if (!existing) {
-      throw new AppError('Invoice not found', 404, 'ERR_INVOICE_NOT_FOUND');
-    }
-
-    if (existing.status === 'ISSUED') {
-      throw new AppError('Invoice has already been issued', 400, 'ERR_ALREADY_ISSUED');
-    }
-
-    if (existing.status === 'CANCELLED') {
-      throw new AppError('Cancelled invoices cannot be issued', 400, 'ERR_CANNOT_ISSUE_CANCELLED');
-    }
-
-    if (existing.items.length === 0) {
-      throw new AppError('Cannot issue an invoice with zero items', 400, 'ERR_EMPTY_INVOICE');
-    }
-
-    // Verify company WhatsApp & Gmail are configured before issuing (strictly mandatory)
-    const business = await prisma.business.findUnique({
-      where: { id: existing.businessId },
-    });
-
-    if (!business) {
-      throw new AppError('Business profile not found', 404, 'ERR_BUSINESS_NOT_FOUND');
-    }
-
-    const cleanBizPhone = (business.phone || '').replace(/\D/g, '');
-    const hasBizWhatsApp = cleanBizPhone.length >= 10;
-    const hasBizGmail = Boolean(business.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(business.email.trim()));
-
-    if (!hasBizWhatsApp || !hasBizGmail) {
-      throw new AppError(
-        'Company WhatsApp number (min 10 digits) and Gmail/Email are mandatory to issue and send invoices. Please configure them in Settings.',
-        400,
-        'ERR_COMPANY_CONTACT_MANDATORY'
-      );
-    }
-
-    // Customer contact (10-digit phone or email) is mandatory to send the invoice
-    const cleanCustPhone = (existing.customer?.phone || '').replace(/\D/g, '');
-    const hasCustPhone = cleanCustPhone.length >= 10;
-    const hasCustEmail = Boolean(existing.customer?.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(existing.customer.email.trim()));
-
-    if (!hasCustPhone && !hasCustEmail) {
-      throw new AppError(
-        'Customer must have at least one contact method (10-digit phone number or email) to receive the invoice.',
-        400,
-        'ERR_CUSTOMER_CONTACT_MANDATORY'
-      );
-    }
-
-    // Atomic transaction for number assignment and status transition
+    // Atomic transaction with row locking on invoice table (B1)
     const issuedInvoice = await prisma.$transaction(async (tx) => {
-      // Atomic row update & sequence allocation: PostgreSQL serializes concurrent updates
+      // 1. Lock invoice row and check status atomically
+      const lockedInvoices: any = await tx.$queryRaw`
+        SELECT id, status, "businessId", "grandTotal", "placeOfSupply", "customerId"
+        FROM "invoices"
+        WHERE id = ${id}
+        FOR UPDATE
+      `;
+
+      const lockedInvoice = lockedInvoices && lockedInvoices[0];
+      if (!lockedInvoice) {
+        throw new AppError('Invoice not found', 404, 'ERR_INVOICE_NOT_FOUND');
+      }
+
+      if (lockedInvoice.status === 'ISSUED') {
+        throw new AppError('Invoice has already been issued', 409, 'ERR_ALREADY_ISSUED');
+      }
+
+      if (lockedInvoice.status === 'CANCELLED') {
+        throw new AppError('Cancelled invoices cannot be issued', 400, 'ERR_CANNOT_ISSUE_CANCELLED');
+      }
+
+      if (lockedInvoice.status !== 'DRAFT') {
+        throw new AppError('Only draft invoices can be issued', 400, 'ERR_INVALID_INVOICE_STATE');
+      }
+
+      // B20: Zero-total invoice cannot be issued
+      if (Number(lockedInvoice.grandTotal) <= 0) {
+        throw new AppError(
+          'Cannot issue an invoice with a total amount of zero or less',
+          400,
+          'ERR_ZERO_TOTAL_INVOICE'
+        );
+      }
+
+      const itemCount = await tx.invoiceItem.count({ where: { invoiceId: id } });
+      if (itemCount === 0) {
+        throw new AppError('Cannot issue an invoice with zero items', 400, 'ERR_EMPTY_INVOICE');
+      }
+
+      // 2. Verify business profile and contact credentials
+      const business = await tx.business.findUnique({
+        where: { id: lockedInvoice.businessId },
+      });
+
+      if (!business) {
+        throw new AppError('Business profile not found', 404, 'ERR_BUSINESS_NOT_FOUND');
+      }
+
+      const cleanBizPhone = (business.phone || '').replace(/\D/g, '');
+      const hasBizWhatsApp = cleanBizPhone.length >= 10;
+      const hasBizGmail = Boolean(business.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(business.email.trim()));
+
+      if (!hasBizWhatsApp || !hasBizGmail) {
+        throw new AppError(
+          'Company WhatsApp number (min 10 digits) and Gmail/Email are mandatory to issue and send invoices. Please configure them in Settings.',
+          400,
+          'ERR_COMPANY_CONTACT_MANDATORY'
+        );
+      }
+
+      // 3. Verify customer contact
+      const customer = await tx.customer.findUnique({
+        where: { id: lockedInvoice.customerId },
+      });
+
+      if (!customer) {
+        throw new AppError('Customer not found', 404, 'ERR_CUSTOMER_NOT_FOUND');
+      }
+
+      const cleanCustPhone = (customer.phone || '').replace(/\D/g, '');
+      const hasCustPhone = cleanCustPhone.length >= 10;
+      const hasCustEmail = Boolean(customer.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer.email.trim()));
+
+      if (!hasCustPhone && !hasCustEmail) {
+        throw new AppError(
+          'Customer must have at least one contact method (10-digit phone number or email) to receive the invoice.',
+          400,
+          'ERR_CUSTOMER_CONTACT_MANDATORY'
+        );
+      }
+
+      // 4. Atomically allocate next sequence number
       const updatedBusiness = await tx.business.update({
-        where: { id: existing.businessId },
+        where: { id: business.id },
         data: {
           nextInvoiceNumber: { increment: 1 },
         },
       });
 
-      // The sequence allocated to this invoice is the value before increment
       const assignedSequence = updatedBusiness.nextInvoiceNumber - 1;
       const currentYear = new Date().getFullYear();
       const officialNumber = `${updatedBusiness.invoicePrefix}-${currentYear}-${String(
         assignedSequence
       ).padStart(6, '0')}`;
 
-      // Lock snapshots permanently
+      // 5. Update status to ISSUED and lock snapshots
       const updated = await tx.invoice.update({
         where: { id },
         data: {
           invoiceNumber: officialNumber,
           status: 'ISSUED',
-          customerNameSnapshot: existing.customer.name,
-          customerPhoneSnapshot: existing.customer.phone,
-          customerEmailSnapshot: existing.customer.email,
-          customerAddressSnapshot: existing.customer.billingAddress,
-          customerGstinSnapshot: existing.customer.gstin,
-          customerStateSnapshot: existing.customer.state || existing.placeOfSupply,
+          customerNameSnapshot: customer.name,
+          customerPhoneSnapshot: customer.phone,
+          customerEmailSnapshot: customer.email,
+          customerAddressSnapshot: customer.billingAddress,
+          customerGstinSnapshot: customer.gstin,
+          customerStateSnapshot: customer.state || lockedInvoice.placeOfSupply,
           businessNameSnapshot: updatedBusiness.name,
           businessAddressSnapshot: updatedBusiness.address,
           businessPhoneSnapshot: updatedBusiness.phone,

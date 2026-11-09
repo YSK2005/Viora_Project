@@ -10,16 +10,38 @@ import { derivePaymentStatus, round2, toDecimal } from '../../utils/money';
 const router = Router();
 
 export const createPaymentSchema = z.object({
-  amount: z.coerce.number().positive('Payment amount must be greater than zero'),
+  amount: z
+    .coerce
+    .number()
+    .positive('Payment amount must be greater than zero')
+    .refine(
+      (val) => {
+        // Enforce max 2 currency decimals (reject sub-paisa like 0.005)
+        const parts = val.toString().split('.');
+        return !parts[1] || parts[1].length <= 2;
+      },
+      {
+        message:
+          'Payment amount cannot have more than 2 decimal places (sub-paisa is not permitted)',
+      }
+    )
+    .refine((val) => val <= 1000000000, {
+      message: 'Payment amount exceeds maximum allowable limit',
+    }),
   paymentDate: z
     .string()
     .refine((val) => !isNaN(Date.parse(val)), {
       message: 'Invalid payment date format',
     })
     .optional(),
-  method: z.enum(['CASH', 'BANK_TRANSFER', 'UPI', 'CHEQUE', 'CARD', 'OTHER']).default('BANK_TRANSFER'),
-  reference: z.string().optional().nullable(),
-  requestKey: z.string().min(4, 'Idempotency requestKey is required to prevent duplicate payments'),
+  method: z
+    .enum(['CASH', 'BANK_TRANSFER', 'UPI', 'CHEQUE', 'CARD', 'OTHER'])
+    .default('BANK_TRANSFER'),
+  reference: z.string().max(100).optional().nullable(),
+  requestKey: z
+    .string()
+    .min(4, 'Idempotency requestKey is required to prevent duplicate payments')
+    .max(100),
 });
 
 const getPaymentsQuerySchema = z.object({

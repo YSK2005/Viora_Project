@@ -239,8 +239,8 @@ export function generateInvoicePdfStream(invoice: InvoicePdfData): NodeJS.Readab
 
   // Draw Items
   invoice.items.forEach((item, index) => {
-    // Check if new page is needed
-    if (currentY > pageHeight - 160) {
+    // Check if new page is needed for row
+    if (currentY > pageHeight - 75) {
       doc.addPage();
       currentY = margin;
       drawTableHeader(currentY);
@@ -378,23 +378,29 @@ export function generateInvoicePdfStream(invoice: InvoicePdfData): NodeJS.Readab
     currentY += 30;
   }
 
-  // 6. Footer on all pages
+  // 6. Footer on all pages (B7: prevent blank page generation)
   const totalPages = doc.bufferedPageRange().count;
   for (let i = 0; i < totalPages; i++) {
     doc.switchToPage(i);
+    const origBottom = doc.page.margins.bottom;
+    doc.page.margins.bottom = 0; // Temporarily disable bottom margin auto page-break
+    
     doc.strokeColor(borderColor).lineWidth(0.5).moveTo(margin, pageHeight - 34).lineTo(pageWidth - margin, pageHeight - 34).stroke();
     
     doc.fillColor(mutedText).fontSize(7.5).font('Helvetica');
     doc.text(
       'Thank you for your business. This is a computer-generated tax invoice generated via Viora Bills.',
       margin,
-      pageHeight - 26,
-      { align: 'left', width: 350 }
+      pageHeight - 24,
+      { align: 'left', width: 350, lineBreak: false }
     );
-    doc.text(`Page ${i + 1} of ${totalPages}`, pageWidth - margin - 100, pageHeight - 26, {
+    doc.text(`Page ${i + 1} of ${totalPages}`, pageWidth - margin - 100, pageHeight - 24, {
       align: 'right',
       width: 100,
+      lineBreak: false,
     });
+    
+    doc.page.margins.bottom = origBottom;
   }
 
   doc.end();

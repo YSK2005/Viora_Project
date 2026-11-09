@@ -73,6 +73,91 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isIssueImmediate, setIsIssueImmediate] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasUnsavedDraft, setHasUnsavedDraft] = useState(false);
+
+  // B14: Escape key closes modal
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isSubmitting) {
+        sessionStorage.removeItem('viora_unsaved_invoice_draft');
+      setHasUnsavedDraft(false);
+      onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose, isSubmitting]);
+
+  // B19: Unsaved form data protection on page refresh / navigation
+  const isDirty = useMemo(() => {
+    if (editingInvoice) return false;
+    return Boolean(items.some((i) => i.description.trim() || i.unitPrice > 0));
+  }, [editingInvoice, items]);
+
+  useEffect(() => {
+    if (!isOpen || !isDirty) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isOpen, isDirty]);
+
+  // Check for saved local draft on open
+  useEffect(() => {
+    if (!isOpen || editingInvoice) return;
+    const saved = sessionStorage.getItem('viora_unsaved_invoice_draft');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && Array.isArray(parsed.items) && parsed.items.length > 0) {
+          setHasUnsavedDraft(true);
+        }
+      } catch {}
+    }
+  }, [isOpen, editingInvoice]);
+
+  // Persist working draft to sessionStorage
+  useEffect(() => {
+    if (!isOpen || editingInvoice) return;
+    if (isDirty) {
+      sessionStorage.setItem(
+        'viora_unsaved_invoice_draft',
+        JSON.stringify({
+          customerId,
+          invoiceDate,
+          dueDate,
+          placeOfSupply,
+          isInterState,
+          notes,
+          items,
+        })
+      );
+    }
+  }, [isOpen, editingInvoice, isDirty, customerId, invoiceDate, dueDate, placeOfSupply, isInterState, notes, items]);
+
+  const handleRestoreDraft = () => {
+    const saved = sessionStorage.getItem('viora_unsaved_invoice_draft');
+    if (!saved) return;
+    try {
+      const parsed = JSON.parse(saved);
+      if (parsed.customerId) setCustomerId(parsed.customerId);
+      if (parsed.invoiceDate) setInvoiceDate(parsed.invoiceDate);
+      if (parsed.dueDate) setDueDate(parsed.dueDate);
+      if (parsed.placeOfSupply) setPlaceOfSupply(parsed.placeOfSupply);
+      if (parsed.isInterState !== undefined) setIsInterState(parsed.isInterState);
+      if (parsed.notes !== undefined) setNotes(parsed.notes);
+      if (parsed.items) setItems(parsed.items);
+      setHasUnsavedDraft(false);
+    } catch {}
+  };
+
+  const handleDiscardDraft = () => {
+    sessionStorage.removeItem('viora_unsaved_invoice_draft');
+    setHasUnsavedDraft(false);
+  };
 
   // Initialize or populate editing invoice
   useEffect(() => {
@@ -336,6 +421,8 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
         onSuccess(savedInvoice);
       }
 
+      sessionStorage.removeItem('viora_unsaved_invoice_draft');
+      setHasUnsavedDraft(false);
       onClose();
     } catch (err: any) {
       setError(err.message || 'Failed to save invoice');
@@ -375,6 +462,32 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
 
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+          {/* B19: Unsaved Draft Recovery Notice */}
+          {hasUnsavedDraft && !editingInvoice && (
+            <div className="p-3.5 bg-purple-50 border border-purple-200 text-purple-900 rounded-xl text-xs flex items-center justify-between shadow-xs">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-purple-600 flex-shrink-0" />
+                <span>An unsaved invoice draft from your previous session was detected.</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleRestoreDraft}
+                  className="px-2.5 py-1 bg-purple-700 text-white font-semibold rounded-md hover:bg-purple-800 transition-colors"
+                >
+                  Restore Draft
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDiscardDraft}
+                  className="px-2.5 py-1 border border-purple-300 text-purple-700 font-semibold rounded-md hover:bg-purple-100 transition-colors"
+                >
+                  Discard
+                </button>
+              </div>
+            </div>
+          )}
+
           {error && (
             <div className="p-3.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center justify-between">
               <span>{error}</span>

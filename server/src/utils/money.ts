@@ -11,6 +11,10 @@ export function round2(dec: Prisma.Decimal): Prisma.Decimal {
   return dec.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
 }
 
+export function roundQty(dec: Prisma.Decimal): Prisma.Decimal {
+  return dec.toDecimalPlaces(3, Prisma.Decimal.ROUND_HALF_UP);
+}
+
 export interface CalculatedLineItem {
   productId?: string | null;
   descriptionSnapshot: string;
@@ -65,7 +69,7 @@ export function calculateLineItem(
     throw new Error('All numeric values must be finite valid numbers');
   }
 
-  const qty = round2(toDecimal(input.quantity));
+  const qty = roundQty(toDecimal(input.quantity));
   const price = round2(toDecimal(input.unitPrice));
   const discount = round2(toDecimal(input.discountAmount ?? 0));
   const taxRate = toDecimal(input.taxRate ?? 0);
@@ -216,7 +220,7 @@ export function derivePaymentStatus(
 
   let paymentStatus: PaymentStatus = 'UNPAID';
   if (total.isZero()) {
-    paymentStatus = 'PAID';
+    paymentStatus = 'UNPAID';
   } else if (totalPaid.greaterThanOrEqualTo(total)) {
     paymentStatus = 'PAID';
   } else if (totalPaid.greaterThan(0)) {

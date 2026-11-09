@@ -38,7 +38,7 @@ export const DEFAULT_INDIAN_STATES: string[] = [
   'West Bengal',
 ];
 
-const CUSTOM_STATES_KEY = 'billy_custom_states';
+const CUSTOM_STATES_KEY = 'viora_custom_states';
 
 export function getStoredCustomStates(): string[] {
   try {
