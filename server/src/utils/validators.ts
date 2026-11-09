@@ -72,3 +72,4 @@ export function validateAndNormalizeGSTIN(val: unknown): string | null {
 
   return trimmed;
 }
+

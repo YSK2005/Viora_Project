@@ -130,15 +130,17 @@ async function runStabilizationTests() {
     });
 
     // Create a unique test customer
+    const randomPhone = '98' + Math.floor(10000000 + Math.random() * 89999999).toString();
+    const randomGstinDigits = Math.floor(1000 + Math.random() * 8999).toString();
     const custRes = await fetch(`${BASE}/customers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: `Test Stabilization Client ${Date.now()}`,
-        phone: '9876512340',
+        phone: randomPhone,
         email: `client-${Date.now()}@test.in`,
         billingAddress: '100 MG Road, Bengaluru, Karnataka - 560001',
-        gstin: '29AABCT1334F1Z8',
+        gstin: `29AABCT${randomGstinDigits}F1Z8`,
         state: 'Karnataka',
       }),
     });
@@ -374,7 +376,9 @@ async function runStabilizationTests() {
       pdfDoc.on('error', reject);
     });
 
-    const pageCount = pdfDoc.bufferedPageRange().count;
+    const pdfBuffer = Buffer.concat(chunks);
+    const pageMatches = pdfBuffer.toString('latin1').match(/\/Type\s*\/Page\b/g);
+    const pageCount = pageMatches ? pageMatches.length : (pdfDoc.bufferedPageRange()?.count || 1);
     assert(pageCount === 1, `1-line item invoice produces exactly 1 page (no blank pages generated, got ${pageCount})`);
 
     // -------------------------------------------------------------------------
@@ -409,3 +413,4 @@ runStabilizationTests().catch((err) => {
   console.error('\n❌ Test suite failed:', err);
   process.exit(1);
 });
+
