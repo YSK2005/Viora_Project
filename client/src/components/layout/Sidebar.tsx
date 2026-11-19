@@ -10,8 +10,9 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { NavigationKey } from '../../types';
+import { NavigationKey, User, UserRole } from '../../types';
 import { BillyWordmark } from '../common/BillyWordmark';
+import { LogOut } from 'lucide-react';
 
 interface SidebarProps {
   currentNav: NavigationKey;
@@ -20,6 +21,9 @@ interface SidebarProps {
   onToggleCollapse: () => void;
   isMobileOpen: boolean;
   onCloseMobile: () => void;
+  user?: User | null;
+  userRole?: UserRole | null;
+  onLogout?: () => void;
 }
 
 interface NavItem {
@@ -46,6 +50,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onToggleCollapse,
   isMobileOpen,
   onCloseMobile,
+  user,
+  userRole,
+  onLogout,
 }) => {
   return (
     <>
@@ -157,6 +164,60 @@ export const Sidebar: React.FC<SidebarProps> = ({
             );
           })}
         </nav>
+
+        {/* User Card & Logout at Bottom */}
+        {user && (
+          <div className="p-3 border-t border-navy-800 bg-navy-900/60">
+            {!isCollapsed ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0 pr-2">
+                    <p className="text-xs font-semibold text-white truncate">{user.name}</p>
+                    <p className="text-[11px] text-navy-400 truncate">{user.email}</p>
+                  </div>
+                  <span
+                    className={`px-1.5 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider ${
+                      userRole === 'OWNER'
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                        : userRole === 'ACCOUNTANT'
+                        ? 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
+                        : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                    }`}
+                  >
+                    {userRole || 'USER'}
+                  </span>
+                </div>
+                {onLogout && (
+                  <button
+                    onClick={onLogout}
+                    className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs text-rose-300 hover:text-white hover:bg-rose-500/20 rounded-lg transition-colors border border-rose-500/20"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Sign Out</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-2">
+                <div
+                  title={`${user.name} (${userRole || 'USER'})`}
+                  className="w-8 h-8 rounded-full bg-teal-600/30 text-teal-300 flex items-center justify-center text-xs font-bold border border-teal-500/30"
+                >
+                  {user.name.charAt(0).toUpperCase()}
+                </div>
+                {onLogout && (
+                  <button
+                    onClick={onLogout}
+                    title="Sign Out"
+                    className="p-1.5 text-rose-400 hover:text-white hover:bg-rose-500/20 rounded-lg transition-colors"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </aside>
     </>
   );

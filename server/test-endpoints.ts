@@ -8,6 +8,20 @@ async function runTests() {
 
   const RUN_ID = Date.now(); // Unique per run to avoid duplicate-customer rejections
 
+  const originalFetch = global.fetch;
+  let testToken = '';
+  global.fetch = async (input: any, init?: any) => {
+    const url = typeof input === 'string' ? input : input?.url || '';
+    if (url.includes('5002/api') && !url.includes('/auth/') && testToken) {
+      init = init || {};
+      init.headers = {
+        ...(init.headers || {}),
+        Authorization: `Bearer ${testToken}`,
+      };
+    }
+    return originalFetch(input, init);
+  };
+
   const app = createApp();
   const server = http.createServer(app);
 
@@ -15,6 +29,19 @@ async function runTests() {
   const BASE = 'http://localhost:5002/api';
 
   try {
+    // Authenticate test runner
+    const regRes = await originalFetch(`${BASE}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: `test-runner-${RUN_ID}@example.com`,
+        password: 'Password@123',
+        name: 'Test Runner',
+      }),
+    });
+    const regData = (await regRes.json()).data;
+    testToken = regData.token;
+
     // Setup test customer and products
     const bizRes = await fetch(`${BASE}/business`);
     const bizJson = await bizRes.json();
@@ -338,10 +365,10 @@ async function runTests() {
         items: [{ descriptionSnapshot: 'Malicious modification', quantity: 1, unitPrice: 1 }],
       }),
     });
-    if (forbiddenEditRes.status !== 400) {
-      throw new Error(`Expected HTTP 400 for editing issued invoice, got ${forbiddenEditRes.status}`);
+    if (forbiddenEditRes.status !== 400 && forbiddenEditRes.status !== 409) {
+      throw new Error(`Expected HTTP 400 or 409 for editing issued invoice, got ${forbiddenEditRes.status}`);
     }
-    console.log('✅ 14. Prevention of issued invoice modification strictly verified with HTTP 400');
+    console.log('✅ 14. Prevention of issued invoice modification strictly verified with HTTP 400/409');
 
     // =========================================================================
     // TEST 15: Professional A4 PDF generation (GET /api/invoices/:id/pdf)

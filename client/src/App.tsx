@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { NavigationKey, Invoice, DashboardSummary, BusinessProfile, SystemHealth } from './types';
+import { NavigationKey, Invoice, DashboardSummary, BusinessProfile, SystemHealth, User, UserRole } from './types';
 import { AppLayout } from './components/layout/AppLayout';
 import { DashboardView } from './components/pages/DashboardView';
 import { InvoicesView } from './components/pages/InvoicesView';
@@ -12,21 +12,30 @@ import { NewInvoiceModal } from './components/modals/NewInvoiceModal';
 import { InvoicePreviewModal } from './components/modals/InvoicePreviewModal';
 import { RecordPaymentModal } from './components/modals/RecordPaymentModal';
 import { InvoiceDispatchModal } from './components/modals/InvoiceDispatchModal';
+import { AuthModal } from './components/modals/AuthModal';
+import { GlobalSearchModal } from './components/common/GlobalSearchModal';
 import {
   fetchInvoices,
   fetchInvoiceDetails,
   fetchDashboardSummary,
   fetchBusiness,
   fetchHealth,
+  fetchCurrentUser,
+  logoutUser,
   issueInvoice,
   deleteDraftInvoice,
   cancelInvoice,
+  AuthResponse,
 } from './services/api';
 import {
   FileCheck2,
 } from 'lucide-react';
 
 export const App: React.FC = () => {
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [userRole, setUserRole] = useState<UserRole | null>(null);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
+
   const [currentNav, setCurrentNav] = useState<NavigationKey>('dashboard');
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [dashboardSummary, setDashboardSummary] = useState<DashboardSummary | null>(null);
@@ -41,6 +50,18 @@ export const App: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isStale, setIsStale] = useState(false);
   const [selectedCustomerFilter, setSelectedCustomerFilter] = useState('');
+  const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsGlobalSearchOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const loadData = useCallback(async () => {
     try {
@@ -53,6 +74,9 @@ export const App: React.FC = () => {
       ]);
 
       setSystemHealth(health);
+      if (health.status !== 'healthy' || !invData.isBackendConnected || !summary || !biz) {
+        throw new Error('Billing data is unavailable. Previously loaded records have been retained.');
+      }
       setInvoices(invData.invoices);
       setDashboardSummary(summary);
       if (biz) setBusinessProfile(biz);
@@ -64,8 +88,32 @@ export const App: React.FC = () => {
     }
   }, []);
 
+  const checkAuth = useCallback(async () => {
+    setIsAuthChecking(true);
+    try {
+      const data = await fetchCurrentUser();
+      if (data && data.user) {
+        setCurrentUser(data.user);
+        setUserRole(data.role);
+        setBusinessProfile(data.business);
+        setIsAuthChecking(false);
+        return true;
+      }
+    } catch (err) {
+      console.warn('Initial session check failed:', err);
+    }
+    setCurrentUser(null);
+    setUserRole(null);
+    setIsAuthChecking(false);
+    return false;
+  }, []);
+
   useEffect(() => {
-    loadData();
+    checkAuth().then((authenticated) => {
+      if (authenticated) {
+        loadData();
+      }
+    });
 
     // Health poll every 20s
     const timer = setInterval(async () => {
@@ -78,9 +126,36 @@ export const App: React.FC = () => {
     }, 20000);
 
     return () => clearInterval(timer);
-  }, [loadData]);
+  }, [checkAuth, loadData]);
+
+  const handleAuthSuccess = (data: AuthResponse) => {
+    setCurrentUser(data.user);
+    setUserRole(data.role);
+    setBusinessProfile(data.business);
+    setIsAuthChecking(false);
+    loadData();
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logoutUser();
+    } catch {
+      setLoadError('Sign out failed. Please retry.');
+      return;
+    }
+    setCurrentUser(null);
+    setUserRole(null);
+    setInvoices([]);
+    setDashboardSummary(null);
+  };
 
   const handleIssueInvoice = async (inv: Invoice) => {
+    try {
+      inv = await fetchInvoiceDetails(inv.id);
+    } catch {
+      setLoadError('Unable to load invoice details. Please retry.');
+      return;
+    }
     // Check company WhatsApp & Gmail before issuing
     const cleanBizPhone = (businessProfile?.phone || '').replace(/\D/g, '');
     const hasBizWhatsApp = cleanBizPhone.length >= 10;
@@ -196,8 +271,46 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleDuplicateInvoice = async (inv: Invoice) => {
+    try {
+      let full = inv;
+      if (!inv.items || inv.items.length === 0) {
+        full = await fetchInvoiceDetails(inv.id);
+      }
+      setEditingInvoice({
+        ...full,
+        id: '', // Empty ID ensures createInvoice is called, not updateDraftInvoice
+        invoiceNumber: `COPY OF ${full.invoiceNumber}`,
+        status: 'DRAFT',
+        invoiceDate: new Date().toISOString().split('T')[0],
+        dueDate: new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0],
+      } as any);
+      setIsNewInvoiceOpen(true);
+    } catch (err: any) {
+      alert(`Could not duplicate invoice: ${err.message}`);
+    }
+  };
+
+  if (isAuthChecking) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
+        <div className="w-12 h-12 rounded-2xl bg-teal-500/20 border border-teal-500/30 flex items-center justify-center text-teal-400 mb-4 animate-pulse">
+          <FileCheck2 className="w-6 h-6" />
+        </div>
+        <div className="text-white font-bold text-lg tracking-tight">Viora Bills</div>
+        <div className="text-slate-400 text-xs mt-1">Verifying secure session...</div>
+      </div>
+    );
+  }
+
   return (
     <>
+      {/* Auth Modal for Unauthenticated Users */}
+      <AuthModal
+        isOpen={!currentUser}
+        onSuccess={handleAuthSuccess}
+      />
+
       {/* Toast Alert */}
       {actionNotice && (
         <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white text-xs px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2 animate-in slide-in-from-bottom-2 no-print">
@@ -210,7 +323,12 @@ export const App: React.FC = () => {
         currentNav={currentNav}
         onNavigate={setCurrentNav}
         systemHealth={systemHealth}
+        user={currentUser}
+        userRole={userRole}
+        onLogout={handleLogout}
+        onOpenGlobalSearch={() => setIsGlobalSearchOpen(true)}
       >
+        {loadError && <div role="alert" className="mb-4 rounded-lg border border-red-300 bg-red-50 p-4 text-red-900">{loadError} <button onClick={loadData} className="underline font-semibold">Retry</button></div>}
         {currentNav === 'dashboard' && (
           <DashboardView
             summary={dashboardSummary}
@@ -238,6 +356,7 @@ export const App: React.FC = () => {
             onEditDraft={handleEditDraft}
             onDeleteDraft={handleDeleteDraft}
             onCancelInvoice={handleCancelInvoice}
+            onDuplicateInvoice={handleDuplicateInvoice}
             initialCustomerFilter={selectedCustomerFilter}
             error={loadError}
             isStale={isStale}
@@ -258,6 +377,7 @@ export const App: React.FC = () => {
 
         {currentNav === 'payments' && (
           <PaymentsView
+            userRole={userRole}
             onSelectInvoice={(invId) => setPreviewInvoiceId(invId)}
             onOpenRecordPayment={() => {
               const payable = invoices.find(
@@ -302,7 +422,8 @@ export const App: React.FC = () => {
       />
 
       {/* Record Payment Modal */}
-      <RecordPaymentModal
+      {paymentInvoice && <RecordPaymentModal
+        key={paymentInvoice.id}
         invoice={paymentInvoice}
         isOpen={Boolean(paymentInvoice)}
         onClose={() => setPaymentInvoice(null)}
@@ -313,6 +434,7 @@ export const App: React.FC = () => {
         }}
       />
 
+      }
       {/* Preview Invoice Modal */}
       <InvoicePreviewModal
         invoiceId={previewInvoiceId}
@@ -334,6 +456,25 @@ export const App: React.FC = () => {
         invoice={dispatchingInvoice}
         business={businessProfile}
         onClose={() => setDispatchingInvoice(null)}
+      />
+
+      {/* Omni-search Command Palette */}
+      <GlobalSearchModal
+        isOpen={isGlobalSearchOpen}
+        onClose={() => setIsGlobalSearchOpen(false)}
+        onSelectInvoice={(invoiceId) => {
+          setIsGlobalSearchOpen(false);
+          setPreviewInvoiceId(invoiceId);
+        }}
+        onSelectCustomer={(customerName) => {
+          setIsGlobalSearchOpen(false);
+          setSelectedCustomerFilter(customerName);
+          setCurrentNav('invoices');
+        }}
+        onSelectProduct={(_productName) => {
+          setIsGlobalSearchOpen(false);
+          setCurrentNav('products');
+        }}
       />
     </>
   );

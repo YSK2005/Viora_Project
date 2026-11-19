@@ -15,8 +15,7 @@ export function createApp(): Application {
   // CORS configuration supporting single or comma-separated origins
   const allowedOrigins = [
     ...env.CLIENT_URL.split(',').map((u) => u.trim().replace(/\/$/, '')),
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
+    ...(env.NODE_ENV === 'development' ? ['http://localhost:5173', 'http://127.0.0.1:5173'] : []),
   ].filter(Boolean);
 
   app.use(
@@ -33,9 +32,21 @@ export function createApp(): Application {
       },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Business-Id', 'X-Viora-Client'],
     })
   );
+
+  // CORS alone does not stop simple cross-origin requests from mutating data.
+  // Require our custom header on cookie-authenticated writes, including login/logout.
+  app.use((req, _res, next) => {
+    const mutation = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
+    const browserRequest = Boolean(req.headers.origin || req.headers.cookie);
+    const bearer = req.headers.authorization?.startsWith('Bearer ');
+    if (mutation && browserRequest && !bearer && req.get('X-Viora-Client') !== 'web') {
+      return next(new AppError('Missing browser request protection header', 403, 'ERR_CSRF'));
+    }
+    next();
+  });
 
   // Request logger
   if (env.NODE_ENV !== 'test') {

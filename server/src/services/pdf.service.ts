@@ -67,6 +67,8 @@ export interface InvoicePdfData {
     paymentDate: string;
     method: string;
     reference?: string | null;
+    isReversed?: boolean;
+    reversedReason?: string | null;
   }>;
 }
 
@@ -110,14 +112,11 @@ export function generateInvoicePdfStream(invoice: InvoicePdfData): NodeJS.Readab
   if (invoice.business.logoUrl) {
     try {
       let imgBuffer: Buffer | null = null;
+      // Strictly allow only verified base64 data URIs - reject local filesystem paths
       if (invoice.business.logoUrl.startsWith('data:image/')) {
         const parts = invoice.business.logoUrl.split('base64,');
         if (parts[1]) {
           imgBuffer = Buffer.from(parts[1], 'base64');
-        }
-      } else if (invoice.business.logoUrl.startsWith('/') || invoice.business.logoUrl.includes(':\\')) {
-        if (fs.existsSync(invoice.business.logoUrl)) {
-          imgBuffer = fs.readFileSync(invoice.business.logoUrl);
         }
       }
       if (imgBuffer) {
@@ -174,18 +173,24 @@ export function generateInvoicePdfStream(invoice: InvoicePdfData): NodeJS.Readab
   doc.strokeColor(borderColor).lineWidth(0.75).moveTo(margin, currentY).lineTo(pageWidth - margin, currentY).stroke();
   currentY += 10;
 
-  // 2. Bill To & Customer Info Box
-  doc.roundedRect(margin, currentY, contentWidth, 54, 4).fillAndStroke('#f8fafc', borderColor);
-  
-  doc.fillColor(mutedText).fontSize(7.5).font('Helvetica-Bold').text('BILLED TO (CUSTOMER DETAILS)', margin + 10, currentY + 8);
-  doc.fillColor(primaryColor).fontSize(10).font('Helvetica-Bold').text(invoice.customer.name, margin + 10, currentY + 19);
-
+  // 2. Bill To & Customer Info Box with dynamic height for long customer names/addresses
   const custDetails = [
     invoice.customer.address,
     invoice.customer.phone ? `Phone: ${invoice.customer.phone}` : null,
     invoice.customer.email ? `Email: ${invoice.customer.email}` : null,
   ].filter(Boolean).join('  |  ');
-  doc.fillColor(textColor).fontSize(8).font('Helvetica').text(custDetails, margin + 10, currentY + 33, { width: 330 });
+
+  doc.fontSize(10).font('Helvetica-Bold');
+  const custNameHeight = doc.heightOfString(invoice.customer.name, { width: 320 });
+  doc.fontSize(8).font('Helvetica');
+  const custDetailsHeight = doc.heightOfString(custDetails, { width: 320 });
+  const boxHeight = Math.max(54, 22 + custNameHeight + custDetailsHeight);
+
+  doc.roundedRect(margin, currentY, contentWidth, boxHeight, 4).fillAndStroke('#f8fafc', borderColor);
+  
+  doc.fillColor(mutedText).fontSize(7.5).font('Helvetica-Bold').text('BILLED TO (CUSTOMER DETAILS)', margin + 10, currentY + 8);
+  doc.fillColor(primaryColor).fontSize(10).font('Helvetica-Bold').text(invoice.customer.name, margin + 10, currentY + 19, { width: 320 });
+  doc.fillColor(textColor).fontSize(8).font('Helvetica').text(custDetails, margin + 10, currentY + 21 + custNameHeight, { width: 320 });
 
   // Customer GSTIN & State on right
   if (invoice.customer.gstin || invoice.customer.state) {
@@ -196,7 +201,7 @@ export function generateInvoicePdfStream(invoice: InvoicePdfData): NodeJS.Readab
     doc.fillColor(textColor).fontSize(8).font('Helvetica').text(custGst, metaBoxX, currentY + 19, { align: 'right', width: metaBoxWidth });
   }
 
-  currentY += 66;
+  currentY += boxHeight + 12;
 
   // 3. Itemized Products & Services Table
   const tableX = margin;
@@ -364,18 +369,59 @@ export function generateInvoicePdfStream(invoice: InvoicePdfData): NodeJS.Readab
 
   // 5. Payment Details Section (if any paid or payments recorded)
   if (invoice.payments && invoice.payments.length > 0) {
-    if (currentY > pageHeight - 80) {
+    if (currentY > pageHeight - 120) {
       doc.addPage();
       currentY = margin;
     }
 
     doc.fillColor(primaryColor).fontSize(9).font('Helvetica-Bold').text('Payment History & Balance Status', margin, currentY);
-    currentY += 14;
+    currentY += 13;
 
     const payBox = `Total Paid: ${formatINR(invoice.totalPaid)}   |   Balance Due: ${formatINR(invoice.balanceRemaining)}   |   Payment Status: ${invoice.paymentStatus || 'UNPAID'}`;
-    doc.roundedRect(margin, currentY, contentWidth, 22, 3).fillAndStroke('#f0fdf4', '#bbf7d0');
-    doc.fillColor('#166534').fontSize(8).font('Helvetica-Bold').text(payBox, margin + 10, currentY + 6);
-    currentY += 30;
+    doc.roundedRect(margin, currentY, contentWidth, 20, 3).fillAndStroke('#f0fdf4', '#bbf7d0');
+    doc.fillColor('#166534').fontSize(8).font('Helvetica-Bold').text(payBox, margin + 10, currentY + 5);
+    currentY += 26;
+
+    // Mini Payment Ledger Table
+    doc.rect(margin, currentY, contentWidth, 14).fill(tableHeaderBg);
+    doc.strokeColor(borderColor).lineWidth(0.5).rect(margin, currentY, contentWidth, 14).stroke();
+    doc.fillColor(primaryColor).fontSize(7).font('Helvetica-Bold');
+    doc.text('Date', margin + 6, currentY + 3.5, { width: 70 });
+    doc.text('Method', margin + 80, currentY + 3.5, { width: 90 });
+    doc.text('Reference / Note', margin + 175, currentY + 3.5, { width: 140 });
+    doc.text('Status', margin + 320, currentY + 3.5, { width: 70 });
+    doc.text('Amount', margin + 395, currentY + 3.5, { width: 120, align: 'right' });
+    currentY += 14;
+
+    invoice.payments.forEach((p, idx) => {
+      if (currentY > pageHeight - 60) {
+        doc.addPage();
+        currentY = margin;
+      }
+      const pRowH = 14;
+      const isAlt = idx % 2 === 1;
+      if (isAlt) {
+        doc.rect(margin, currentY, contentWidth, pRowH).fill('#fbfcfd');
+      }
+      doc.strokeColor(borderColor).lineWidth(0.5).rect(margin, currentY, contentWidth, pRowH).stroke();
+
+      doc.fillColor(p.isReversed ? '#94a3b8' : textColor).fontSize(7).font('Helvetica');
+      doc.text(p.paymentDate, margin + 6, currentY + 3.5, { width: 70 });
+      doc.text(p.method.replace('_', ' '), margin + 80, currentY + 3.5, { width: 90 });
+      doc.text(p.reference || '—', margin + 175, currentY + 3.5, { width: 140, ellipsis: true });
+      
+      if (p.isReversed) {
+        doc.font('Helvetica-Bold').fillColor('#dc2626').text('REVERSED', margin + 320, currentY + 3.5, { width: 70 });
+      } else {
+        doc.font('Helvetica-Bold').fillColor('#16a34a').text('CLEARED', margin + 320, currentY + 3.5, { width: 70 });
+      }
+
+      doc.font('Helvetica-Bold').fillColor(p.isReversed ? '#94a3b8' : primaryColor);
+      doc.text(formatINR(p.amount), margin + 395, currentY + 3.5, { width: 120, align: 'right' });
+      currentY += pRowH;
+    });
+
+    currentY += 12;
   }
 
   // 6. Footer on all pages (B7: prevent blank page generation)

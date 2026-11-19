@@ -1,0 +1,90 @@
+name: Automated Release Checks & CI
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+
+jobs:
+  release-verification:
+    name: Type-Check, Build, Security Scan & Master Regressions
+    runs-on: ubuntu-latest
+    env:
+      NODE_ENV: test
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: viora_bills_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Monorepo Dependencies
+        run: npm ci
+
+      - name: Run Dependency Vulnerability Scan
+        run: npm audit --audit-level=high
+
+      - name: TypeScript Type-Checking
+        run: npm run type-check
+
+      - name: Production Bundle & Server Build
+        run: npm run build
+
+      - name: Apply Versioned Database Migrations
+        working-directory: server
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/viora_bills_test?schema=public
+        run: npx prisma migrate deploy
+
+      - name: Run P0 Master Regression Suite (Auth, Isolation, Lifecycle, Pagination)
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/viora_bills_test?schema=public
+          JWT_SECRET: supersecretjwtkeyforciverification
+          PORT: 5001
+        run: npx tsx server/test-p0.ts
+
+      - name: Run P1 Master Verification Suite (Reversals, Timezones, Omni-Search)
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/viora_bills_test?schema=public
+          JWT_SECRET: supersecretjwtkeyforciverification
+          PORT: 5001
+        run: npx tsx server/test-p1.ts
+
+      - name: Run Core Endpoints & Financial Calculation Verification
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/viora_bills_test?schema=public
+          JWT_SECRET: supersecretjwtkeyforciverification
+          PORT: 5001
+        run: npx tsx server/test-endpoints.ts
+
+      - name: Run Stabilization & Bug-Fix Verification Suite (B1 - B23)
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/viora_bills_test?schema=public
+          JWT_SECRET: supersecretjwtkeyforciverification
+          PORT: 5001
+        run: npx tsx server/test-stabilization.ts
+
+      - name: Review Security and Invoice Pagination Regressions
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/viora_bills_test?schema=public
+        run: npm run test:review

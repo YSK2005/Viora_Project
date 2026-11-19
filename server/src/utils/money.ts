@@ -201,7 +201,7 @@ export type PaymentStatus = 'UNPAID' | 'PARTIALLY_PAID' | 'PAID';
 
 export function derivePaymentStatus(
   grandTotal: DecimalLike,
-  payments: Array<{ amount: DecimalLike }>
+  payments: Array<{ amount: DecimalLike; isReversed?: boolean }>
 ): {
   paymentStatus: PaymentStatus;
   totalPaid: Prisma.Decimal;
@@ -211,6 +211,7 @@ export function derivePaymentStatus(
   let totalPaid = new Prisma.Decimal(0);
 
   for (const p of payments) {
+    if (p.isReversed === true) continue;
     totalPaid = totalPaid.plus(toDecimal(p.amount));
   }
   totalPaid = round2(totalPaid);

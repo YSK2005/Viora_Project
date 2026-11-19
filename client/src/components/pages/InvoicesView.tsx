@@ -12,6 +12,7 @@ interface InvoicesViewProps {
   onEditDraft?: (inv: Invoice) => void;
   onDeleteDraft?: (inv: Invoice) => void;
   onCancelInvoice?: (inv: Invoice) => void;
+  onDuplicateInvoice?: (inv: Invoice) => void;
   initialCustomerFilter?: string;
   isLoading?: boolean;
   error?: string | null;
@@ -28,6 +29,7 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
   onEditDraft,
   onDeleteDraft,
   onCancelInvoice,
+  onDuplicateInvoice,
   initialCustomerFilter = '',
   isLoading: _isLoading = false,
   error = null,
@@ -140,6 +142,7 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
         onEditDraft={onEditDraft}
         onDeleteDraft={onDeleteDraft}
         onCancelInvoice={onCancelInvoice}
+        onDuplicateInvoice={onDuplicateInvoice}
         initialCustomerFilter={initialCustomerFilter}
       />
     </div>

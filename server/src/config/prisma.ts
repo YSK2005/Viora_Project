@@ -25,7 +25,7 @@ export async function checkDatabaseConnection(): Promise<{ isConnected: boolean;
   } catch (err: any) {
     return {
       isConnected: false,
-      message: `Database standby (Phase 2): ${err.message || 'PostgreSQL not yet provisioned'}`,
+      message: 'Database unavailable',
     };
   }
 }

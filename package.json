@@ -18,11 +18,17 @@
     "type-check": "npm run type-check --workspace=server && npm run type-check --workspace=client",
     "lint": "npm run lint --workspace=server && npm run lint --workspace=client",
     "test:backend": "npm run test:backend --workspace=server",
+    "test:release": "npx tsx server/test-p0.ts && npx tsx server/test-p1.ts && npx tsx server/test-endpoints.ts && npx tsx server/test-stabilization.ts && npm run test:review",
+    "release:check": "npm run type-check && npm run build && npm run test:release",
     "db:reset": "npm run db:reset --workspace=server",
-    "start": "npm run start --workspace=server"
+    "start": "npm run start --workspace=server",
+    "test:review": "npx tsx server/test-review-security.ts"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
+  },
+  "overrides": {
+    "esbuild": "^0.25.0"
   },
   "keywords": [
     "billing",

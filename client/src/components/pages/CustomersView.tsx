@@ -7,6 +7,7 @@ import {
   deleteCustomer,
 } from '../../services/api';
 import { StateSelect } from '../common/StateSelect';
+import { PaginationToolbar } from '../common/PaginationToolbar';
 import {
   Users,
   Search,
@@ -34,6 +35,10 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -52,19 +57,21 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetchCustomers({ search: searchQuery });
+      const res = await fetchCustomers({ search: searchQuery, page, limit });
       setCustomers(res.customers);
+      setTotalCount(res.totalCount);
+      setTotalPages(res.pagination?.totalPages || 1);
     } catch (err: any) {
       setError(err.message || 'Failed to load customers');
     } finally {
       setIsLoading(false);
     }
-  }, [searchQuery]);
+  }, [searchQuery, page, limit]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       loadData();
-    }, 250);
+    }, 200);
     return () => clearTimeout(timer);
   }, [loadData]);
 
@@ -219,13 +226,16 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
           <input
             type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setPage(1);
+            }}
             placeholder="Search by customer name, phone, email, or GSTIN..."
             className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
           />
         </div>
         <div className="text-xs text-slate-400 ml-auto hidden sm:block">
-          Total: {customers.length} registered
+          Total: {totalCount} registered
         </div>
       </div>
 
@@ -268,7 +278,75 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-slate-200/80 shadow-card overflow-hidden">
-          <div className="overflow-x-auto">
+          {/* Mobile Card View (<= 768px / 375px) */}
+          <div className="block md:hidden divide-y divide-slate-100">
+            {customers.map((c) => (
+              <div key={c.id} className="p-4 hover:bg-slate-50/80 transition-colors">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div>
+                    <div className="font-semibold text-navy-900 text-sm">{c.name}</div>
+                    {c.isArchived && (
+                      <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200 mt-0.5">
+                        Archived
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onViewCustomerInvoices?.(c.name)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200"
+                  >
+                    <FileText className="w-3 h-3 text-purple-600" />
+                    <span>{c._count?.invoices ?? 0} Invoices</span>
+                  </button>
+                </div>
+
+                <div className="space-y-1 text-xs text-slate-600 my-2">
+                  {c.phone && (
+                    <div className="flex items-center gap-1.5 font-mono">
+                      <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>+91 {c.phone.replace(/\D/g, '').slice(-10)}</span>
+                    </div>
+                  )}
+                  {c.email && (
+                    <div className="flex items-center gap-1.5 text-slate-500">
+                      <Mail className="w-3.5 h-3.5 text-rose-500" />
+                      <span>{c.email}</span>
+                    </div>
+                  )}
+                  <div className="flex items-start gap-1.5 text-slate-500 text-[11px]">
+                    <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                    <span className="line-clamp-2">{c.billingAddress}</span>
+                  </div>
+                  {c.gstin && (
+                    <div className="text-[11px] font-mono text-slate-700 bg-slate-100 px-2 py-0.5 rounded inline-block">
+                      GSTIN: {c.gstin}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    onClick={() => handleOpenEditModal(c)}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                  >
+                    <FileEdit className="w-3.5 h-3.5" />
+                    <span>Edit</span>
+                  </button>
+                  <button
+                    onClick={() => handleDelete(c)}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop Table View */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-200/80 bg-slate-50/60 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
@@ -358,6 +436,18 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
               </tbody>
             </table>
           </div>
+          <PaginationToolbar
+            currentPage={page}
+            totalPages={totalPages}
+            totalCount={totalCount}
+            pageSize={limit}
+            onPageChange={(p) => setPage(p)}
+            onPageSizeChange={(sz) => {
+              setLimit(sz);
+              setPage(1);
+            }}
+            itemLabel="customers"
+          />
         </div>
       )}
 

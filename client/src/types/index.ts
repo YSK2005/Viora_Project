@@ -7,6 +7,27 @@ export type NavigationKey =
   | 'reports'
   | 'settings';
 
+export type UserRole = 'OWNER' | 'ACCOUNTANT' | 'VIEWER';
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+}
+
+export interface BusinessMembership {
+  businessId: string;
+  businessName: string;
+  role: UserRole;
+}
+
+export interface PaginationMeta {
+  totalCount: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 export type InvoiceLifecycleStatus = 'DRAFT' | 'ISSUED' | 'CANCELLED';
 export type PaymentStatus = 'UNPAID' | 'PARTIALLY_PAID' | 'PAID';
 
@@ -126,6 +147,10 @@ export interface PaymentRecord {
   reference?: string | null;
   requestKey: string;
   createdAt?: string;
+  isReversed?: boolean;
+  reversedAt?: string | null;
+  reversedReason?: string | null;
+  reversedByUserId?: string | null;
 }
 
 export interface DashboardSummary {

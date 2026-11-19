@@ -9,6 +9,7 @@ interface NavbarProps {
   currentNav: NavigationKey;
   onOpenMobile: () => void;
   systemHealth?: SystemHealth;
+  onOpenGlobalSearch?: () => void;
 }
 
 const PAGE_TITLES: Record<NavigationKey, { title: string; subtitle: string }> = {
@@ -26,25 +27,26 @@ const PAGE_TITLES: Record<NavigationKey, { title: string; subtitle: string }> = 
   },
   products: {
     title: 'Products & Services',
-    subtitle: 'Item catalog, SAC/HSN codes, and pricing rules',
+    subtitle: 'Item catalog, unit pricing, and GST tax rates',
   },
   payments: {
     title: 'Payment Records',
-    subtitle: 'Payment tracking, bank transfers, UPI and settlements',
+    subtitle: 'Payment tracking, bank transfers, UPI receipts, and reversals',
   },
   reports: {
     title: 'Sales & Tax Reports',
-    subtitle: 'GSTR-1 summaries, monthly sales, and revenue insights',
+    subtitle: 'Sales timelines, GST tax summaries, and revenue insights',
   },
   settings: {
     title: 'Business Settings',
-    subtitle: 'Company profile, GSTIN, banking, and invoice templates',
+    subtitle: 'Company profile, branding logo, GSTIN, and sequential numbering',
   },
 };
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentNav,
   onOpenMobile,
+  onOpenGlobalSearch,
 }) => {
   const currentPage = PAGE_TITLES[currentNav];
 
@@ -77,15 +79,31 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Right side: Search */}
       <div className="flex items-center gap-2 sm:gap-3">
-        {/* Search Input Placeholder */}
-        <div className="relative hidden xl:block w-72">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Search records, invoices... (Ctrl + K)"
-            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-400/30 focus:border-brand-400 transition-all"
-          />
-        </div>
+        {/* Mobile Search Button */}
+        <button
+          onClick={onOpenGlobalSearch}
+          type="button"
+          className="xl:hidden p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+          aria-label="Open search"
+          title="Search (Ctrl + K)"
+        >
+          <Search className="w-5 h-5" />
+        </button>
+
+        {/* Desktop Search Button */}
+        <button
+          onClick={onOpenGlobalSearch}
+          type="button"
+          className="hidden xl:flex items-center justify-between w-72 pl-3 pr-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-400 hover:border-slate-300 hover:bg-slate-100/80 transition-all text-left shadow-sm group"
+        >
+          <div className="flex items-center gap-2">
+            <Search className="w-4 h-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
+            <span className="text-slate-500 font-medium">Search records, invoices...</span>
+          </div>
+          <kbd className="px-1.5 py-0.5 text-[10px] font-semibold bg-white border border-slate-200 rounded text-slate-500 shadow-2xs">
+            Ctrl K
+          </kbd>
+        </button>
       </div>
     </header>
   );

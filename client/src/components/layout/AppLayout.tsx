@@ -2,13 +2,17 @@ import React, { useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { Navbar } from './Navbar';
 import { MockDataBanner } from '../common/MockDataBanner';
-import { NavigationKey, SystemHealth } from '../../types';
+import { NavigationKey, SystemHealth, User, UserRole } from '../../types';
 
 interface AppLayoutProps {
   children: React.ReactNode;
   currentNav: NavigationKey;
   onNavigate: (key: NavigationKey) => void;
   systemHealth: SystemHealth;
+  user?: User | null;
+  userRole?: UserRole | null;
+  onLogout?: () => void;
+  onOpenGlobalSearch?: () => void;
 }
 
 export const AppLayout: React.FC<AppLayoutProps> = ({
@@ -16,6 +20,10 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   currentNav,
   onNavigate,
   systemHealth,
+  user,
+  userRole,
+  onLogout,
+  onOpenGlobalSearch,
 }) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -36,6 +44,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
           isMobileOpen={isMobileOpen}
           onCloseMobile={() => setIsMobileOpen(false)}
+          user={user}
+          userRole={userRole}
+          onLogout={onLogout}
         />
 
         {/* Main Content Area */}
@@ -49,6 +60,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             currentNav={currentNav}
             onOpenMobile={() => setIsMobileOpen(true)}
             systemHealth={systemHealth}
+            onOpenGlobalSearch={onOpenGlobalSearch}
           />
 
           {/* Main View Container */}

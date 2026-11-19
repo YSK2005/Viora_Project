@@ -8,10 +8,38 @@ import { generateInvoicePdfStream, InvoicePdfData } from './src/services/pdf.ser
 async function runStabilizationTests() {
   console.log('🧪 Starting Bug-Fix & Software Stabilization Verification Suite (B1 - B23)...\n');
 
+  const RUN_ID = Date.now();
+  const originalFetch = global.fetch;
+  let testToken = '';
+  global.fetch = async (input: any, init?: any) => {
+    const url = typeof input === 'string' ? input : input?.url || '';
+    if (url.includes('5003/api') && !url.includes('/auth/') && testToken) {
+      init = init || {};
+      init.headers = {
+        ...(init.headers || {}),
+        Authorization: `Bearer ${testToken}`,
+      };
+    }
+    return originalFetch(input, init);
+  };
+
   const app = createApp();
   const server = http.createServer(app);
   await new Promise<void>((resolve) => server.listen(5003, () => resolve()));
   const BASE = 'http://localhost:5003/api';
+
+  // Authenticate stabilization test runner
+  const regRes = await originalFetch(`${BASE}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: `test-stab-${RUN_ID}@example.com`,
+      password: 'Password@123',
+      name: 'Stabilization Test Runner',
+    }),
+  });
+  const regData = (await regRes.json()).data;
+  testToken = regData?.token || '';
 
   let passed = 0;
   let failed = 0;

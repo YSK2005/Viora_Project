@@ -11,6 +11,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserRole {
+  OWNER
+  ACCOUNTANT
+  VIEWER
+}
+
 enum InvoiceStatus {
   DRAFT
   ISSUED
@@ -26,22 +32,70 @@ enum PaymentMethod {
   OTHER
 }
 
+model User {
+  id           String               @id @default(uuid())
+  email        String               @unique
+  passwordHash String
+  name         String
+  memberships  BusinessMembership[]
+  sessions     Session[]
+  auditLogs    AuditLog[]
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@map("users")
+}
+
+model BusinessMembership {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  role       UserRole @default(OWNER)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, businessId])
+  @@index([userId])
+  @@index([businessId])
+  @@map("business_memberships")
+}
+
+model Session {
+  id               String   @id @default(uuid())
+  tokenHash        String   @unique
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeBusinessId String?
+  expiresAt        DateTime
+  ipAddress        String?
+  userAgent        String?
+  createdAt        DateTime @default(now())
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("sessions")
+}
+
 model Business {
-  id                String     @id @default(uuid())
+  id                String               @id @default(uuid())
   name              String
   logoUrl           String?
   address           String
   phone             String
   email             String
   gstin             String?
-  state             String?    @default("Karnataka")
-  invoicePrefix     String     @default("INV")
-  nextInvoiceNumber Int        @default(1)
+  state             String?              @default("Karnataka")
+  invoicePrefix     String               @default("INV")
+  nextInvoiceNumber Int                  @default(1)
+  memberships       BusinessMembership[]
   customers         Customer[]
   products          Product[]
   invoices          Invoice[]
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
+  auditLogs         AuditLog[]
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
 
   @@map("businesses")
 }
@@ -62,7 +116,8 @@ model Customer {
   updatedAt      DateTime  @updatedAt
 
   @@index([businessId])
-  @@index([isArchived])
+  @@index([businessId, isArchived])
+  @@index([businessId, name])
   @@map("customers")
 }
 
@@ -82,8 +137,7 @@ model Product {
   updatedAt   DateTime      @updatedAt
 
   @@index([businessId])
-  @@index([isActive])
-  @@index([isArchived])
+  @@index([businessId, isActive, isArchived])
   @@map("products")
 }
 
@@ -130,8 +184,8 @@ model Invoice {
 
   @@unique([businessId, invoiceNumber])
   @@index([businessId, status])
-  @@index([customerId])
-  @@index([invoiceDate])
+  @@index([businessId, invoiceDate])
+  @@index([businessId, customerId])
   @@map("invoices")
 }
 
@@ -164,17 +218,42 @@ model InvoiceItem {
 }
 
 model Payment {
-  id          String        @id @default(uuid())
-  invoiceId   String
-  invoice     Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
-  amount      Decimal       @db.Decimal(12, 2)
-  paymentDate DateTime      @default(now())
-  method      PaymentMethod @default(BANK_TRANSFER)
-  reference   String?
-  requestKey  String        @unique
-  createdAt   DateTime      @default(now())
+  id               String        @id @default(uuid())
+  invoiceId        String
+  invoice          Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  amount           Decimal       @db.Decimal(12, 2)
+  paymentDate      DateTime      @default(now())
+  method           PaymentMethod @default(BANK_TRANSFER)
+  reference        String?
+  requestKey       String        @unique
+  isReversed       Boolean       @default(false)
+  reversedAt       DateTime?
+  reversedReason   String?
+  reversedByUserId String?
+  createdByUserId  String?
+  createdAt        DateTime      @default(now())
 
   @@index([invoiceId])
+  @@index([invoiceId, isReversed])
   @@index([paymentDate])
+  @@index([isReversed])
   @@map("payments")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String
+  entityType String
+  entityId   String
+  details    Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([businessId, createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
 }

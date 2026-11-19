@@ -1,11 +1,11 @@
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { randomBytes } from 'crypto';
-import { prisma } from '../../config/prisma';
+import { prisma, Prisma } from '../../config/prisma';
 import { sendSuccess } from '../../utils/response';
 import { validateRequest } from '../../middlewares/validate';
 import { AppError } from '../../middlewares/errorHandler';
-import { getOrCreateDefaultBusiness } from '../../utils/businessHelper';
+import { AuthenticatedRequest, requireRole } from '../../middlewares/auth';
 import {
   calculateInvoiceTotals,
   derivePaymentStatus,
@@ -14,6 +14,8 @@ import {
 } from '../../utils/money';
 import { generateInvoicePdfStream, InvoicePdfData } from '../../services/pdf.service';
 import { createPaymentSchema, handleRecordPayment } from './payments.route';
+import { toTimezoneBoundary } from '../../utils/dateBoundary';
+import { logAuditEvent } from '../../utils/audit';
 
 const router = Router();
 
@@ -63,9 +65,9 @@ const getInvoicesQuerySchema = z.object({
 router.get(
   '/',
   validateRequest({ query: getInvoicesQuerySchema }),
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-      const business = await getOrCreateDefaultBusiness();
+      const business = req.business;
       const {
         status,
         paymentStatus,
@@ -77,54 +79,52 @@ router.get(
         limit,
       } = req.query as any;
 
-      const where: any = {
-        businessId: business.id,
-      };
-
-      if (status !== 'ALL') {
-        where.status = status;
-      }
-
-      if (customerId && customerId.trim() !== '') {
-        where.customerId = customerId.trim();
-      }
-
-      if (startDate || endDate) {
-        where.invoiceDate = {};
-        if (startDate) {
-          where.invoiceDate.gte = new Date(`${startDate}T00:00:00.000Z`);
-        }
-        if (endDate) {
-          where.invoiceDate.lte = new Date(`${endDate}T23:59:59.999Z`);
-        }
-      }
-
-      if (search && search.trim() !== '') {
+      const conditions = [Prisma.sql`i."businessId" = ${business.id}`];
+      if (status !== 'ALL') conditions.push(Prisma.sql`i.status::text = ${status}`);
+      if (customerId?.trim()) conditions.push(Prisma.sql`i."customerId" = ${customerId.trim()}`);
+      if (startDate) conditions.push(Prisma.sql`i."invoiceDate" >= ${toTimezoneBoundary(startDate, false)}`);
+      if (endDate) conditions.push(Prisma.sql`i."invoiceDate" <= ${toTimezoneBoundary(endDate, true)}`);
+      if (search?.trim()) {
         const q = search.trim();
-        where.OR = [
-          { invoiceNumber: { contains: q, mode: 'insensitive' } },
-          { customerNameSnapshot: { contains: q, mode: 'insensitive' } },
-          { customer: { name: { contains: q, mode: 'insensitive' } } },
-        ];
+        conditions.push(Prisma.sql`(strpos(lower(i."invoiceNumber"), lower(${q})) > 0
+          OR strpos(lower(i."customerNameSnapshot"), lower(${q})) > 0
+          OR strpos(lower(c.name), lower(${q})) > 0)`);
       }
-
-      // Fetch matching invoices to apply derived payment status filtering BEFORE pagination
-      const allMatching = await prisma.invoice.findMany({
-        where,
-        orderBy: [{ invoiceDate: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
-        include: {
-          customer: {
-            select: { id: true, name: true, email: true, phone: true, state: true },
-          },
-          payments: {
-            select: { amount: true },
-          },
-        },
-      });
+      // Aggregate in PostgreSQL and page IDs before loading invoice/customer records.
+      // Keep count, page, and balances on the same consistent database snapshot.
+      const base = Prisma.sql`SELECT i.id, i."invoiceDate", i."createdAt", i."grandTotal",
+          COALESCE(p.paid, 0) AS paid
+        FROM invoices i JOIN customers c ON c.id = i."customerId"
+        LEFT JOIN LATERAL (
+          SELECT SUM(amount) AS paid FROM payments
+          WHERE "invoiceId" = i.id AND "isReversed" = false
+        ) p ON true
+        WHERE ${Prisma.join(conditions, ' AND ')}`;
+      const paymentCondition = paymentStatus === 'PAID'
+        ? Prisma.sql`"grandTotal" <> 0 AND paid >= "grandTotal"`
+        : paymentStatus === 'PARTIALLY_PAID'
+        ? Prisma.sql`paid > 0 AND paid < "grandTotal"`
+        : paymentStatus === 'UNPAID'
+        ? Prisma.sql`"grandTotal" = 0 OR paid <= 0`
+        : Prisma.sql`true`;
+      const { invoices, totalCount, paidById } = await prisma.$transaction(async (tx) => {
+        const counts = await tx.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
+          SELECT COUNT(*) AS count FROM (${base}) matched WHERE ${paymentCondition}`);
+        const rows = await tx.$queryRaw<Array<{ id: string; paid: Prisma.Decimal }>>(Prisma.sql`
+          SELECT id, paid FROM (${base}) matched WHERE ${paymentCondition}
+          ORDER BY "invoiceDate" DESC, "createdAt" DESC, id DESC
+          LIMIT ${limit} OFFSET ${(page - 1) * limit}`);
+        const invoices = await tx.invoice.findMany({
+          where: { businessId: business.id, id: { in: rows.map(row => row.id) } },
+          orderBy: [{ invoiceDate: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+          include: { customer: { select: { id: true, name: true, email: true, phone: true, state: true } } },
+        });
+        return { invoices, totalCount: Number(counts[0].count), paidById: new Map(rows.map(row => [row.id, row.paid])) };
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 
       // Augment invoices with derived payment status and freeze issue-time snapshots if issued
-      const augmented = allMatching.map((inv) => {
-        const paymentInfo = derivePaymentStatus(inv.grandTotal, inv.payments);
+      const pagedInvoices = invoices.map((inv) => {
+        const paymentInfo = derivePaymentStatus(inv.grandTotal, [{ amount: paidById.get(inv.id) || 0 }]);
         const isIssued = inv.status === 'ISSUED' || inv.status === 'CANCELLED';
 
         return {
@@ -154,15 +154,7 @@ router.get(
         };
       });
 
-      // Filter by paymentStatus BEFORE paging (B4)
-      const filtered =
-        paymentStatus === 'ALL'
-          ? augmented
-          : augmented.filter((i) => i.paymentStatus === paymentStatus);
-
-      const totalCount = filtered.length;
       const totalPages = Math.ceil(totalCount / limit) || 1;
-      const pagedInvoices = filtered.slice((page - 1) * limit, page * limit);
 
       return sendSuccess(
         res,
@@ -188,12 +180,12 @@ router.get(
  * Returns single invoice with line items, payments, snapshots and derived balance
  * When ISSUED, returns frozen snapshot details for customer and business (B8)
  */
-router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/:id', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
 
-    const inv = await prisma.invoice.findUnique({
-      where: { id },
+    const inv = await prisma.invoice.findFirst({
+      where: { id, businessId: req.business.id },
       include: {
         customer: true,
         business: true,
@@ -294,12 +286,12 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
  * GET /api/invoices/:id/pdf
  * Returns professional A4 PDF for invoice with snapshots and tax breakdowns
  */
-router.get('/:id/pdf', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/:id/pdf', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
 
-    const inv = await prisma.invoice.findUnique({
-      where: { id },
+    const inv = await prisma.invoice.findFirst({
+      where: { id, businessId: req.business.id },
       include: {
         customer: true,
         business: true,
@@ -375,6 +367,8 @@ router.get('/:id/pdf', async (req: Request, res: Response, next: NextFunction) =
         paymentDate: p.paymentDate.toISOString().split('T')[0],
         method: p.method,
         reference: p.reference,
+        isReversed: p.isReversed,
+        reversedReason: p.reversedReason,
       })),
     };
 
@@ -397,10 +391,11 @@ router.get('/:id/pdf', async (req: Request, res: Response, next: NextFunction) =
  */
 router.post(
   '/',
+  requireRole(['OWNER', 'ACCOUNTANT']),
   validateRequest({ body: createInvoiceSchema }),
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-      const business = await getOrCreateDefaultBusiness();
+      const business = req.business;
       const { customerId, invoiceDate, dueDate, placeOfSupply, isInterState: explicitInterState, notes, items } = req.body;
 
       // Validate customer existence
@@ -501,6 +496,19 @@ router.post(
           },
         });
 
+        await logAuditEvent(
+          {
+            businessId: business.id,
+            userId: req.user?.id,
+            action: 'INVOICE_CREATE',
+            entityType: 'INVOICE',
+            entityId: created.id,
+            details: { invoiceNumber: created.invoiceNumber, grandTotal: Number(created.grandTotal) },
+            ipAddress: req.ip,
+          },
+          tx
+        );
+
         return created;
       });
 
@@ -517,15 +525,16 @@ router.post(
  */
 router.put(
   '/:id',
+  requireRole(['OWNER', 'ACCOUNTANT']),
   validateRequest({ body: updateInvoiceSchema }),
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
-      const business = await getOrCreateDefaultBusiness();
+      const business = req.business;
       const { customerId, invoiceDate, dueDate, placeOfSupply, isInterState: explicitInterState, notes, items } = req.body;
 
-      const existing = await prisma.invoice.findUnique({
-        where: { id },
+      const existing = await prisma.invoice.findFirst({
+        where: { id, businessId: business.id },
         include: { items: true },
       });
 
@@ -536,7 +545,7 @@ router.put(
       if (existing.status !== 'DRAFT') {
         throw new AppError(
           'Issued or cancelled invoices cannot be edited. Create a new invoice or credit note.',
-          400,
+          409,
           'ERR_IMMUTABLE_INVOICE'
         );
       }
@@ -559,14 +568,29 @@ router.put(
         ? explicitInterState
         : resolvedSupplyPlace.toLowerCase() !== (business.state || 'karnataka').toLowerCase();
 
-      const calculated = calculateInvoiceTotals(items, isInterState);
+      let calculated;
+      try {
+        calculated = calculateInvoiceTotals(items, isInterState);
+      } catch (error: any) {
+        throw new AppError(error.message, 400, 'ERR_INVALID_INVOICE_CALCULATION');
+      }
+      if (customer.isArchived) {
+        throw new AppError('Cannot invoice an archived customer', 400, 'ERR_CUSTOMER_ARCHIVED');
+      }
 
       const updated = await prisma.$transaction(async (tx) => {
+        const locked = await tx.$queryRaw<Array<{ status: string }>>`
+          SELECT status FROM invoices WHERE id = ${id} AND "businessId" = ${business.id} FOR UPDATE
+        `;
+        if (!locked.length) throw new AppError('Invoice not found', 404, 'ERR_INVOICE_NOT_FOUND');
+        if (locked[0].status !== 'DRAFT') {
+          throw new AppError('Issued or cancelled invoices cannot be edited', 409, 'ERR_IMMUTABLE_INVOICE');
+        }
         await tx.invoiceItem.deleteMany({
           where: { invoiceId: id },
         });
 
-        return tx.invoice.update({
+        const updatedInvoice = await tx.invoice.update({
           where: { id },
           data: {
             customerId: customer.id,
@@ -622,6 +646,21 @@ router.put(
             customer: true,
           },
         });
+
+        await logAuditEvent(
+          {
+            businessId: business.id,
+            userId: req.user?.id,
+            action: 'INVOICE_UPDATE',
+            entityType: 'INVOICE',
+            entityId: id,
+            details: { invoiceNumber: updatedInvoice.invoiceNumber, grandTotal: Number(updatedInvoice.grandTotal) },
+            ipAddress: req.ip,
+          },
+          tx
+        );
+
+        return updatedInvoice;
       });
 
       return sendSuccess(res, updated, 'Draft invoice updated successfully');
@@ -634,97 +673,157 @@ router.put(
 /**
  * DELETE /api/invoices/:id
  * Deletes a DRAFT invoice. Issued invoices cannot be deleted (B11)
+ * Enforces transactional row locking to prevent race with issuance.
  */
-router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { id } = req.params;
-    const inv = await prisma.invoice.findUnique({
-      where: { id },
-      include: { payments: true },
-    });
+router.delete(
+  '/:id',
+  requireRole(['OWNER', 'ACCOUNTANT']),
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      const businessId = req.business.id;
 
-    if (!inv) {
-      throw new AppError('Invoice not found', 404, 'ERR_INVOICE_NOT_FOUND');
+      await prisma.$transaction(async (tx) => {
+        const locked = await tx.$queryRaw<Array<{ id: string; status: string }>>`
+          SELECT id, status FROM invoices WHERE id = ${id} AND "businessId" = ${businessId} FOR UPDATE
+        `;
+
+        if (!locked || locked.length === 0) {
+          throw new AppError('Invoice not found', 404, 'ERR_INVOICE_NOT_FOUND');
+        }
+
+        if (locked[0].status !== 'DRAFT') {
+          throw new AppError(
+            'Only draft invoices can be deleted. Issued invoices cannot be deleted.',
+            409,
+            'ERR_CANNOT_DELETE_NON_DRAFT'
+          );
+        }
+
+        await tx.invoiceItem.deleteMany({
+          where: { invoiceId: id },
+        });
+
+        await tx.invoice.delete({
+          where: { id },
+        });
+
+        await logAuditEvent(
+          {
+            businessId,
+            userId: req.user?.id,
+            action: 'INVOICE_DELETE',
+            entityType: 'INVOICE',
+            entityId: id,
+            details: { invoiceId: id },
+            ipAddress: req.ip,
+          },
+          tx
+        );
+      });
+
+      return sendSuccess(res, { id }, 'Draft invoice deleted successfully');
+    } catch (error) {
+      next(error);
     }
-
-    if (inv.status !== 'DRAFT') {
-      throw new AppError(
-        'Only draft invoices can be deleted. Issued invoices cannot be deleted.',
-        409,
-        'ERR_CANNOT_DELETE_NON_DRAFT'
-      );
-    }
-
-    await prisma.invoice.delete({
-      where: { id },
-    });
-
-    return sendSuccess(res, { id }, 'Draft invoice deleted successfully');
-  } catch (error) {
-    next(error);
   }
-});
+);
 
 /**
  * POST /api/invoices/:id/cancel
  * Cancels an ISSUED invoice. Cancelled invoices preserve their number for audit trail (B11)
+ * Enforces transactional row locking and payments verification.
  */
-router.post('/:id/cancel', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { id } = req.params;
-    const inv = await prisma.invoice.findUnique({
-      where: { id },
-      include: { payments: true },
-    });
+router.post(
+  '/:id/cancel',
+  requireRole(['OWNER']),
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      const businessId = req.business.id;
 
-    if (!inv) {
-      throw new AppError('Invoice not found', 404, 'ERR_INVOICE_NOT_FOUND');
+      const updated = await prisma.$transaction(async (tx) => {
+        const locked = await tx.$queryRaw<
+          Array<{ id: string; status: string; invoiceNumber: string }>
+        >`
+          SELECT id, status, "invoiceNumber" FROM invoices WHERE id = ${id} AND "businessId" = ${businessId} FOR UPDATE
+        `;
+
+        if (!locked || locked.length === 0) {
+          throw new AppError('Invoice not found', 404, 'ERR_INVOICE_NOT_FOUND');
+        }
+
+        const inv = locked[0];
+
+        if (inv.status === 'CANCELLED') {
+          throw new AppError('Invoice is already cancelled', 400, 'ERR_ALREADY_CANCELLED');
+        }
+
+        if (inv.status === 'DRAFT') {
+          throw new AppError('Draft invoices should be deleted, not cancelled', 400, 'ERR_CANNOT_CANCEL_DRAFT');
+        }
+
+        const paymentsCount = await tx.payment.count({
+          where: { invoiceId: id },
+        });
+
+        if (paymentsCount > 0) {
+          throw new AppError(
+            'Invoices with recorded payments cannot be cancelled directly. Please refund or remove payments first.',
+            400,
+            'ERR_INVOICE_HAS_PAYMENTS'
+          );
+        }
+
+        const cancelled = await tx.invoice.update({
+          where: { id },
+          data: { status: 'CANCELLED' },
+        });
+
+        await logAuditEvent(
+          {
+            businessId,
+            userId: req.user?.id,
+            action: 'INVOICE_CANCEL',
+            entityType: 'INVOICE',
+            entityId: id,
+            details: { invoiceNumber: cancelled.invoiceNumber },
+            ipAddress: req.ip,
+          },
+          tx
+        );
+
+        return cancelled;
+      });
+
+      return sendSuccess(res, updated, `Invoice ${updated.invoiceNumber} has been cancelled`);
+    } catch (error) {
+      next(error);
     }
-
-    if (inv.status === 'CANCELLED') {
-      throw new AppError('Invoice is already cancelled', 400, 'ERR_ALREADY_CANCELLED');
-    }
-
-    if (inv.status === 'DRAFT') {
-      throw new AppError('Draft invoices should be deleted, not cancelled', 400, 'ERR_CANNOT_CANCEL_DRAFT');
-    }
-
-    if (inv.payments && inv.payments.length > 0) {
-      throw new AppError(
-        'Invoices with recorded payments cannot be cancelled directly. Please refund or remove payments first.',
-        400,
-        'ERR_INVOICE_HAS_PAYMENTS'
-      );
-    }
-
-    const updated = await prisma.invoice.update({
-      where: { id },
-      data: { status: 'CANCELLED' },
-    });
-
-    return sendSuccess(res, updated, `Invoice ${updated.invoiceNumber} has been cancelled`);
-  } catch (error) {
-    next(error);
   }
-});
+);
 
 /**
  * POST /api/invoices/:id/issue
  * Issues a draft invoice: locks invoice row in database, assigns sequential official number atomically (B1, B20)
  */
-router.post('/:id/issue', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { id } = req.params;
+router.post(
+  '/:id/issue',
+  requireRole(['OWNER', 'ACCOUNTANT']),
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      const businessId = req.business.id;
 
-    // Atomic transaction with row locking on invoice table (B1)
-    const issuedInvoice = await prisma.$transaction(async (tx) => {
-      // 1. Lock invoice row and check status atomically
-      const lockedInvoices: any = await tx.$queryRaw`
-        SELECT id, status, "businessId", "grandTotal", "placeOfSupply", "customerId"
-        FROM "invoices"
-        WHERE id = ${id}
-        FOR UPDATE
-      `;
+      // Atomic transaction with row locking on invoice table (B1)
+      const issuedInvoice = await prisma.$transaction(async (tx) => {
+        // 1. Lock invoice row and check status atomically
+        const lockedInvoices: any = await tx.$queryRaw`
+          SELECT id, status, "businessId", "grandTotal", "placeOfSupply", "customerId"
+          FROM "invoices"
+          WHERE id = ${id} AND "businessId" = ${businessId}
+          FOR UPDATE
+        `;
 
       const lockedInvoice = lockedInvoices && lockedInvoices[0];
       if (!lockedInvoice) {
@@ -838,6 +937,19 @@ router.post('/:id/issue', async (req: Request, res: Response, next: NextFunction
         },
       });
 
+      await logAuditEvent(
+        {
+          businessId: req.business.id,
+          userId: req.user?.id,
+          action: 'INVOICE_ISSUE',
+          entityType: 'INVOICE',
+          entityId: id,
+          details: { invoiceNumber: updated.invoiceNumber, grandTotal: Number(updated.grandTotal) },
+          ipAddress: req.ip,
+        },
+        tx
+      );
+
       return updated;
     });
 
@@ -857,11 +969,12 @@ router.post('/:id/issue', async (req: Request, res: Response, next: NextFunction
  */
 router.post(
   '/:id/payments',
+  requireRole(['OWNER', 'ACCOUNTANT']),
   validateRequest({ body: createPaymentSchema }),
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
-      const result = await handleRecordPayment(id, req.body);
+      const result = await handleRecordPayment(id, req.body, req.business.id, req.user?.id);
       return sendSuccess(res, result, 'Payment recorded successfully', 201);
     } catch (error) {
       next(error);

@@ -1,11 +1,13 @@
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../config/prisma';
 import { sendSuccess } from '../../utils/response';
 import { validateRequest } from '../../middlewares/validate';
 import { AppError } from '../../middlewares/errorHandler';
-import { getOrCreateDefaultBusiness } from '../../utils/businessHelper';
+import { AuthenticatedRequest, requireRole } from '../../middlewares/auth';
 import { derivePaymentStatus, round2, toDecimal } from '../../utils/money';
+import { toTimezoneBoundary } from '../../utils/dateBoundary';
+import { logAuditEvent } from '../../utils/audit';
 
 const router = Router();
 
@@ -51,8 +53,17 @@ const getPaymentsQuerySchema = z.object({
   method: z.string().optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
+  isReversed: z.enum(['true', 'false', 'all']).optional().default('all'),
   page: z.coerce.number().int().positive().optional().default(1),
   limit: z.coerce.number().int().positive().max(100).optional().default(20),
+});
+
+export const reversePaymentSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(3, 'Reversal reason must be at least 3 characters')
+    .max(500, 'Reversal reason cannot exceed 500 characters'),
 });
 
 /**
@@ -62,14 +73,14 @@ const getPaymentsQuerySchema = z.object({
 router.get(
   '/',
   validateRequest({ query: getPaymentsQuerySchema }),
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-      const business = await getOrCreateDefaultBusiness();
-      const { invoiceId, customerId, search, method, startDate, endDate, page, limit } = req.query as any;
+      const businessId = req.business.id;
+      const { invoiceId, customerId, search, method, startDate, endDate, isReversed, page, limit } = req.query as any;
 
       const where: any = {
         invoice: {
-          businessId: business.id,
+          businessId,
         },
       };
 
@@ -85,10 +96,16 @@ router.get(
         where.method = method;
       }
 
+      if (isReversed === 'true') {
+        where.isReversed = true;
+      } else if (isReversed === 'false') {
+        where.isReversed = false;
+      }
+
       if (startDate || endDate) {
         where.paymentDate = {};
-        if (startDate) where.paymentDate.gte = new Date(`${startDate}T00:00:00.000Z`);
-        if (endDate) where.paymentDate.lte = new Date(`${endDate}T23:59:59.999Z`);
+        if (startDate) where.paymentDate.gte = toTimezoneBoundary(startDate, false);
+        if (endDate) where.paymentDate.lte = toTimezoneBoundary(endDate, true);
       }
 
       if (search && search.trim()) {
@@ -134,6 +151,11 @@ router.get(
             method: p.method,
             reference: p.reference,
             requestKey: p.requestKey,
+            isReversed: p.isReversed,
+            reversedAt: p.reversedAt,
+            reversedReason: p.reversedReason,
+            reversedByUserId: p.reversedByUserId,
+            createdByUserId: p.createdByUserId,
             createdAt: p.createdAt,
           })),
           pagination: {
@@ -152,13 +174,134 @@ router.get(
 );
 
 /**
+ * POST /api/payments/:id/reverse
+ * Reverses a recorded payment with full audit history and balance reconciliation.
+ * Preserves the original payment row for complete financial audit integrity.
+ * Requires OWNER or ACCOUNTANT role.
+ */
+router.post(
+  '/:id/reverse',
+  requireRole(['OWNER', 'ACCOUNTANT']),
+  validateRequest({ body: reversePaymentSchema }),
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const paymentId = req.params.id;
+      const { reason } = req.body;
+      const businessId = req.business.id;
+
+      const result = await prisma.$transaction(async (tx) => {
+        // 1. Locate payment and ensure multi-tenant boundary
+        const payment = await tx.payment.findUnique({
+          where: { id: paymentId },
+          include: {
+            invoice: {
+              select: {
+                id: true,
+                businessId: true,
+                invoiceNumber: true,
+                grandTotal: true,
+                status: true,
+              },
+            },
+          },
+        });
+
+        if (!payment || payment.invoice.businessId !== businessId) {
+          throw new AppError('Payment not found', 404, 'ERR_PAYMENT_NOT_FOUND');
+        }
+
+        if (payment.isReversed) {
+          throw new AppError('This payment has already been reversed', 400, 'ERR_PAYMENT_ALREADY_REVERSED');
+        }
+
+        // 2. Lock invoice row for update
+        const [lockedInvoice] = await tx.$queryRaw<Array<{ id: string; grandTotal: any; status: string }>>`
+          SELECT id, "grandTotal", status
+          FROM "invoices"
+          WHERE id = ${payment.invoiceId} AND "businessId" = ${businessId}
+          FOR UPDATE
+        `;
+
+        if (!lockedInvoice) {
+          throw new AppError('Invoice not found', 404, 'ERR_INVOICE_NOT_FOUND');
+        }
+
+        // 3. Mark payment as reversed (Preserves original payment record!)
+        const reversedAt = new Date();
+        const updatedPayment = await tx.payment.update({
+          where: { id: payment.id },
+          data: {
+            isReversed: true,
+            reversedAt,
+            reversedReason: reason.trim(),
+            reversedByUserId: req.user!.id,
+          },
+        });
+
+        // 4. Reconcile remaining invoice balance excluding reversed payments
+        const allPayments = await tx.payment.findMany({
+          where: { invoiceId: payment.invoiceId },
+        });
+
+        const derived = derivePaymentStatus(lockedInvoice.grandTotal, allPayments);
+
+        // 5. Create immutable audit log entry
+        await logAuditEvent(
+          {
+            businessId,
+            userId: req.user!.id,
+            action: 'PAYMENT_REVERSE',
+            entityType: 'PAYMENT',
+            entityId: payment.id,
+            details: {
+              invoiceId: payment.invoiceId,
+              invoiceNumber: payment.invoice.invoiceNumber,
+              reversedAmount: Number(payment.amount),
+              reason: reason.trim(),
+              reversedAt: reversedAt.toISOString(),
+              reversedByUserId: req.user!.id,
+              newPaymentStatus: derived.paymentStatus,
+              newTotalPaid: Number(derived.totalPaid),
+              newBalanceRemaining: Number(derived.balanceRemaining),
+            },
+            ipAddress: req.ip,
+          },
+          tx
+        );
+
+        return {
+          payment: {
+            ...updatedPayment,
+            amount: Number(updatedPayment.amount),
+          },
+          invoiceSummary: {
+            invoiceId: lockedInvoice.id,
+            invoiceNumber: payment.invoice.invoiceNumber,
+            grandTotal: Number(lockedInvoice.grandTotal),
+            paymentStatus: derived.paymentStatus,
+            totalPaid: Number(derived.totalPaid),
+            balanceRemaining: Number(derived.balanceRemaining),
+          },
+        };
+      });
+
+      return sendSuccess(res, result, 'Payment reversed successfully and invoice balance reconciled');
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
  * Helper to record payment on an invoice (used by POST /api/invoices/:id/payments)
  * Protects against concurrent requests via PostgreSQL row-level locks (FOR UPDATE)
  * and strict transactional balance recalculation and idempotency checking.
  */
 export async function handleRecordPayment(
   invoiceId: string,
-  rawBody: z.infer<typeof createPaymentSchema>
+  rawBody: z.infer<typeof createPaymentSchema>,
+  businessId?: string,
+  userId?: string
 ) {
   const body = createPaymentSchema.parse(rawBody);
   const paymentAmount = round2(toDecimal(body.amount));
@@ -178,19 +321,33 @@ export async function handleRecordPayment(
       }
 
       // 2. Lock invoice row FOR UPDATE to safely serialize concurrent payment attempts
-      const lockedInvoices = await tx.$queryRaw<
-        Array<{
-          id: string;
-          invoiceNumber: string;
-          grandTotal: any;
-          status: string;
-        }>
-      >`
-        SELECT id, "invoiceNumber", "grandTotal", status
-        FROM "invoices"
-        WHERE id = ${invoiceId}
-        FOR UPDATE
-      `;
+      const lockedInvoices = businessId
+        ? await tx.$queryRaw<
+            Array<{
+              id: string;
+              invoiceNumber: string;
+              grandTotal: any;
+              status: string;
+            }>
+          >`
+            SELECT id, "invoiceNumber", "grandTotal", status
+            FROM "invoices"
+            WHERE id = ${invoiceId} AND "businessId" = ${businessId}
+            FOR UPDATE
+          `
+        : await tx.$queryRaw<
+            Array<{
+              id: string;
+              invoiceNumber: string;
+              grandTotal: any;
+              status: string;
+            }>
+          >`
+            SELECT id, "invoiceNumber", "grandTotal", status
+            FROM "invoices"
+            WHERE id = ${invoiceId}
+            FOR UPDATE
+          `;
 
       if (!lockedInvoices || lockedInvoices.length === 0) {
         throw new AppError('Invoice not found', 404, 'ERR_INVOICE_NOT_FOUND');
@@ -206,7 +363,7 @@ export async function handleRecordPayment(
         );
       }
 
-      // 3. Recalculate balance inside transaction
+      // 3. Recalculate balance inside transaction (excluding reversed payments)
       const existingPayments = await tx.payment.findMany({
         where: { invoiceId },
         select: {
@@ -216,6 +373,7 @@ export async function handleRecordPayment(
           method: true,
           reference: true,
           requestKey: true,
+          isReversed: true,
           createdAt: true,
         },
       });
@@ -245,12 +403,37 @@ export async function handleRecordPayment(
           method: body.method,
           reference: body.reference ? body.reference.trim() : null,
           requestKey: body.requestKey.trim(),
+          createdByUserId: userId || null,
         },
       });
 
       // 6. Recalculate updated status
       const updatedPayments = [...existingPayments, newPayment];
       const updatedStatus = derivePaymentStatus(invoice.grandTotal, updatedPayments);
+
+      // 7. Audit log
+      if (businessId) {
+        await logAuditEvent(
+          {
+            businessId,
+            userId: userId || null,
+            action: 'PAYMENT_RECORD',
+            entityType: 'PAYMENT',
+            entityId: newPayment.id,
+            details: {
+              invoiceId: invoice.id,
+              invoiceNumber: invoice.invoiceNumber,
+              amount: Number(newPayment.amount),
+              method: newPayment.method,
+              requestKey: newPayment.requestKey,
+              paymentStatus: updatedStatus.paymentStatus,
+              totalPaid: Number(updatedStatus.totalPaid),
+              balanceRemaining: Number(updatedStatus.balanceRemaining),
+            },
+          },
+          tx
+        );
+      }
 
       return {
         payment: {

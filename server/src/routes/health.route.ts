@@ -13,19 +13,19 @@ router.get('/', async (_req: Request, res: Response) => {
   const dbHealth = await checkDatabaseConnection();
 
   const healthData = {
-    status: 'healthy',
+    status: dbHealth.isConnected ? 'healthy' : 'unhealthy',
     service: 'viora-bills-api',
     version: '0.1.0',
     environment: env.NODE_ENV,
     uptimeSeconds: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
     database: {
-      status: dbHealth.isConnected ? 'connected' : 'standby_phase2',
+      status: dbHealth.isConnected ? 'connected' : 'disconnected',
       message: dbHealth.message,
     },
   };
 
-  return sendSuccess(res, healthData, 'System is operating normally');
+  return sendSuccess(res, healthData, dbHealth.isConnected ? 'System is operating normally' : 'Database unavailable', dbHealth.isConnected ? 200 : 503);
 });
 
 export const healthRouter = router;

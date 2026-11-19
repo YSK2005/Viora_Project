@@ -32,6 +32,8 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
   const [confirmed, setConfirmed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // P1: Stable idempotency request key preserved across retries
+  const [requestKey] = useState(() => `PAY-${invoice.id.slice(-6)}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`);
 
   const formatCurrency = (amt: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -91,7 +93,6 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
     setError(null);
 
     try {
-      const requestKey = `PAY-${invoice.id.slice(-6)}-${Date.now()}`;
       await recordInvoicePayment(invoice.id, {
         amount: payAmt,
         paymentDate,
@@ -103,7 +104,7 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
       onSuccess();
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Payment recording failed');
+      setError(err.message || 'Payment recording failed. You can safely retry without creating duplicates.');
     } finally {
       setIsSubmitting(false);
     }

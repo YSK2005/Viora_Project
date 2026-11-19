@@ -20,12 +20,17 @@ import {
   ToggleRight,
   FileEdit,
 } from 'lucide-react';
+import { PaginationToolbar } from '../common/PaginationToolbar';
 
 export const ProductsView: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -42,19 +47,21 @@ export const ProductsView: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetchProducts({ search: searchQuery });
+      const res = await fetchProducts({ search: searchQuery, page, limit });
       setProducts(res.products);
+      setTotalCount(res.totalCount);
+      setTotalPages(res.pagination?.totalPages || 1);
     } catch (err: any) {
       setError(err.message || 'Failed to load products');
     } finally {
       setIsLoading(false);
     }
-  }, [searchQuery]);
+  }, [searchQuery, page, limit]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       loadData();
-    }, 250);
+    }, 200);
     return () => clearTimeout(timer);
   }, [loadData]);
 
@@ -195,13 +202,16 @@ export const ProductsView: React.FC = () => {
           <input
             type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setPage(1);
+            }}
             placeholder="Search by product name, unit, or description..."
             className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
           />
         </div>
         <div className="text-xs text-slate-400 ml-auto hidden sm:block">
-          Total: {products.length} catalog items
+          Total: {totalCount} catalog items
         </div>
       </div>
 
@@ -244,7 +254,72 @@ export const ProductsView: React.FC = () => {
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-slate-200/80 shadow-card overflow-hidden">
-          <div className="overflow-x-auto">
+          {/* Mobile Card View (<= 768px / 375px) */}
+          <div className="block md:hidden divide-y divide-slate-100">
+            {products.map((p) => (
+              <div key={p.id} className="p-4 hover:bg-slate-50/80 transition-colors">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div>
+                    <div className="font-semibold text-navy-900 text-sm">{p.name}</div>
+                    {p.description && (
+                      <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">
+                        {p.description}
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <div className="font-bold text-sm text-navy-900">
+                      {formatCurrency(p.unitPrice)}
+                    </div>
+                    <span className="text-[10px] text-slate-500 font-mono">per {p.unit}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100 mt-2">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-teal-50 text-teal-800 border border-teal-200">
+                      <Tag className="w-3 h-3" />
+                      {p.taxRate}% GST
+                    </span>
+                    <button
+                      onClick={() => handleToggleStatus(p)}
+                      className="inline-flex items-center gap-1 text-[11px] font-medium"
+                    >
+                      {p.isActive ? (
+                        <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                          Active
+                        </span>
+                      ) : (
+                        <span className="text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
+                          Inactive
+                        </span>
+                      )}
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleOpenEditModal(p)}
+                      className="p-1.5 text-slate-500 hover:text-purple-700 hover:bg-purple-50 rounded-lg"
+                      aria-label={`Edit ${p.name}`}
+                    >
+                      <FileEdit className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(p)}
+                      className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
+                      aria-label={`Delete ${p.name}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop Table View */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-200/80 bg-slate-50/60 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
@@ -325,6 +400,18 @@ export const ProductsView: React.FC = () => {
               </tbody>
             </table>
           </div>
+          <PaginationToolbar
+            currentPage={page}
+            totalPages={totalPages}
+            totalCount={totalCount}
+            pageSize={limit}
+            onPageChange={(p) => setPage(p)}
+            onPageSizeChange={(sz) => {
+              setLimit(sz);
+              setPage(1);
+            }}
+            itemLabel="catalog products"
+          />
         </div>
       )}
 

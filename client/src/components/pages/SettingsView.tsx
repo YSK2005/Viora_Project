@@ -114,9 +114,10 @@ export const SettingsView: React.FC = () => {
     localStorage.removeItem(LOGO_STORAGE_KEY);
     if (fileInputRef.current) fileInputRef.current.value = '';
     try {
-      await updateBusiness({ logoUrl: null });
-    } catch {
-      // Non-fatal
+      await updateBusiness({ name, address, phone, email, logoUrl: null });
+    } catch (err: any) {
+      setError(err.message || 'Failed to remove logo');
+      setLogoDataUrl(business?.logoUrl || null);
     }
   };
 

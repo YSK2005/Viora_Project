@@ -1,10 +1,11 @@
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../config/prisma';
 import { sendSuccess } from '../../utils/response';
 import { validateRequest } from '../../middlewares/validate';
-import { getOrCreateDefaultBusiness } from '../../utils/businessHelper';
+import { AuthenticatedRequest } from '../../middlewares/auth';
 import { round2, toDecimal } from '../../utils/money';
+import { toTimezoneBoundary } from '../../utils/dateBoundary';
 
 const router = Router();
 
@@ -25,12 +26,12 @@ const dashboardQuerySchema = z.object({
 router.get(
   '/summary',
   validateRequest({ query: dashboardQuerySchema }),
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-      const business = await getOrCreateDefaultBusiness();
+      const business = req.business;
       const { startDate, endDate } = req.query as any;
 
-      // 1. Issued invoices filter (by invoiceDate, drafts and cancelled excluded)
+      // 1. Issued invoices filter (by invoiceDate in business timezone, drafts and cancelled excluded)
       const invoiceWhere: any = {
         businessId: business.id,
         status: 'ISSUED',
@@ -38,8 +39,8 @@ router.get(
 
       if (startDate || endDate) {
         invoiceWhere.invoiceDate = {};
-        if (startDate) invoiceWhere.invoiceDate.gte = new Date(`${startDate}T00:00:00.000Z`);
-        if (endDate) invoiceWhere.invoiceDate.lte = new Date(`${endDate}T23:59:59.999Z`);
+        if (startDate) invoiceWhere.invoiceDate.gte = toTimezoneBoundary(startDate, false);
+        if (endDate) invoiceWhere.invoiceDate.lte = toTimezoneBoundary(endDate, true);
       }
 
       const issuedInvoices = await prisma.invoice.findMany({
@@ -52,6 +53,7 @@ router.get(
             select: {
               amount: true,
               paymentDate: true,
+              isReversed: true,
             },
           },
         },
@@ -64,22 +66,23 @@ router.get(
       };
       if (startDate || endDate) {
         draftWhere.invoiceDate = {};
-        if (startDate) draftWhere.invoiceDate.gte = new Date(`${startDate}T00:00:00.000Z`);
-        if (endDate) draftWhere.invoiceDate.lte = new Date(`${endDate}T23:59:59.999Z`);
+        if (startDate) draftWhere.invoiceDate.gte = toTimezoneBoundary(startDate, false);
+        if (endDate) draftWhere.invoiceDate.lte = toTimezoneBoundary(endDate, true);
       }
       const draftCount = await prisma.invoice.count({ where: draftWhere });
 
-      // 3. Payments collected in period (by paymentDate)
+      // 3. Payments collected in period (by paymentDate in business timezone, excluding reversed payments)
       const paymentWhere: any = {
         invoice: {
           businessId: business.id,
           status: 'ISSUED',
         },
+        isReversed: false,
       };
       if (startDate || endDate) {
         paymentWhere.paymentDate = {};
-        if (startDate) paymentWhere.paymentDate.gte = new Date(`${startDate}T00:00:00.000Z`);
-        if (endDate) paymentWhere.paymentDate.lte = new Date(`${endDate}T23:59:59.999Z`);
+        if (startDate) paymentWhere.paymentDate.gte = toTimezoneBoundary(startDate, false);
+        if (endDate) paymentWhere.paymentDate.lte = toTimezoneBoundary(endDate, true);
       }
       const periodPayments = await prisma.payment.findMany({
         where: paymentWhere,
@@ -107,6 +110,7 @@ router.get(
 
         let invoicePaid = toDecimal(0);
         for (const p of inv.payments) {
+          if (p.isReversed) continue;
           invoicePaid = invoicePaid.plus(toDecimal(p.amount));
         }
         invoicePaid = round2(invoicePaid);
@@ -184,6 +188,16 @@ router.get(
         counts: {
           customers: customerCount,
           products: productCount,
+        },
+        periodActivity: {
+          periodSales: Number(totalIssuedSales),
+          invoicesIssued: issuedInvoices.length,
+          paymentsCollected: Number(totalCollected),
+          collectionRate,
+        },
+        closingBalance: {
+          outstandingReceivables: Number(outstandingBalance),
+          unpaidInvoicesCount: unpaidCount + partialCount,
         },
       };
 

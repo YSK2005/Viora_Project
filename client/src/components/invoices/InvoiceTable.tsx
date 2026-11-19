@@ -17,7 +17,9 @@ import {
   Ban,
   Calendar,
   User,
+  Copy,
 } from 'lucide-react';
+import { PaginationToolbar } from '../common/PaginationToolbar';
 import { downloadInvoicePdf } from '../../services/api';
 import { openWhatsAppDispatch, openGmailDispatch } from '../../utils/dispatchInvoice';
 
@@ -30,6 +32,7 @@ interface InvoiceTableProps {
   onEditDraft?: (invoice: Invoice) => void;
   onDeleteDraft?: (invoice: Invoice) => void;
   onCancelInvoice?: (invoice: Invoice) => void;
+  onDuplicateInvoice?: (invoice: Invoice) => void;
   initialCustomerFilter?: string;
 }
 
@@ -42,6 +45,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
   onEditDraft,
   onDeleteDraft,
   onCancelInvoice,
+  onDuplicateInvoice,
   initialCustomerFilter = '',
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,6 +53,8 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'DRAFT' | 'ISSUED' | 'CANCELLED' | 'PAID' | 'UNPAID'>('ALL');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Synchronize initialCustomerFilter prop changes
   React.useEffect(() => {
@@ -105,6 +111,24 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
       });
   }, [invoices, statusFilter, searchQuery, customerFilter, startDate, endDate]);
 
+  const handleSearchChange = (val: string) => {
+    setSearchQuery(val);
+    setPage(1);
+  };
+
+  const handleStatusChange = (val: any) => {
+    setStatusFilter(val);
+    setPage(1);
+  };
+
+  const handleCustomerChange = (val: string) => {
+    setCustomerFilter(val);
+    setPage(1);
+  };
+
+  const totalPages = Math.ceil(filteredInvoices.length / pageSize) || 1;
+  const paginatedInvoices = filteredInvoices.slice((page - 1) * pageSize, page * pageSize);
+
   const formatAmount = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
@@ -153,7 +177,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
               type="text"
               placeholder="Search by invoice # or customer..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 placeholder:text-slate-400 transition-all"
             />
           </div>
@@ -165,7 +189,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
               <select
                 aria-label="Filter by customer"
                 value={customerFilter}
-                onChange={(e) => setCustomerFilter(e.target.value)}
+                onChange={(e) => handleCustomerChange(e.target.value)}
                 className="w-full border-0 bg-transparent p-0 text-xs text-slate-700 focus:ring-0 cursor-pointer"
               >
                 <option value="">All Customers</option>
@@ -178,7 +202,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
               {customerFilter && (
                 <button
                   type="button"
-                  onClick={() => setCustomerFilter('')}
+                  onClick={() => handleCustomerChange('')}
                   className="text-[10px] text-slate-400 hover:text-slate-600 font-bold ml-1"
                   title="Clear customer filter"
                 >
@@ -194,7 +218,10 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
             <input
               type="date"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                setPage(1);
+              }}
               className="border-0 p-0 text-xs text-slate-700 focus:ring-0"
               title="From date"
             />
@@ -202,7 +229,10 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
             <input
               type="date"
               value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
+              onChange={(e) => {
+                setEndDate(e.target.value);
+                setPage(1);
+              }}
               className="border-0 p-0 text-xs text-slate-700 focus:ring-0"
               title="To date"
             />
@@ -211,6 +241,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                 onClick={() => {
                   setStartDate('');
                   setEndDate('');
+                  setPage(1);
                 }}
                 className="text-[10px] text-purple-600 hover:text-purple-800 ml-1 font-semibold"
               >
@@ -226,7 +257,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
           {(['ALL', 'DRAFT', 'ISSUED', 'PAID', 'UNPAID', 'CANCELLED'] as const).map((tab) => (
             <button
               key={tab}
-              onClick={() => setStatusFilter(tab)}
+              onClick={() => handleStatusChange(tab)}
               className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
                 statusFilter === tab
                   ? 'bg-purple-700 text-white font-semibold'
@@ -263,181 +294,330 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
           isFiltered={Boolean(searchQuery || customerFilter || statusFilter !== 'ALL' || startDate || endDate)}
         />
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-200/80 bg-slate-50/50 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                <th className="py-3 px-4 sm:px-6">Invoice #</th>
-                <th className="py-3 px-4">Customer</th>
-                <th className="py-3 px-4">Invoice Date</th>
-                <th className="py-3 px-4">Due Date</th>
-                <th className="py-3 px-4 text-right">Grand Total</th>
-                <th className="py-3 px-4 text-center">Status</th>
-                <th className="py-3 px-4 text-center">Payment</th>
-                <th className="py-3 px-4 sm:px-6 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-xs">
-              {filteredInvoices.map((inv) => (
-                <tr
-                  key={inv.id}
-                  onClick={() => onSelectInvoice?.(inv)}
-                  className="hover:bg-purple-50/30 transition-colors cursor-pointer group"
-                >
-                  <td className="py-3.5 px-4 sm:px-6 font-mono font-medium text-slate-900 group-hover:text-purple-700">
-                    {inv.invoiceNumber}
-                  </td>
-                  <td className="py-3.5 px-4 font-medium text-slate-800">
-                    {inv.customerName || '—'}
-                  </td>
-                  <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">
-                    {inv.invoiceDate}
-                  </td>
-                  <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">
-                    {inv.dueDate}
-                  </td>
-                  <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-900">
-                    {formatAmount(Number(inv.grandTotal))}
-                  </td>
-                  <td className="py-3.5 px-4 text-center">
-                    <InvoiceStatusBadge status={inv.status} />
-                  </td>
-                  <td className="py-3.5 px-4 text-center">
-                    {inv.status === 'ISSUED' ? (
-                      <InvoiceStatusBadge paymentStatus={inv.paymentStatus} />
-                    ) : (
-                      <span className="text-[11px] text-slate-400">—</span>
-                    )}
-                  </td>
-                  <td
-                    className="py-3.5 px-4 sm:px-6 text-right"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div className="flex items-center justify-end gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => onSelectInvoice?.(inv)}
-                        title="Preview & Print"
-                        className="p-1.5 text-slate-400 hover:text-purple-700 hover:bg-purple-50 rounded-md transition-colors"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            await downloadInvoicePdf(inv.id, inv.invoiceNumber);
-                          } catch (err: any) {
-                            alert(`Download error: ${err.message}`);
-                          }
-                        }}
-                        title="Download A4 PDF"
-                        className="p-1.5 text-slate-400 hover:text-purple-700 hover:bg-purple-50 rounded-md transition-colors"
-                      >
-                        <Download className="w-4 h-4" />
-                      </button>
-
-                      {/* B11: Edit and Delete for Draft Invoices */}
-                      {inv.status === 'DRAFT' && onEditDraft && (
-                        <button
-                          type="button"
-                          onClick={() => onEditDraft(inv)}
-                          title="Edit Draft Invoice"
-                          className="px-2 py-1 text-[11px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-md flex items-center gap-1 transition-colors"
-                        >
-                          <FileEdit className="w-3.5 h-3.5 text-slate-600" />
-                          <span>Edit</span>
-                        </button>
-                      )}
-
-                      {inv.status === 'DRAFT' && onDeleteDraft && (
-                        <button
-                          type="button"
-                          onClick={() => onDeleteDraft(inv)}
-                          title="Delete Draft Invoice"
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-
-                      {inv.status === 'DRAFT' && onIssueInvoice && (
-                        <button
-                          type="button"
-                          onClick={() => onIssueInvoice(inv)}
-                          title="Issue Official Invoice"
-                          className="px-2 py-1 text-[11px] font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-md flex items-center gap-1"
-                        >
-                          <SendHorizontal className="w-3 h-3 text-purple-600" />
-                          Issue
-                        </button>
-                      )}
-
-                      {/* Share actions for Issued Invoices */}
+        <>
+          {/* Mobile View: Responsive Cards for screens <= 1024px / 375px */}
+          <div className="block lg:hidden divide-y divide-slate-100">
+            {paginatedInvoices.map((inv) => (
+              <div
+                key={inv.id}
+                onClick={() => onSelectInvoice?.(inv)}
+                className="p-4 hover:bg-purple-50/20 transition-colors cursor-pointer"
+              >
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div>
+                    <div className="font-mono font-bold text-sm text-purple-700">
+                      {inv.invoiceNumber}
+                    </div>
+                    <div className="font-medium text-xs text-slate-800 mt-0.5">
+                      {inv.customerName || '—'}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-mono font-bold text-sm text-slate-900">
+                      {formatAmount(Number(inv.grandTotal))}
+                    </div>
+                    <div className="flex items-center gap-1 justify-end mt-1">
+                      <InvoiceStatusBadge status={inv.status} />
                       {inv.status === 'ISSUED' && (
-                        <>
+                        <InvoiceStatusBadge paymentStatus={inv.paymentStatus} />
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-100 mt-2">
+                  <div className="flex items-center gap-2">
+                    <span>Date: {inv.invoiceDate}</span>
+                    <span>•</span>
+                    <span>Due: {inv.dueDate}</span>
+                  </div>
+                </div>
+
+                {/* Action buttons on mobile */}
+                <div
+                  className="flex items-center flex-wrap gap-1.5 pt-3 mt-2 border-t border-slate-100"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    onClick={() => onSelectInvoice?.(inv)}
+                    className="px-2.5 py-1 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-md flex items-center gap-1"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>View</span>
+                  </button>
+
+                  {onDuplicateInvoice && (
+                    <button
+                      type="button"
+                      onClick={() => onDuplicateInvoice(inv)}
+                      className="px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-md flex items-center gap-1"
+                      title="Duplicate invoice"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copy</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await downloadInvoicePdf(inv.id, inv.invoiceNumber);
+                      } catch (err: any) {
+                        alert(`Download error: ${err.message}`);
+                      }
+                    }}
+                    className="px-2.5 py-1 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md flex items-center gap-1"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>PDF</span>
+                  </button>
+
+                  {inv.status === 'DRAFT' && onEditDraft && (
+                    <button
+                      type="button"
+                      onClick={() => onEditDraft(inv)}
+                      className="px-2.5 py-1 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md flex items-center gap-1"
+                    >
+                      <FileEdit className="w-3.5 h-3.5" />
+                      <span>Edit</span>
+                    </button>
+                  )}
+
+                  {inv.status === 'DRAFT' && onIssueInvoice && (
+                    <button
+                      type="button"
+                      onClick={() => onIssueInvoice(inv)}
+                      className="px-2.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-md flex items-center gap-1"
+                    >
+                      <SendHorizontal className="w-3.5 h-3.5" />
+                      <span>Issue</span>
+                    </button>
+                  )}
+
+                  {inv.status === 'DRAFT' && onDeleteDraft && (
+                    <button
+                      type="button"
+                      onClick={() => onDeleteDraft(inv)}
+                      className="px-2.5 py-1 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-md flex items-center gap-1"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete</span>
+                    </button>
+                  )}
+
+                  {inv.status === 'ISSUED' && inv.paymentStatus !== 'PAID' && onRecordPayment && (
+                    <button
+                      type="button"
+                      onClick={() => onRecordPayment(inv)}
+                      className="px-2.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-md flex items-center gap-1"
+                    >
+                      <CreditCard className="w-3.5 h-3.5" />
+                      <span>Pay</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop Table View */}
+          <div className="hidden lg:block overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200/80 bg-slate-50/50 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                  <th className="py-3 px-4 sm:px-6">Invoice #</th>
+                  <th className="py-3 px-4">Customer</th>
+                  <th className="py-3 px-4">Invoice Date</th>
+                  <th className="py-3 px-4">Due Date</th>
+                  <th className="py-3 px-4 text-right">Grand Total</th>
+                  <th className="py-3 px-4 text-center">Status</th>
+                  <th className="py-3 px-4 text-center">Payment</th>
+                  <th className="py-3 px-4 sm:px-6 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs">
+                {paginatedInvoices.map((inv) => (
+                  <tr
+                    key={inv.id}
+                    onClick={() => onSelectInvoice?.(inv)}
+                    className="hover:bg-purple-50/30 transition-colors cursor-pointer group"
+                  >
+                    <td className="py-3.5 px-4 sm:px-6 font-mono font-medium text-slate-900 group-hover:text-purple-700">
+                      {inv.invoiceNumber}
+                    </td>
+                    <td className="py-3.5 px-4 font-medium text-slate-800">
+                      {inv.customerName || '—'}
+                    </td>
+                    <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">
+                      {inv.invoiceDate}
+                    </td>
+                    <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">
+                      {inv.dueDate}
+                    </td>
+                    <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-900">
+                      {formatAmount(Number(inv.grandTotal))}
+                    </td>
+                    <td className="py-3.5 px-4 text-center">
+                      <InvoiceStatusBadge status={inv.status} />
+                    </td>
+                    <td className="py-3.5 px-4 text-center">
+                      {inv.status === 'ISSUED' ? (
+                        <InvoiceStatusBadge paymentStatus={inv.paymentStatus} />
+                      ) : (
+                        <span className="text-[11px] text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td
+                      className="py-3.5 px-4 sm:px-6 text-right"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => onSelectInvoice?.(inv)}
+                          title="Preview & Print"
+                          className="p-1.5 text-slate-400 hover:text-purple-700 hover:bg-purple-50 rounded-md transition-colors"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+
+                        {/* Explicit Duplicate Action */}
+                        {onDuplicateInvoice && (
                           <button
                             type="button"
-                            onClick={() => openWhatsAppDispatch(inv)}
-                            title="Open WhatsApp message draft"
-                            className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
+                            onClick={() => onDuplicateInvoice(inv)}
+                            title="Duplicate invoice as fresh draft"
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
                           >
-                            <MessageCircle className="w-4 h-4" />
+                            <Copy className="w-4 h-4" />
                           </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              await downloadInvoicePdf(inv.id, inv.invoiceNumber);
+                            } catch (err: any) {
+                              alert(`Download error: ${err.message}`);
+                            }
+                          }}
+                          title="Download A4 PDF"
+                          className="p-1.5 text-slate-400 hover:text-purple-700 hover:bg-purple-50 rounded-md transition-colors"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
+
+                        {/* B11: Edit and Delete for Draft Invoices */}
+                        {inv.status === 'DRAFT' && onEditDraft && (
                           <button
                             type="button"
-                            onClick={() => openGmailDispatch(inv)}
-                            title="Compose Gmail draft"
+                            onClick={() => onEditDraft(inv)}
+                            title="Edit Draft Invoice"
+                            className="px-2 py-1 text-[11px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-md flex items-center gap-1 transition-colors"
+                          >
+                            <FileEdit className="w-3.5 h-3.5 text-slate-600" />
+                            <span>Edit</span>
+                          </button>
+                        )}
+
+                        {inv.status === 'DRAFT' && onDeleteDraft && (
+                          <button
+                            type="button"
+                            onClick={() => onDeleteDraft(inv)}
+                            title="Delete Draft Invoice"
                             className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
                           >
-                            <Mail className="w-4 h-4" />
-                          </button>
-                        </>
-                      )}
-
-                      {/* B11: Cancel Issued Unpaid Invoices */}
-                      {inv.status === 'ISSUED' &&
-                        inv.paymentStatus === 'UNPAID' &&
-                        onCancelInvoice && (
-                          <button
-                            type="button"
-                            onClick={() => onCancelInvoice(inv)}
-                            title="Cancel Invoice"
-                            className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-md transition-colors"
-                          >
-                            <Ban className="w-4 h-4" />
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         )}
 
-                      {inv.status === 'ISSUED' &&
-                        inv.paymentStatus !== 'PAID' &&
-                        onRecordPayment && (
+                        {inv.status === 'DRAFT' && onIssueInvoice && (
                           <button
                             type="button"
-                            onClick={() => onRecordPayment(inv)}
-                            title="Record Payment"
+                            onClick={() => onIssueInvoice(inv)}
+                            title="Issue Official Invoice"
                             className="px-2 py-1 text-[11px] font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-md flex items-center gap-1"
                           >
-                            <CreditCard className="w-3 h-3 text-purple-600" />
-                            Pay
+                            <SendHorizontal className="w-3 h-3 text-purple-600" />
+                            Issue
                           </button>
                         )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+
+                        {/* Share actions for Issued Invoices */}
+                        {inv.status === 'ISSUED' && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => openWhatsAppDispatch(inv)}
+                              title="Open WhatsApp message draft"
+                              className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
+                            >
+                              <MessageCircle className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openGmailDispatch(inv)}
+                              title="Compose Gmail draft"
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                            >
+                              <Mail className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+
+                        {/* B11: Cancel Issued Unpaid Invoices */}
+                        {inv.status === 'ISSUED' &&
+                          inv.paymentStatus === 'UNPAID' &&
+                          onCancelInvoice && (
+                            <button
+                              type="button"
+                              onClick={() => onCancelInvoice(inv)}
+                              title="Cancel Invoice"
+                              className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-md transition-colors"
+                            >
+                              <Ban className="w-4 h-4" />
+                            </button>
+                          )}
+
+                        {inv.status === 'ISSUED' &&
+                          inv.paymentStatus !== 'PAID' &&
+                          onRecordPayment && (
+                            <button
+                              type="button"
+                              onClick={() => onRecordPayment(inv)}
+                              title="Record Payment"
+                              className="px-2 py-1 text-[11px] font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-md flex items-center gap-1"
+                            >
+                              <CreditCard className="w-3 h-3 text-purple-600" />
+                              Pay
+                            </button>
+                          )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
-      {/* Footer info */}
-      <div className="px-4 py-3 bg-slate-50/50 border-t border-slate-200/80 flex items-center justify-between text-[11px] text-slate-500">
-        <div>
-          Showing {filteredInvoices.length} of {invoices.length} invoices
-        </div>
-      </div>
+      {/* Pagination Toolbar */}
+      <PaginationToolbar
+        currentPage={page}
+        totalPages={totalPages}
+        totalCount={filteredInvoices.length}
+        pageSize={pageSize}
+        onPageChange={(p) => setPage(p)}
+        onPageSizeChange={(sz) => {
+          setPageSize(sz);
+          setPage(1);
+        }}
+        itemLabel="invoices"
+      />
     </div>
   );
 };

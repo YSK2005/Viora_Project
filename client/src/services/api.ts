@@ -6,13 +6,135 @@ import {
   Product,
   PaymentRecord,
   BusinessProfile,
+  User,
+  UserRole,
+  BusinessMembership,
+  PaginationMeta,
 } from '../types';
 
 const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 
+// -------------------------------------------------------------
+// Auth & Session Management
+// -------------------------------------------------------------
+// Remove tokens left by earlier versions. Sessions now use HttpOnly cookies only.
+try { localStorage.removeItem('viora_auth_token'); } catch { /* Storage may be disabled. */ }
+
+export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const url = `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`;
+  const headers = new Headers(init.headers || {});
+
+  headers.set('X-Viora-Client', 'web');
+
+  return fetch(url, {
+    ...init,
+    headers,
+    credentials: 'include', // Includes HTTP-only session cookie
+  });
+}
+
+export interface AuthResponse {
+  user: User;
+  business: BusinessProfile;
+  role: UserRole;
+  memberships: BusinessMembership[];
+}
+
+export async function registerUser(data: {
+  email: string;
+  password: string;
+  name: string;
+  businessName?: string;
+}): Promise<AuthResponse> {
+  const res = await apiFetch('/auth/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(json.error?.message || 'Registration failed');
+  }
+
+  return json.data;
+}
+
+export async function loginUser(data: {
+  email: string;
+  password: string;
+}): Promise<AuthResponse> {
+  const res = await apiFetch('/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(json.error?.message || 'Invalid email or password');
+  }
+
+  return json.data;
+}
+
+export async function logoutUser(): Promise<void> {
+  const res = await apiFetch('/auth/logout', { method: 'POST' });
+  if (!res.ok) throw new Error('Sign out failed. Please try again.');
+}
+
+export async function fetchCurrentUser(): Promise<{
+  user: User;
+  business: BusinessProfile;
+  role: UserRole;
+  memberships: BusinessMembership[];
+} | null> {
+  try {
+    const res = await apiFetch('/auth/me');
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.data;
+  } catch {
+    return null;
+  }
+}
+
+export async function switchBusiness(businessId: string): Promise<any> {
+  const res = await apiFetch('/auth/switch-business', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ businessId }),
+  });
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    throw new Error(json.error?.message || 'Failed to switch business');
+  }
+  return res.json();
+}
+
+export async function addBusinessMember(data: {
+  email: string;
+  role: UserRole;
+  name?: string;
+}): Promise<any> {
+  const res = await apiFetch('/auth/members', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    throw new Error(json.error?.message || 'Failed to add member');
+  }
+  return res.json();
+}
+
+// -------------------------------------------------------------
+// System Health
+// -------------------------------------------------------------
 export async function fetchHealth(): Promise<SystemHealth> {
   try {
-    const res = await fetch(`${API_BASE}/health`, {
+    const res = await apiFetch('/health', {
       headers: { Accept: 'application/json' },
     });
     if (!res.ok) return { status: 'unhealthy' };
@@ -42,13 +164,13 @@ export async function fetchDashboardSummary(params?: {
     if (params?.endDate) query.append('endDate', params.endDate);
 
     const queryString = query.toString();
-    const url = queryString ? `${API_BASE}/dashboard/summary?${queryString}` : `${API_BASE}/dashboard/summary`;
-    const res = await fetch(url);
+    const url = queryString ? `/dashboard/summary?${queryString}` : '/dashboard/summary';
+    const res = await apiFetch(url);
     if (!res.ok) throw new Error('Failed to load dashboard summary');
     const json = await res.json();
     return json.data;
   } catch (err) {
-    console.warn('Dashboard summary fetch failed, using fallback metrics', err);
+    console.warn('Dashboard summary fetch failed:', err);
     return null;
   }
 }
@@ -63,7 +185,7 @@ export async function fetchSalesReport(params?: {
   if (params?.endDate) query.append('endDate', params.endDate);
   if (params?.groupBy) query.append('groupBy', params.groupBy);
 
-  const res = await fetch(`${API_BASE}/reports/sales?${query.toString()}`);
+  const res = await apiFetch(`/reports/sales?${query.toString()}`);
   if (!res.ok) throw new Error('Failed to load sales report');
   const json = await res.json();
   return json.data;
@@ -81,7 +203,7 @@ export async function fetchInvoices(params?: {
   endDate?: string;
   limit?: number;
   page?: number;
-}): Promise<{ invoices: Invoice[]; totalCount: number; isBackendConnected: boolean }> {
+}): Promise<{ invoices: Invoice[]; totalCount: number; isBackendConnected: boolean; pagination?: PaginationMeta }> {
   try {
     const query = new URLSearchParams();
     if (params?.status && params.status !== 'ALL') query.append('status', params.status);
@@ -93,12 +215,13 @@ export async function fetchInvoices(params?: {
     if (params?.limit) query.append('limit', String(params.limit));
     if (params?.page) query.append('page', String(params.page));
 
-    const res = await fetch(`${API_BASE}/invoices?${query.toString()}`);
+    const res = await apiFetch(`/invoices?${query.toString()}`);
     if (!res.ok) throw new Error('API response not ok');
     const json = await res.json();
     return {
       invoices: json.data?.invoices || [],
       totalCount: json.data?.pagination?.totalCount || 0,
+      pagination: json.data?.pagination,
       isBackendConnected: true,
     };
   } catch (err) {
@@ -112,7 +235,7 @@ export async function fetchInvoices(params?: {
 }
 
 export async function fetchInvoiceDetails(id: string): Promise<Invoice> {
-  const res = await fetch(`${API_BASE}/invoices/${id}`);
+  const res = await apiFetch(`/invoices/${id}`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error?.message || 'Failed to fetch invoice');
@@ -138,11 +261,12 @@ export async function createInvoice(data: {
     taxRate?: number;
   }>;
 }): Promise<Invoice> {
-  const res = await fetch(`${API_BASE}/invoices`, {
+  const res = await apiFetch('/invoices', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error?.message || 'Failed to create invoice');
@@ -151,7 +275,7 @@ export async function createInvoice(data: {
   return json.data;
 }
 
-export async function updateDraftInvoice(
+export async function updateInvoice(
   id: string,
   data: {
     customerId: string;
@@ -171,23 +295,28 @@ export async function updateDraftInvoice(
     }>;
   }
 ): Promise<Invoice> {
-  const res = await fetch(`${API_BASE}/invoices/${id}`, {
+  const res = await apiFetch(`/invoices/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || 'Failed to update draft invoice');
+    throw new Error(err.error?.message || 'Failed to update invoice');
   }
   const json = await res.json();
   return json.data;
 }
 
+export const updateDraftInvoice = updateInvoice;
+
 export async function issueInvoice(id: string): Promise<Invoice> {
-  const res = await fetch(`${API_BASE}/invoices/${id}/issue`, {
+  const res = await apiFetch(`/invoices/${id}/issue`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
   });
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error?.message || 'Failed to issue invoice');
@@ -196,20 +325,12 @@ export async function issueInvoice(id: string): Promise<Invoice> {
   return json.data;
 }
 
-export async function deleteDraftInvoice(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/invoices/${id}`, {
-    method: 'DELETE',
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || 'Failed to delete draft invoice');
-  }
-}
-
 export async function cancelInvoice(id: string): Promise<Invoice> {
-  const res = await fetch(`${API_BASE}/invoices/${id}/cancel`, {
+  const res = await apiFetch(`/invoices/${id}/cancel`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
   });
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error?.message || 'Failed to cancel invoice');
@@ -218,47 +339,61 @@ export async function cancelInvoice(id: string): Promise<Invoice> {
   return json.data;
 }
 
-export function getInvoicePdfUrl(id: string): string {
-  return `${API_BASE}/invoices/${id}/pdf`;
+export async function deleteDraftInvoice(id: string): Promise<{ success: boolean; message: string }> {
+  const res = await apiFetch(`/invoices/${id}`, {
+    method: 'DELETE',
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || 'Failed to delete draft invoice');
+  }
+  return res.json();
 }
 
-export async function downloadInvoicePdf(id: string, invoiceNumber: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/invoices/${id}/pdf`);
+export async function recordPayment(
+  invoiceId: string,
+  data: {
+    amount: number;
+    paymentDate?: string;
+    method?: string;
+    reference?: string;
+    requestKey: string;
+  }
+): Promise<any> {
+  const res = await apiFetch(`/invoices/${invoiceId}/payments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
   if (!res.ok) {
-    throw new Error('Failed to download invoice PDF');
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || 'Failed to record payment');
+  }
+  const json = await res.json();
+  return json.data;
+}
+
+export const recordInvoicePayment = recordPayment;
+
+export async function downloadInvoicePdf(id: string, invoiceNumber?: string): Promise<void> {
+  const res = await apiFetch(`/invoices/${id}/pdf`, {
+    headers: { Accept: 'application/pdf' },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || 'Failed to download PDF');
   }
   const blob = await res.blob();
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `invoice-${invoiceNumber || 'document'}.pdf`;
+  a.download = `Invoice_${invoiceNumber || id}.pdf`;
   document.body.appendChild(a);
   a.click();
   window.URL.revokeObjectURL(url);
   document.body.removeChild(a);
-}
-
-export async function recordInvoicePayment(
-  invoiceId: string,
-  data: {
-    amount: number;
-    paymentDate?: string;
-    method: string;
-    reference?: string;
-    requestKey: string;
-  }
-): Promise<any> {
-  const res = await fetch(`${API_BASE}/invoices/${invoiceId}/payments`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || 'Payment recording failed');
-  }
-  const json = await res.json();
-  return json.data;
 }
 
 // -------------------------------------------------------------
@@ -268,30 +403,31 @@ export async function fetchCustomers(params?: {
   search?: string;
   page?: number;
   limit?: number;
-}): Promise<{ customers: Customer[]; totalCount: number }> {
+}): Promise<{ customers: Customer[]; totalCount: number; pagination?: PaginationMeta }> {
   const query = new URLSearchParams();
   if (params?.search) query.append('search', params.search);
   if (params?.page) query.append('page', String(params.page));
   if (params?.limit) query.append('limit', String(params.limit));
 
-  const res = await fetch(`${API_BASE}/customers?${query.toString()}`);
+  const res = await apiFetch(`/customers?${query.toString()}`);
   if (!res.ok) throw new Error('Failed to fetch customers');
   const json = await res.json();
   return {
     customers: json.data?.customers || [],
     totalCount: json.data?.pagination?.totalCount || 0,
+    pagination: json.data?.pagination,
   };
 }
 
 export async function createCustomer(data: {
   name: string;
-  phone: string;
+  phone?: string;
   email?: string;
   billingAddress: string;
   gstin?: string;
   state?: string;
 }): Promise<Customer> {
-  const res = await fetch(`${API_BASE}/customers`, {
+  const res = await apiFetch('/customers', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -315,7 +451,7 @@ export async function updateCustomer(
     state?: string;
   }>
 ): Promise<Customer> {
-  const res = await fetch(`${API_BASE}/customers/${id}`, {
+  const res = await apiFetch(`/customers/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -329,7 +465,7 @@ export async function updateCustomer(
 }
 
 export async function deleteCustomer(id: string): Promise<any> {
-  const res = await fetch(`${API_BASE}/customers/${id}`, {
+  const res = await apiFetch(`/customers/${id}`, {
     method: 'DELETE',
   });
   if (!res.ok) {
@@ -346,30 +482,33 @@ export async function fetchProducts(params?: {
   search?: string;
   page?: number;
   limit?: number;
-}): Promise<{ products: Product[]; totalCount: number }> {
+  isActive?: string;
+}): Promise<{ products: Product[]; totalCount: number; pagination?: PaginationMeta }> {
   const query = new URLSearchParams();
   if (params?.search) query.append('search', params.search);
   if (params?.page) query.append('page', String(params.page));
   if (params?.limit) query.append('limit', String(params.limit));
+  if (params?.isActive) query.append('isActive', params.isActive);
 
-  const res = await fetch(`${API_BASE}/products?${query.toString()}`);
+  const res = await apiFetch(`/products?${query.toString()}`);
   if (!res.ok) throw new Error('Failed to fetch products');
   const json = await res.json();
   return {
     products: json.data?.products || [],
     totalCount: json.data?.pagination?.totalCount || 0,
+    pagination: json.data?.pagination,
   };
 }
 
 export async function createProduct(data: {
   name: string;
   description?: string;
-  unit: string;
+  unit?: string;
   unitPrice: number;
-  taxRate: number;
+  taxRate?: number;
   isActive?: boolean;
 }): Promise<Product> {
-  const res = await fetch(`${API_BASE}/products`, {
+  const res = await apiFetch('/products', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -386,14 +525,14 @@ export async function updateProduct(
   id: string,
   data: Partial<{
     name: string;
-    description?: string;
+    description: string;
     unit: string;
     unitPrice: number;
     taxRate: number;
-    isActive?: boolean;
+    isActive: boolean;
   }>
 ): Promise<Product> {
-  const res = await fetch(`${API_BASE}/products/${id}`, {
+  const res = await apiFetch(`/products/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -407,7 +546,7 @@ export async function updateProduct(
 }
 
 export async function deleteProduct(id: string): Promise<any> {
-  const res = await fetch(`${API_BASE}/products/${id}`, {
+  const res = await apiFetch(`/products/${id}`, {
     method: 'DELETE',
   });
   if (!res.ok) {
@@ -421,46 +560,61 @@ export async function deleteProduct(id: string): Promise<any> {
 // Payments API
 // -------------------------------------------------------------
 export async function fetchPayments(params?: {
-  page?: number;
-  limit?: number;
-  search?: string;
-  startDate?: string;
-  endDate?: string;
-  method?: string;
   invoiceId?: string;
   customerId?: string;
-}): Promise<{ payments: PaymentRecord[]; totalCount: number }> {
+  search?: string;
+  method?: string;
+  startDate?: string;
+  endDate?: string;
+  page?: number;
+  limit?: number;
+}): Promise<{ payments: PaymentRecord[]; totalCount: number; pagination?: PaginationMeta }> {
   const query = new URLSearchParams();
-  if (params?.page) query.append('page', String(params.page));
-  if (params?.limit) query.append('limit', String(params.limit));
-  if (params?.search) query.append('search', params.search);
-  if (params?.startDate) query.append('startDate', params.startDate);
-  if (params?.endDate) query.append('endDate', params.endDate);
-  if (params?.method && params.method !== 'ALL') query.append('method', params.method);
   if (params?.invoiceId) query.append('invoiceId', params.invoiceId);
   if (params?.customerId) query.append('customerId', params.customerId);
+  if (params?.search) query.append('search', params.search);
+  if (params?.method && params.method !== 'ALL') query.append('method', params.method);
+  if (params?.startDate) query.append('startDate', params.startDate);
+  if (params?.endDate) query.append('endDate', params.endDate);
+  if (params?.page) query.append('page', String(params.page));
+  if (params?.limit) query.append('limit', String(params.limit));
 
-  const res = await fetch(`${API_BASE}/payments?${query.toString()}`);
+  const res = await apiFetch(`/payments?${query.toString()}`);
   if (!res.ok) throw new Error('Failed to fetch payments');
   const json = await res.json();
   return {
     payments: json.data?.payments || [],
     totalCount: json.data?.pagination?.totalCount || 0,
+    pagination: json.data?.pagination,
   };
+}
+
+export async function reversePayment(paymentId: string, reason: string): Promise<PaymentRecord> {
+  const res = await apiFetch(`/payments/${paymentId}/reverse`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to reverse payment');
+  }
+  const json = await res.json();
+  return json.data;
 }
 
 // -------------------------------------------------------------
 // Business Profile API
 // -------------------------------------------------------------
 export async function fetchBusiness(): Promise<BusinessProfile> {
-  const res = await fetch(`${API_BASE}/business`);
+  const res = await apiFetch('/business');
   if (!res.ok) throw new Error('Failed to fetch business details');
   const json = await res.json();
   return json.data;
 }
 
 export async function updateBusiness(data: Partial<BusinessProfile>): Promise<BusinessProfile> {
-  const res = await fetch(`${API_BASE}/business`, {
+  const res = await apiFetch('/business', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),

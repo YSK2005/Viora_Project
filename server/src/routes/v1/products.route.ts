@@ -1,18 +1,18 @@
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../config/prisma';
 import { sendSuccess } from '../../utils/response';
 import { validateRequest } from '../../middlewares/validate';
 import { AppError } from '../../middlewares/errorHandler';
-import { getOrCreateDefaultBusiness } from '../../utils/businessHelper';
+import { AuthenticatedRequest, requireRole } from '../../middlewares/auth';
 import { round2, toDecimal } from '../../utils/money';
 
 const router = Router();
 
 const createProductSchema = z.object({
-  name: z.string().min(2, 'Product name must be at least 2 characters'),
+  name: z.string().trim().min(2, 'Product name must be at least 2 characters').max(200),
   description: z.string().optional().nullable(),
-  unit: z.string().min(1, 'Unit is required').default('PCS'),
+  unit: z.string().trim().min(1, 'Unit is required').max(30).default('PCS'),
   unitPrice: z.coerce.number().min(0, 'Unit price cannot be negative'),
   taxRate: z.coerce.number().min(0).max(100, 'Tax rate must be between 0% and 100%').default(0),
   isActive: z.boolean().optional().default(true),
@@ -30,18 +30,18 @@ const productQuerySchema = z.object({
 
 /**
  * GET /api/products
- * Returns paginated product list with search and filter
+ * Returns paginated product list with search and filter for active business
  */
 router.get(
   '/',
   validateRequest({ query: productQuerySchema }),
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-      const business = await getOrCreateDefaultBusiness();
+      const businessId = req.business.id;
       const { search, page, limit, isActive, includeArchived } = req.query as any;
 
       const where: any = {
-        businessId: business.id,
+        businessId,
       };
 
       if (includeArchived !== 'true') {
@@ -92,13 +92,13 @@ router.get(
 
 /**
  * GET /api/products/:id
- * Returns single product details
+ * Returns single product details (isolated to active business)
  */
-router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/:id', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const product = await prisma.product.findUnique({
-      where: { id },
+    const product = await prisma.product.findFirst({
+      where: { id, businessId: req.business.id },
     });
 
     if (!product) {
@@ -113,17 +113,18 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
 
 /**
  * POST /api/products
- * Creates a new product catalog item
+ * Creates a new product catalog item (OWNER or ACCOUNTANT)
  */
 router.post(
   '/',
+  requireRole(['OWNER', 'ACCOUNTANT']),
   validateRequest({ body: createProductSchema }),
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-      const business = await getOrCreateDefaultBusiness();
+      const businessId = req.business.id;
       const product = await prisma.product.create({
         data: {
-          businessId: business.id,
+          businessId,
           name: req.body.name.trim(),
           description: req.body.description ? req.body.description.trim() : null,
           unit: req.body.unit ? req.body.unit.trim().toUpperCase() : 'PCS',
@@ -142,15 +143,18 @@ router.post(
 
 /**
  * PUT /api/products/:id
- * Updates product details
+ * Updates product details (OWNER or ACCOUNTANT)
  */
 router.put(
   '/:id',
+  requireRole(['OWNER', 'ACCOUNTANT']),
   validateRequest({ body: updateProductSchema }),
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
-      const existing = await prisma.product.findUnique({ where: { id } });
+      const existing = await prisma.product.findFirst({
+        where: { id, businessId: req.business.id },
+      });
       if (!existing) {
         throw new AppError('Product not found', 404, 'ERR_PRODUCT_NOT_FOUND');
       }
@@ -176,13 +180,13 @@ router.put(
 
 /**
  * DELETE /api/products/:id
- * Soft deletes/archives product if referenced in past invoices
+ * Soft deletes/archives product if referenced in past invoices (OWNER or ACCOUNTANT)
  */
-router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
+router.delete('/:id', requireRole(['OWNER', 'ACCOUNTANT']), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const existing = await prisma.product.findUnique({
-      where: { id },
+    const existing = await prisma.product.findFirst({
+      where: { id, businessId: req.business.id },
       include: { _count: { select: { items: true } } },
     });
 

@@ -1,10 +1,10 @@
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../config/prisma';
 import { sendSuccess } from '../../utils/response';
 import { validateRequest } from '../../middlewares/validate';
 import { AppError } from '../../middlewares/errorHandler';
-import { getOrCreateDefaultBusiness } from '../../utils/businessHelper';
+import { AuthenticatedRequest, requireRole } from '../../middlewares/auth';
 import {
   validateAndNormalizeIndianPhone,
   validateAndNormalizeGSTIN,
@@ -157,18 +157,18 @@ const customerQuerySchema = z.object({
 
 /**
  * GET /api/customers
- * Returns paginated customer list with search filter
+ * Returns paginated customer list with search filter for active business
  */
 router.get(
   '/',
   validateRequest({ query: customerQuerySchema }),
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-      const business = await getOrCreateDefaultBusiness();
+      const businessId = req.business.id;
       const { search, page, limit, includeArchived } = req.query as any;
 
       const where: any = {
-        businessId: business.id,
+        businessId,
       };
 
       if (includeArchived !== 'true') {
@@ -219,13 +219,13 @@ router.get(
 
 /**
  * GET /api/customers/:id
- * Retrieves single customer by ID
+ * Retrieves single customer by ID (isolated to active business)
  */
-router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/:id', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const customer = await prisma.customer.findUnique({
-      where: { id },
+    const customer = await prisma.customer.findFirst({
+      where: { id, businessId: req.business.id },
     });
 
     if (!customer) {
@@ -240,17 +240,18 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
 
 /**
  * POST /api/customers
- * Creates a new customer for default business
+ * Creates a new customer for active business (OWNER or ACCOUNTANT)
  */
 router.post(
   '/',
+  requireRole(['OWNER', 'ACCOUNTANT']),
   validateRequest({ body: createCustomerSchema }),
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-      const business = await getOrCreateDefaultBusiness();
+      const businessId = req.business.id;
       const { name, phone, email, billingAddress, gstin, state } = req.body;
 
-      // Duplicate customer detection (B17)
+      // Duplicate customer detection (B17) scoped to business
       const duplicateConditions: any[] = [];
       if (phone && phone.trim()) {
         duplicateConditions.push({ phone: phone.trim() });
@@ -265,7 +266,7 @@ router.post(
       if (duplicateConditions.length > 0) {
         const existingDuplicate = await prisma.customer.findFirst({
           where: {
-            businessId: business.id,
+            businessId,
             isArchived: false,
             OR: duplicateConditions,
           },
@@ -282,7 +283,7 @@ router.post(
 
       const customer = await prisma.customer.create({
         data: {
-          businessId: business.id,
+          businessId,
           name,
           phone: phone || '',
           email: email && email.trim() !== '' ? email.trim() : null,
@@ -301,17 +302,18 @@ router.post(
 
 /**
  * PUT /api/customers/:id
- * Updates customer details
+ * Updates customer details (OWNER or ACCOUNTANT)
  */
 router.put(
   '/:id',
+  requireRole(['OWNER', 'ACCOUNTANT']),
   validateRequest({ body: updateCustomerSchema }),
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
 
-      const current = await prisma.customer.findUnique({
-        where: { id },
+      const current = await prisma.customer.findFirst({
+        where: { id, businessId: req.business.id },
       });
 
       if (!current) {
@@ -360,12 +362,12 @@ router.put(
  * DELETE /api/customers/:id
  * Soft deletes if referenced in invoices, permanently removes if unreferenced
  */
-router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
+router.delete('/:id', requireRole(['OWNER', 'ACCOUNTANT']), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
 
-    const customer = await prisma.customer.findUnique({
-      where: { id },
+    const customer = await prisma.customer.findFirst({
+      where: { id, businessId: req.business.id },
       include: {
         _count: {
           select: { invoices: true },

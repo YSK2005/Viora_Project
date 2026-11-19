@@ -13,21 +13,22 @@ export const validateRequest = (schema: {
         req.body = await schema.body.parseAsync(req.body);
       }
       if (schema.query) {
-        req.query = await schema.query.parseAsync(req.query);
+        req.query = (await schema.query.parseAsync(req.query)) as any;
       }
       if (schema.params) {
-        req.params = await schema.params.parseAsync(req.params);
+        req.params = (await schema.params.parseAsync(req.params)) as any;
       }
       return next();
     } catch (error) {
       if (error instanceof ZodError) {
+        const issues = (error as any).issues || (error as any).errors || [];
         return sendError(
           res,
           'Validation failed',
           400,
           'ERR_VALIDATION',
-          error.errors.map((err) => ({
-            field: err.path.join('.'),
+          issues.map((err: any) => ({
+            field: Array.isArray(err.path) ? err.path.join('.') : String(err.path || ''),
             message: err.message,
           }))
         );

@@ -18,6 +18,7 @@ import {
   issueInvoice,
 } from '../../services/api';
 import { StateSelect } from '../common/StateSelect';
+import { CustomerSearchSelect } from '../common/CustomerSearchSelect';
 
 interface NewInvoiceModalProps {
   isOpen: boolean;
@@ -50,6 +51,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
   const [businessState, setBusinessState] = useState('Karnataka');
   const [customerId, setCustomerId] = useState('');
+  const [selectedCustomerObj, setSelectedCustomerObj] = useState<Customer | null>(null);
   const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState(() => {
     const d = new Date();
@@ -166,7 +168,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
 
     Promise.all([fetchCustomers(), fetchProducts(), fetchBusiness()]).then(([cRes, pRes, bRes]) => {
       setCustomers(cRes.customers);
-      setProducts(pRes.products);
+      setProducts(pRes.products.filter((product) => product.isActive));
       setBusinessProfile(bRes);
       const bState = bRes.state || 'Karnataka';
       setBusinessState(bState);
@@ -209,16 +211,47 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
 
   // Selected customer details
   const selectedCustomer = useMemo(() => {
-    return customers.find((c) => c.id === customerId);
-  }, [customers, customerId]);
+    return selectedCustomerObj || customers.find((c) => c.id === customerId);
+  }, [selectedCustomerObj, customers, customerId]);
+
+  const resetForm = () => {
+    setCustomerId('');
+    setSelectedCustomerObj(null);
+    setInvoiceDate(new Date().toISOString().split('T')[0]);
+    const d = new Date();
+    d.setDate(d.getDate() + 15);
+    setDueDate(d.toISOString().split('T')[0]);
+    setPlaceOfSupply(businessState);
+    setIsInterState(false);
+    setNotes('Payment due within 15 days of invoice date.');
+    setItems([
+      {
+        productId: '',
+        description: '',
+        unit: 'PCS',
+        quantity: 1,
+        unitPrice: 0,
+        discountAmount: 0,
+        taxRate: 18,
+      },
+    ]);
+    sessionStorage.removeItem('viora_unsaved_invoice_draft');
+    setHasUnsavedDraft(false);
+    setError(null);
+  };
 
   // Update place of supply when customer changes (if not explicitly overridden)
-  const handleCustomerChange = (newCustId: string) => {
+  const handleCustomerChange = (newCustId: string, custObj?: Customer) => {
     setCustomerId(newCustId);
-    const cust = customers.find((c) => c.id === newCustId);
-    if (cust && cust.state) {
-      setPlaceOfSupply(cust.state);
-      setIsInterState(cust.state.toLowerCase() !== businessState.toLowerCase());
+    const cust = custObj || customers.find((c) => c.id === newCustId);
+    if (cust) {
+      setSelectedCustomerObj(cust);
+      if (cust.state) {
+        setPlaceOfSupply(cust.state);
+        setIsInterState(cust.state.toLowerCase() !== businessState.toLowerCase());
+      }
+    } else {
+      setSelectedCustomerObj(null);
     }
   };
 
@@ -426,8 +459,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
         onSuccess(savedInvoice);
       }
 
-      sessionStorage.removeItem('viora_unsaved_invoice_draft');
-      setHasUnsavedDraft(false);
+      resetForm();
       onClose();
     } catch (err: any) {
       setError(err.message || 'Failed to save invoice');
@@ -508,18 +540,11 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
                 <User className="w-3.5 h-3.5 text-teal-600" />
                 Select Customer *
               </label>
-              <select
+              <CustomerSearchSelect
                 value={customerId}
-                onChange={(e) => handleCustomerChange(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
-              >
-                <option value="">-- Choose Customer --</option>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} {c.gstin ? `(GSTIN: ${c.gstin})` : ''}
-                  </option>
-                ))}
-              </select>
+                onChange={(id, cust) => handleCustomerChange(id, cust)}
+                required
+              />
 
               {selectedCustomer && (
                 <div className="mt-2 p-2.5 bg-white rounded-lg border border-slate-200 text-[11px] text-slate-600 space-y-1">

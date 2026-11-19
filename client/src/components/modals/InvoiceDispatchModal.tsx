@@ -148,7 +148,7 @@ export const InvoiceDispatchModal: React.FC<InvoiceDispatchModalProps> = ({
           {/* Dispatch Cards */}
           <div className="space-y-3">
             <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-              Share via Communication Channels:
+              Open Pre-filled Message Drafts:
             </div>
 
             {/* 1. WhatsApp Card */}
@@ -166,10 +166,10 @@ export const InvoiceDispatchModal: React.FC<InvoiceDispatchModalProps> = ({
                   </div>
                   <div>
                     <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                      <span>WhatsApp Share</span>
+                      <span>WhatsApp Draft</span>
                       {waOpened && (
                         <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-semibold inline-flex items-center gap-0.5">
-                          <Check className="w-2.5 h-2.5" /> Opened in WhatsApp
+                          <Check className="w-2.5 h-2.5" /> Draft Opened
                         </span>
                       )}
                     </div>
@@ -190,7 +190,7 @@ export const InvoiceDispatchModal: React.FC<InvoiceDispatchModalProps> = ({
                     onClick={handleOpenWhatsApp}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 shadow-xs transition-colors flex-shrink-0"
                   >
-                    <span>{waOpened ? 'Reopen WhatsApp' : 'Share via WhatsApp'}</span>
+                    <span>{waOpened ? 'Reopen Draft' : 'Open WhatsApp Draft'}</span>
                     <ExternalLink className="w-3 h-3" />
                   </button>
                 ) : (
@@ -216,10 +216,10 @@ export const InvoiceDispatchModal: React.FC<InvoiceDispatchModalProps> = ({
                   </div>
                   <div>
                     <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                      <span>Gmail Compose</span>
+                      <span>Gmail Draft</span>
                       {gmailOpened && (
                         <span className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-800 font-semibold inline-flex items-center gap-0.5">
-                          <Check className="w-2.5 h-2.5" /> Email Draft Opened
+                          <Check className="w-2.5 h-2.5" /> Draft Opened
                         </span>
                       )}
                     </div>
@@ -240,7 +240,7 @@ export const InvoiceDispatchModal: React.FC<InvoiceDispatchModalProps> = ({
                     onClick={handleOpenGmail}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 shadow-xs transition-colors flex-shrink-0"
                   >
-                    <span>{gmailOpened ? 'Reopen Gmail' : 'Compose in Gmail'}</span>
+                    <span>{gmailOpened ? 'Reopen Draft' : 'Open Gmail Draft'}</span>
                     <ExternalLink className="w-3 h-3" />
                   </button>
                 ) : (

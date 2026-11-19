@@ -1,10 +1,11 @@
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../config/prisma';
 import { sendSuccess } from '../../utils/response';
 import { validateRequest } from '../../middlewares/validate';
-import { getOrCreateDefaultBusiness } from '../../utils/businessHelper';
+import { AuthenticatedRequest } from '../../middlewares/auth';
 import { round2, toDecimal } from '../../utils/money';
+import { toTimezoneBoundary } from '../../utils/dateBoundary';
 
 const router = Router();
 
@@ -46,9 +47,9 @@ function istDateToUtcBoundary(dateStr: string, isEnd: boolean = false): Date {
 router.get(
   '/sales',
   validateRequest({ query: salesReportQuerySchema }),
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-      const business = await getOrCreateDefaultBusiness();
+      const business = req.business;
       const { startDate, endDate, groupBy } = req.query as any;
 
       // 1. Invoices filter (ISSUED invoices only)
@@ -60,10 +61,10 @@ router.get(
       if (startDate || endDate) {
         invoiceWhere.invoiceDate = {};
         if (startDate) {
-          invoiceWhere.invoiceDate.gte = istDateToUtcBoundary(startDate, false);
+          invoiceWhere.invoiceDate.gte = toTimezoneBoundary(startDate, false);
         }
         if (endDate) {
-          invoiceWhere.invoiceDate.lte = istDateToUtcBoundary(endDate, true);
+          invoiceWhere.invoiceDate.lte = toTimezoneBoundary(endDate, true);
         }
       }
 
@@ -81,21 +82,22 @@ router.get(
         },
       });
 
-      // 2. Payments filter (Collections by payment date)
+      // 2. Payments filter (Collections by payment date, non-reversed)
       const paymentWhere: any = {
         invoice: {
           businessId: business.id,
           status: 'ISSUED',
         },
+        isReversed: false,
       };
 
       if (startDate || endDate) {
         paymentWhere.paymentDate = {};
         if (startDate) {
-          paymentWhere.paymentDate.gte = istDateToUtcBoundary(startDate, false);
+          paymentWhere.paymentDate.gte = toTimezoneBoundary(startDate, false);
         }
         if (endDate) {
-          paymentWhere.paymentDate.lte = istDateToUtcBoundary(endDate, true);
+          paymentWhere.paymentDate.lte = toTimezoneBoundary(endDate, true);
         }
       }
 
@@ -220,6 +222,7 @@ router.get(
         select: {
           grandTotal: true,
           payments: {
+            where: endDate ? { paymentDate: { lte: istDateToUtcBoundary(endDate, true) } } : undefined,
             select: { amount: true },
           },
         },
