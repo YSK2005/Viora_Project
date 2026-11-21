@@ -174,6 +174,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
             )}
           </button>
 
+          {!isRegister && (
+            <button
+              type="button"
+              onClick={() => {
+                setEmail('admin@viora.test');
+                setPassword('AdminPassword123!');
+                setError(null);
+              }}
+              className="w-full py-2 text-xs font-medium text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg transition-colors flex items-center justify-center gap-1.5"
+            >
+              ⚡ Fill Demo Credentials (admin@viora.test)
+            </button>
+          )}
+
           <div className="pt-2 text-center text-sm text-slate-600">
             {isRegister ? (
               <p>
