@@ -1,5 +1,7 @@
 import {creditsRouter} from './v1/credits.route';
 import { recurringRouter } from './v1/recurring.route';
+import { subscriptionsRouter } from './v1/subscriptions.route';
+import { superAdminRouter } from './v1/superadmin.route';
 import { Router } from 'express';
 import { healthRouter } from './health.route';
 import { authRouter } from './v1/auth.route';
@@ -21,6 +23,14 @@ router.use('/health', healthRouter);
 // Authentication & Session endpoints (public)
 router.use('/auth', authRouter);
 router.use('/v1/auth', authRouter);
+
+// Subscriptions & Razorpay Payment Gateway (public plans, protected subscriptions)
+router.use('/subscriptions', subscriptionsRouter);
+router.use('/v1/subscriptions', subscriptionsRouter);
+
+// Super Admin System Management Portal
+router.use('/superadmin', superAdminRouter);
+router.use('/v1/superadmin', superAdminRouter);
 
 router.use('/credit-notes', requireAuth, creditsRouter);
 router.use('/v1/credit-notes', requireAuth, creditsRouter);

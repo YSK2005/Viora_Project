@@ -46,6 +46,26 @@ const PAGE_TITLES: Record<NavigationKey, { title: string; subtitle: string }> = 
     title: 'Business Settings',
     subtitle: 'Company profile, branding logo, GSTIN, and sequential numbering',
   },
+  superadmin: {
+    title: 'Super Admin Control Center',
+    subtitle: 'Global system settings, Razorpay gateway keys, multi-tenant businesses & subscription plans',
+  },
+  customer_portal: {
+    title: 'Customer License & Subscription',
+    subtitle: 'Active software subscription, billing cycles, and official tax payment receipts',
+  },
+  pricing: {
+    title: 'Software Subscription Plans',
+    subtitle: 'Choose a plan in INR (₹) to activate or upgrade your Viora Bills software license',
+  },
+  payment_success: {
+    title: 'Subscription Payment Confirmed',
+    subtitle: 'Razorpay transaction verified and subscription activated successfully',
+  },
+  payment_failed: {
+    title: 'Payment Transaction Incomplete',
+    subtitle: 'We could not complete your payment transaction',
+  },
 };
 
 export const Navbar: React.FC<NavbarProps> = ({

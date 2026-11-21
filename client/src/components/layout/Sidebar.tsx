@@ -11,10 +11,13 @@ import {
   ChevronLeft,
   ChevronRight,
   Repeat,
+  Sliders,
+  Sparkles,
+  ShieldCheck,
+  LogOut,
 } from 'lucide-react';
 import { NavigationKey, User, UserRole } from '../../types';
 import { BillyWordmark } from '../common/BillyWordmark';
-import { LogOut } from 'lucide-react';
 
 interface SidebarProps {
   currentNav: NavigationKey;
@@ -35,19 +38,6 @@ interface NavItem {
   badge?: string;
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { key: 'invoices', label: 'Invoices', icon: Receipt },
-  { key: 'customers', label: 'Customers', icon: Users },
-  { key: 'products', label: 'Products & Services', icon: Package },
-  { key: 'payments', label: 'Payments', icon: CreditCard },
-  { key: 'reports', label: 'Sales Reports', icon: BarChart3 },
-  { key: 'credits', label: 'Credit Notes', icon: Receipt },
-  { key: 'statements', label: 'Customer Statements', icon: Users },
-  { key: 'recurring', label: 'Recurring', icon: Repeat },
-  { key: 'settings', label: 'Business Settings', icon: Settings },
-];
-
 export const Sidebar: React.FC<SidebarProps> = ({
   currentNav,
   onNavigate,
@@ -60,6 +50,43 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLogout,
 }) => {
   const dialogProps=useDialog(isMobileOpen,onCloseMobile,'Main navigation');
+
+  const navItems: NavItem[] = React.useMemo(() => {
+    if (userRole === 'SUPER_ADMIN') {
+      return [
+        { key: 'superadmin', label: 'Super Admin Control', icon: Sliders, badge: 'MASTER' },
+        { key: 'pricing', label: 'Subscription Plans', icon: Sparkles, badge: 'INR ₹' },
+        { key: 'dashboard', label: 'Billing Dashboard', icon: LayoutDashboard },
+        { key: 'invoices', label: 'All Invoices', icon: Receipt },
+        { key: 'customers', label: 'Customers', icon: Users },
+        { key: 'products', label: 'Master Products', icon: Package },
+        { key: 'settings', label: 'System Settings', icon: Settings },
+      ];
+    }
+    if (userRole === 'CUSTOMER') {
+      return [
+        { key: 'customer_portal', label: 'My Subscription', icon: ShieldCheck, badge: 'PORTAL' },
+        { key: 'pricing', label: 'Upgrade / Plans', icon: Sparkles, badge: 'INR ₹' },
+        { key: 'dashboard', label: 'Billing Software', icon: LayoutDashboard },
+        { key: 'invoices', label: 'Invoices & Bills', icon: Receipt },
+        { key: 'payments', label: 'Receipts & Payments', icon: CreditCard },
+      ];
+    }
+    // OWNER, ACCOUNTANT, VIEWER (Billing Suite Admin)
+    return [
+      { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { key: 'invoices', label: 'Invoices', icon: Receipt },
+      { key: 'customers', label: 'Customers', icon: Users },
+      { key: 'products', label: 'Products & Services', icon: Package },
+      { key: 'payments', label: 'Payments', icon: CreditCard },
+      { key: 'reports', label: 'Sales Reports', icon: BarChart3 },
+      { key: 'credits', label: 'Credit Notes', icon: Receipt },
+      { key: 'statements', label: 'Customer Statements', icon: Users },
+      { key: 'recurring', label: 'Recurring', icon: Repeat },
+      { key: 'pricing', label: 'Software License', icon: Sparkles, badge: 'INR ₹' },
+      { key: 'settings', label: 'Business Settings', icon: Settings },
+    ];
+  }, [userRole]);
   return (
     <>
       {/* Mobile backdrop overlay */}
@@ -119,7 +146,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           )}
 
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentNav === item.key;
 
@@ -187,7 +214,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </div>
                   <span
                     className={`px-1.5 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider ${
-                      userRole === 'OWNER'
+                      userRole === 'SUPER_ADMIN'
+                        ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                        : userRole === 'CUSTOMER'
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                        : userRole === 'OWNER'
                         ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                         : userRole === 'ACCOUNTANT'
                         ? 'bg-teal-500/20 text-teal-300 border border-teal-500/30'

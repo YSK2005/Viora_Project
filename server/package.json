@@ -6,7 +6,8 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "prisma generate && tsc && node scripts/copy-runtime.cjs",
+    "build": "prisma generate && tsc && node scripts/copy-runtime.cjs && esbuild src/index.ts --bundle --platform=node --target=node20 --minify --outfile=dist/bundle.min.js --external:@prisma/client --external:pdfkit",
+    "build:bundle": "esbuild src/index.ts --bundle --platform=node --target=node20 --minify --outfile=dist/bundle.min.js --external:@prisma/client --external:pdfkit",
     "start": "node dist/index.js",
     "type-check": "tsc --noEmit",
     "lint": "tsc --noEmit",

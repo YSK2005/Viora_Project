@@ -1,9 +1,14 @@
 const CreditsView=lazy(()=>import('./components/pages/CreditsView').then(m=>({default:m.CreditsView})));
 const StatementsView=lazy(()=>import('./components/pages/StatementsView').then(m=>({default:m.StatementsView})));
 const RecurringView=lazy(()=>import('./components/pages/RecurringView').then(m=>({default:m.RecurringView})));
+const SuperAdminView = lazy(() => import('./components/pages/SuperAdminView').then(m => ({default: m.SuperAdminView})));
+const CustomerPortalView = lazy(() => import('./components/pages/CustomerPortalView').then(m => ({default: m.CustomerPortalView})));
+const PricingView = lazy(() => import('./components/pages/PricingView').then(m => ({default: m.PricingView})));
+const PaymentSuccessView = lazy(() => import('./components/pages/PaymentSuccessView').then(m => ({default: m.PaymentSuccessView})));
+const PaymentFailedView = lazy(() => import('./components/pages/PaymentFailedView').then(m => ({default: m.PaymentFailedView})));
 import {PageSkeleton} from './components/common/PageSkeleton';
 import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
-import { NavigationKey, Invoice, DashboardSummary, BusinessProfile, SystemHealth, User, UserRole } from './types';
+import { NavigationKey, Invoice, DashboardSummary, BusinessProfile, SystemHealth, User, UserRole, PaymentReceiptData } from './types';
 import { AppLayout } from './components/layout/AppLayout';
 const DashboardView = lazy(() => import('./components/pages/DashboardView').then(m => ({default:m.DashboardView})));
 const InvoicesView = lazy(() => import('./components/pages/InvoicesView').then(m => ({default:m.InvoicesView})));
@@ -31,6 +36,7 @@ import {
   cancelInvoice,
   AuthResponse,
 } from './services/api';
+import { getActivePortal } from './utils/portal';
 import {
   FileCheck2,
 } from 'lucide-react';
@@ -40,7 +46,12 @@ export const App: React.FC = () => {
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
 
-  const [currentNav, setCurrentNav] = useState<NavigationKey>('dashboard');
+  const [currentNav, setCurrentNav] = useState<NavigationKey>(() => {
+    const p = getActivePortal();
+    if (p === 'SUPER_ADMIN') return 'superadmin';
+    if (p === 'CUSTOMER') return 'customer_portal';
+    return 'dashboard';
+  });
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [dashboardSummary, setDashboardSummary] = useState<DashboardSummary | null>(null);
   const [isNewInvoiceOpen, setIsNewInvoiceOpen] = useState(false);
@@ -55,6 +66,12 @@ export const App: React.FC = () => {
   const [isStale, setIsStale] = useState(false);
   const [selectedCustomerFilter, setSelectedCustomerFilter] = useState('');
   const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
+  const [activeReceiptData, setActiveReceiptData] = useState<PaymentReceiptData | null>(null);
+  const [paymentFailureData, setPaymentFailureData] = useState<{
+    message?: string;
+    code?: string;
+    orderId?: string;
+  } | null>(null);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -101,6 +118,14 @@ export const App: React.FC = () => {
         setUserRole(data.role);
         setBusinessProfile(data.business);
         setIsAuthChecking(false);
+        const p = getActivePortal();
+        if (p === 'SUPER_ADMIN' || data.role === 'SUPER_ADMIN') {
+          setCurrentNav('superadmin');
+        } else if (p === 'CUSTOMER' || data.role === 'CUSTOMER') {
+          setCurrentNav('customer_portal');
+        } else {
+          setCurrentNav('dashboard');
+        }
         return true;
       }
     } catch (err) {
@@ -137,6 +162,14 @@ export const App: React.FC = () => {
     setUserRole(data.role);
     setBusinessProfile(data.business);
     setIsAuthChecking(false);
+    const p = getActivePortal();
+    if (p === 'SUPER_ADMIN' || data.role === 'SUPER_ADMIN') {
+      setCurrentNav('superadmin');
+    } else if (p === 'CUSTOMER' || data.role === 'CUSTOMER') {
+      setCurrentNav('customer_portal');
+    } else {
+      setCurrentNav('dashboard');
+    }
     loadData();
   };
 
@@ -151,6 +184,10 @@ export const App: React.FC = () => {
     setUserRole(null);
     setInvoices([]);
     setDashboardSummary(null);
+    const p = getActivePortal();
+    if (p === 'SUPER_ADMIN') setCurrentNav('superadmin');
+    else if (p === 'CUSTOMER') setCurrentNav('customer_portal');
+    else setCurrentNav('dashboard');
   };
 
   const handleIssueInvoice = async (inv: Invoice) => {
@@ -428,6 +465,49 @@ export const App: React.FC = () => {
         {currentNav==='credits' && <CreditsView onChanged={loadData} canIssue={userRole==='OWNER'||userRole==='ACCOUNTANT'} />}
         {currentNav==='statements' && <StatementsView />}
         {currentNav === 'recurring' && <RecurringView onInvoiceCreated={loadData} />}
+
+        {/* Big Update: Dedicated Portals & Return Views */}
+        {currentNav === 'superadmin' && (
+          <SuperAdminView
+            onSwitchToWorkspace={(_bizId) => {
+              setCurrentNav('dashboard');
+              loadData();
+            }}
+          />
+        )}
+        {currentNav === 'customer_portal' && (
+          <CustomerPortalView
+            onUpgradePlan={() => setCurrentNav('pricing')}
+            onLaunchWorkspace={() => setCurrentNav('dashboard')}
+          />
+        )}
+        {currentNav === 'pricing' && (
+          <PricingView
+            isAuthenticated={Boolean(currentUser)}
+            onPaymentSuccess={(receipt: any) => {
+              setActiveReceiptData(receipt);
+              setCurrentNav('payment_success');
+            }}
+            onPaymentFailed={(failInfo: any) => {
+              setPaymentFailureData(failInfo);
+              setCurrentNav('payment_failed');
+            }}
+          />
+        )}
+        {currentNav === 'payment_success' && (
+          <PaymentSuccessView
+            receiptData={activeReceiptData}
+            onGoToPortal={() => setCurrentNav('customer_portal')}
+            onGoToBilling={() => setCurrentNav('dashboard')}
+          />
+        )}
+        {currentNav === 'payment_failed' && (
+          <PaymentFailedView
+            errorDetails={paymentFailureData}
+            onRetry={() => setCurrentNav('pricing')}
+            onViewPlans={() => setCurrentNav('pricing')}
+          />
+        )}
         </Suspense>
       </AppLayout>
 

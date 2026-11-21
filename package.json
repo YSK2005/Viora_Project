@@ -9,7 +9,10 @@
   ],
   "scripts": {
     "postinstall": "npm run prisma:generate --workspace=server",
-    "dev": "concurrently -k -p \"[{name}]\" -n \"CLIENT,SERVER\" -c \"teal.bold,blue.bold\" \"npm run dev --workspace=client\" \"npm run dev --workspace=server\"",
+    "dev": "concurrently -k -p \"[{name}]\" -n \"SERVER,ADMIN:5173,CUSTOMER:5174,SUPERADMIN:5175\" -c \"blue.bold,teal.bold,cyan.bold,magenta.bold\" \"npm run dev --workspace=server\" \"npm run dev:admin --workspace=client\" \"npm run dev:customer --workspace=client\" \"npm run dev:superadmin --workspace=client\"",
+    "dev:admin": "npm run dev:admin --workspace=client",
+    "dev:customer": "npm run dev:customer --workspace=client",
+    "dev:superadmin": "npm run dev:superadmin --workspace=client",
     "dev:client": "npm run dev --workspace=client",
     "dev:server": "npm run dev --workspace=server",
     "build": "npm run build --workspace=server && npm run build --workspace=client",

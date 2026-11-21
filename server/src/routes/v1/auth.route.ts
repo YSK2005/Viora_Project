@@ -22,6 +22,7 @@ const registerSchema = z.object({
   password: z.string().min(12, 'Password must be at least 12 characters').max(128),
   name: z.string().trim().min(2, 'Name must be at least 2 characters').max(100),
   businessName: z.string().trim().min(2).max(100).optional(),
+  role: z.enum(['SUPER_ADMIN', 'OWNER', 'ACCOUNTANT', 'VIEWER', 'CUSTOMER']).optional().default('OWNER'),
 });
 
 const loginSchema = z.object({
@@ -48,7 +49,7 @@ router.post(
   validateRequest({ body: registerSchema }),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-      const { email, password, name, businessName } = req.body;
+      const { email, password, name, businessName, role = 'OWNER' } = req.body;
 
       const existingUser = await prisma.user.findUnique({ where: { email } });
       if (existingUser) {
@@ -63,29 +64,31 @@ router.post(
             email,
             name,
             passwordHash,
+            role,
           },
         });
 
-        // Public signup may only create a new, isolated business.
-        const newBiz = await tx.business.create({
-          data: {
-            name: businessName || `${name}'s Business`,
-            address: 'Business Address',
-            phone: '+91 98765 43210',
-            email,
-            state: 'Karnataka',
-            invoicePrefix: 'INV',
-          },
-        });
-        const targetBusinessId = newBiz.id;
+        // CUSTOMER accounts don't create an initial business until they subscribe or want one
+        if (role !== 'CUSTOMER') {
+          const newBiz = await tx.business.create({
+            data: {
+              name: businessName || `${name}'s Business`,
+              address: 'Business Address',
+              phone: '+91 98765 43210',
+              email,
+              state: 'Karnataka',
+              invoicePrefix: 'INV',
+            },
+          });
 
-        await tx.businessMembership.create({
-          data: {
-            userId: newUser.id,
-            businessId: targetBusinessId,
-            role: 'OWNER',
-          },
-        });
+          await tx.businessMembership.create({
+            data: {
+              userId: newUser.id,
+              businessId: newBiz.id,
+              role: role === 'SUPER_ADMIN' ? 'OWNER' : role,
+            },
+          });
+        }
 
         return newUser;
       });
@@ -100,10 +103,10 @@ router.post(
         },
       });
 
-      const activeMembership = fullUser!.memberships[0];
+      const activeMembership = fullUser?.memberships?.[0] || null;
       const { rawToken, expiresAt } = await createSessionRecord(
         user.id,
-        activeMembership.businessId,
+        activeMembership?.businessId,
         req.ip,
         req.get('user-agent')
       );
@@ -120,9 +123,10 @@ router.post(
             id: user.id,
             email: user.email,
             name: user.name,
+            role: user.role,
           },
-          business: activeMembership.business,
-          role: activeMembership.role,
+          business: activeMembership?.business || null,
+          role: user.role,
         },
         'Account registered and signed in successfully',
         201
@@ -202,14 +206,14 @@ router.post(
       failedLoginTracker.delete(normalizedEmail);
 
       const memberships = user.memberships;
-      if (memberships.length === 0) {
+      if (memberships.length === 0 && user.role !== 'SUPER_ADMIN' && user.role !== 'CUSTOMER') {
         throw new AppError('No business access. Contact a business owner.', 403, ErrorCode.ERR_NO_MEMBERSHIP);
       }
 
-      const activeMembership = memberships[0];
+      const activeMembership = memberships.length > 0 ? memberships[0] : null;
       const { rawToken, expiresAt } = await createSessionRecord(
         user.id,
-        activeMembership.businessId,
+        activeMembership?.businessId,
         req.ip,
         req.get('user-agent')
       );
@@ -226,9 +230,10 @@ router.post(
             id: user.id,
             email: user.email,
             name: user.name,
+            role: user.role,
           },
-          business: activeMembership.business,
-          role: activeMembership.role,
+          business: activeMembership?.business || null,
+          role: user.role === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : user.role === 'CUSTOMER' ? 'CUSTOMER' : (activeMembership ? activeMembership.role : user.role),
           memberships: memberships.map((m) => ({
             businessId: m.businessId,
             businessName: m.business.name,

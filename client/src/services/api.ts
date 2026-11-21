@@ -56,6 +56,7 @@ export async function registerUser(data: {
   password: string;
   name: string;
   businessName?: string;
+  role?: UserRole;
 }): Promise<AuthResponse> {
   const res = await apiFetch('/auth/register', {
     method: 'POST',
@@ -719,4 +720,181 @@ export async function deleteRecurringSchedule(id: string): Promise<void> {
     throw new Error(err.error?.message || err.message || 'Failed to delete recurring schedule');
   }
 }
+
+// -------------------------------------------------------------
+// Subscriptions & Razorpay API
+// -------------------------------------------------------------
+export async function fetchSubscriptionPlans(): Promise<any[]> {
+  const res = await apiFetch('/subscriptions/plans');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || 'Failed to fetch subscription plans');
+  }
+  const json = await res.json();
+  return json.data?.plans || [];
+}
+
+export async function fetchMySubscription(): Promise<{
+  hasActiveSubscription: boolean;
+  subscription: any | null;
+  history: any[];
+}> {
+  const res = await apiFetch('/subscriptions/my-subscription');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || 'Failed to fetch subscription details');
+  }
+  const json = await res.json();
+  return json.data;
+}
+
+export async function createSubscriptionOrder(
+  planId: string,
+  billingCycle: 'MONTHLY' | 'YEARLY' = 'MONTHLY'
+): Promise<any> {
+  const res = await apiFetch('/subscriptions/create-order', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ planId, billingCycle }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || 'Failed to initialize subscription order');
+  }
+  const json = await res.json();
+  return json.data;
+}
+
+export async function verifySubscriptionPayment(payload: {
+  orderId: string;
+  paymentId: string;
+  signature: string;
+  planId: string;
+  billingCycle: 'MONTHLY' | 'YEARLY';
+}): Promise<{ subscription: any; receipt: any }> {
+  const res = await apiFetch('/subscriptions/verify-payment', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || 'Payment verification failed');
+  }
+  const json = await res.json();
+  return json.data;
+}
+
+export async function cancelSubscription(): Promise<any> {
+  const res = await apiFetch('/subscriptions/cancel', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || 'Failed to cancel subscription');
+  }
+  const json = await res.json();
+  return json.data;
+}
+
+// -------------------------------------------------------------
+// Super Admin API
+// -------------------------------------------------------------
+export async function fetchSuperAdminStats(): Promise<any> {
+  const res = await apiFetch('/superadmin/stats');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || 'Failed to fetch super admin platform metrics');
+  }
+  const json = await res.json();
+  return json.data;
+}
+
+export async function fetchSuperAdminTenants(params?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+}): Promise<{ tenants: any[]; pagination: any }> {
+  const q = new URLSearchParams();
+  if (params?.page) q.append('page', String(params.page));
+  if (params?.limit) q.append('limit', String(params.limit));
+  if (params?.search) q.append('search', params.search);
+
+  const res = await apiFetch(`/superadmin/tenants?${q.toString()}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || 'Failed to fetch tenant list');
+  }
+  const json = await res.json();
+  return json.data;
+}
+
+export async function fetchSuperAdminUsers(params?: {
+  page?: number;
+  limit?: number;
+}): Promise<{ users: any[]; pagination: any }> {
+  const q = new URLSearchParams();
+  if (params?.page) q.append('page', String(params.page));
+  if (params?.limit) q.append('limit', String(params.limit));
+
+  const res = await apiFetch(`/superadmin/users?${q.toString()}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || 'Failed to fetch user list');
+  }
+  const json = await res.json();
+  return json.data;
+}
+
+export async function fetchSuperAdminSettings(): Promise<any[]> {
+  const res = await apiFetch('/superadmin/settings');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || 'Failed to fetch system settings');
+  }
+  const json = await res.json();
+  return json.data?.settings || [];
+}
+
+export async function updateSuperAdminSettings(
+  settings: Array<{ key: string; value: string; category?: string; description?: string }>
+): Promise<any[]> {
+  const res = await apiFetch('/superadmin/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ settings }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || 'Failed to update system settings');
+  }
+  const json = await res.json();
+  return json.data?.settings || [];
+}
+
+export async function fetchSuperAdminProducts(): Promise<any[]> {
+  const res = await apiFetch('/superadmin/products');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || 'Failed to fetch global master products');
+  }
+  const json = await res.json();
+  return json.data?.products || [];
+}
+
+export async function updateSuperAdminPlan(id: string, data: any): Promise<any> {
+  const res = await apiFetch(`/superadmin/plans/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || 'Failed to update subscription plan');
+  }
+  const json = await res.json();
+  return json.data?.plan;
+}
+
 

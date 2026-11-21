@@ -8,14 +8,20 @@ export type NavigationKey =
   | 'settings'
   | 'credits'
   | 'statements'
-  | 'recurring';
+  | 'recurring'
+  | 'superadmin'
+  | 'customer_portal'
+  | 'pricing'
+  | 'payment_success'
+  | 'payment_failed';
 
-export type UserRole = 'OWNER' | 'ACCOUNTANT' | 'VIEWER';
+export type UserRole = 'SUPER_ADMIN' | 'OWNER' | 'ACCOUNTANT' | 'VIEWER' | 'CUSTOMER';
 
 export interface User {
   id: string;
   email: string;
   name: string;
+  role?: UserRole;
 }
 
 export interface BusinessMembership {
@@ -206,3 +212,102 @@ export interface SystemHealth {
     message: string;
   };
 }
+
+export type SubscriptionStatus = 'ACTIVE' | 'PENDING' | 'EXPIRED' | 'CANCELLED';
+export type BillingCycle = 'MONTHLY' | 'YEARLY';
+
+export interface SubscriptionPlan {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  monthlyPrice: number;
+  yearlyPrice: number;
+  invoiceLimit: number;
+  businessLimit: number;
+  features: string[];
+  isActive: boolean;
+}
+
+export interface Subscription {
+  id: string;
+  userId: string;
+  planId: string;
+  plan: SubscriptionPlan;
+  status: SubscriptionStatus;
+  billingCycle: BillingCycle;
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  amountPaid: number;
+  currency: string;
+  razorpayOrderId?: string;
+  razorpayPaymentId?: string;
+  receiptNumber: string;
+  cancelledAt?: string;
+  createdAt: string;
+}
+
+export interface SystemSetting {
+  id: string;
+  key: string;
+  value: string;
+  category: string;
+  description?: string;
+  updatedBy?: string;
+  updatedAt: string;
+}
+
+export interface PlatformStats {
+  totalTenants: number;
+  totalUsers: number;
+  activeSubscriptionsCount: number;
+  totalRevenue: number;
+  totalInvoices: number;
+  totalPayments: number;
+  recentTenants: Array<{
+    id: string;
+    name: string;
+    email: string;
+    phone: string;
+    invoicesCount: number;
+    customersCount: number;
+    createdAt: string;
+  }>;
+}
+
+export interface TenantItem {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  gstin?: string;
+  state?: string;
+  invoicesCount: number;
+  customersCount: number;
+  productsCount: number;
+  owners: Array<{ name: string; email: string }>;
+  createdAt: string;
+}
+
+export interface SuperAdminUserItem {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  businesses: string[];
+  activePlan: string;
+  createdAt: string;
+}
+
+export interface PaymentReceiptData {
+  receiptNumber: string;
+  orderId: string;
+  paymentId: string;
+  amount: number;
+  currency: string;
+  planName: string;
+  billingCycle: string;
+  validUntil: string;
+}
+

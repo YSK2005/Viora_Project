@@ -23,15 +23,21 @@ if "%PG_STATUS%"=="True" (
 )
 
 echo.
-echo [2/3] Starting Backend API Server (Port 5000) and Frontend (Port 5173)...
+echo [2/3] Launching Dedicated Role Portals:
+echo   - Port 5173 : Billing Admin Suite (Invoices, Clients, Payments)
+echo   - Port 5174 : SaaS Customer Portal (Subscriptions, Plans, Receipts)
+echo   - Port 5175 : Super Admin Control (Platform Settings, Razorpay Keys)
+echo   - Port 5000 : Unified Backend API Engine
 echo.
 echo ===================================================
-echo App will open in your browser automatically!
-echo Press Ctrl + C in this window to stop the servers.
+echo Opening portals in your browser...
+echo Press Ctrl + C in this window to stop all services.
 echo ===================================================
 echo.
 
 start http://localhost:5173
+start http://localhost:5174
+start http://localhost:5175
 
 npm run dev
 pause

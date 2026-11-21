@@ -9,10 +9,12 @@ export interface AuthenticatedRequest extends Request {
     id: string;
     email: string;
     name: string;
+    role?: UserRole;
   };
   business?: any;
   membership?: any;
   role?: UserRole;
+  userRole?: UserRole;
   session?: any;
   sessionToken?: string;
 }
@@ -59,23 +61,26 @@ export async function requireAuth(
     const user = session.user;
     const memberships = user.memberships || [];
 
-    // Revoked or orphaned users must never gain access implicitly.
-    if (memberships.length === 0) {
+    // SUPER_ADMIN and CUSTOMER users are allowed without tenant business membership
+    const isGlobalSuperAdmin = user.role === 'SUPER_ADMIN';
+    const isCustomerAccount = user.role === 'CUSTOMER';
+
+    if (memberships.length === 0 && !isGlobalSuperAdmin && !isCustomerAccount) {
       throw new AppError('No business access. Contact a business owner.', 403, ErrorCode.ERR_NO_MEMBERSHIP);
     }
 
-    // Determine active business
+    // Determine active business if user has memberships
+    let activeMembership = memberships.length > 0 ? memberships[0] : null;
     const requestedBizId = req.headers['x-business-id'] as string;
-    let activeMembership = memberships[0];
 
-    if (requestedBizId) {
+    if (requestedBizId && memberships.length > 0) {
       const found = memberships.find((m) => m.businessId === requestedBizId);
       if (found) {
         activeMembership = found;
-      } else {
+      } else if (!isGlobalSuperAdmin) {
         throw new AppError('You do not have access to the specified business', 403, ErrorCode.ERR_FORBIDDEN_BUSINESS);
       }
-    } else if (session.activeBusinessId) {
+    } else if (session.activeBusinessId && memberships.length > 0) {
       const found = memberships.find((m) => m.businessId === session.activeBusinessId);
       if (found) {
         activeMembership = found;
@@ -86,10 +91,12 @@ export async function requireAuth(
       id: user.id,
       email: user.email,
       name: user.name,
+      role: user.role,
     };
-    req.business = activeMembership.business;
+    req.business = activeMembership ? activeMembership.business : null;
     req.membership = activeMembership;
-    req.role = activeMembership.role;
+    req.role = isGlobalSuperAdmin ? 'SUPER_ADMIN' : isCustomerAccount ? 'CUSTOMER' : (activeMembership ? activeMembership.role : user.role);
+    req.userRole = user.role;
     req.session = session;
     req.sessionToken = rawToken;
 
@@ -101,6 +108,9 @@ export async function requireAuth(
 
 export function requireRole(allowedRoles: UserRole[]) {
   return (req: AuthenticatedRequest, _res: Response, next: NextFunction) => {
+    if (req.userRole === 'SUPER_ADMIN' || req.role === 'SUPER_ADMIN') {
+      return next();
+    }
     if (!req.role || !allowedRoles.includes(req.role)) {
       return next(
         new AppError(
