@@ -650,6 +650,7 @@ export interface RecurringSchedule {
   customerName: string;
   invoiceNumber: string;
   frequency: 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'ANNUALLY';
+  billingDay?: number;
   nextRunDate: string;
   lastRunAt?: string;
   status: 'ACTIVE' | 'PAUSED';

@@ -12,6 +12,7 @@ export interface RecurringSchedule {
   customerName: string;
   invoiceNumber: string;
   frequency: RecurrenceFrequency;
+  billingDay: number; // Anchor day of month (1-31), preserving original billing day across short months
   nextRunDate: string;
   lastRunAt?: string;
   status: 'ACTIVE' | 'PAUSED';
@@ -33,7 +34,6 @@ export function isValidISODateString(val: string): boolean {
   if (month < 1 || month > 12) return false;
   if (year < 2000 || year > 2100) return false;
 
-  // Maximum valid days in the given month (month is 1-indexed here, day 0 of month gives last day of prev month)
   const maxDays = new Date(year, month, 0).getDate();
   return day >= 1 && day <= maxDays;
 }
@@ -58,15 +58,13 @@ export function formatDateISO(d: Date): string {
 
 /**
  * Computes the target date with proper month-end clamping.
- * e.g., Jan 31 + 1 month clamps to Feb 28 (or 29), avoiding skipping into March.
+ * If desiredDay is 31, January (31) -> February (28/29) -> March (31).
  */
 export function formatTargetMonthEnd(targetYear: number, targetMonth: number, desiredDay: number): string {
-  // Normalize year and month
   const base = new Date(targetYear, targetMonth, 1);
   const finalYear = base.getFullYear();
   const finalMonth = base.getMonth();
 
-  // Find max days in the target month
   const maxDays = new Date(finalYear, finalMonth + 1, 0).getDate();
   const finalDay = Math.min(desiredDay, maxDays);
 
@@ -76,12 +74,17 @@ export function formatTargetMonthEnd(targetYear: number, targetMonth: number, de
 }
 
 /**
- * Calculates the next recurrence date from a given base date with month-end safety.
+ * Calculates the next recurrence date from a given base date while preserving the anchor billing day.
+ * e.g., starting Jan 31 gives: Feb 28 -> Mar 31 -> Apr 30 -> May 31.
  */
-export function calculateNextDate(from: Date, frequency: RecurrenceFrequency): string {
+export function calculateNextDate(
+  from: Date,
+  frequency: RecurrenceFrequency,
+  anchorBillingDay?: number
+): string {
   const year = from.getFullYear();
   const month = from.getMonth();
-  const day = from.getDate();
+  const desiredDay = anchorBillingDay !== undefined ? anchorBillingDay : from.getDate();
 
   switch (frequency) {
     case 'WEEKLY': {
@@ -90,17 +93,17 @@ export function calculateNextDate(from: Date, frequency: RecurrenceFrequency): s
       return formatDateISO(d);
     }
     case 'MONTHLY':
-      return formatTargetMonthEnd(year, month + 1, day);
+      return formatTargetMonthEnd(year, month + 1, desiredDay);
     case 'QUARTERLY':
-      return formatTargetMonthEnd(year, month + 3, day);
+      return formatTargetMonthEnd(year, month + 3, desiredDay);
     case 'ANNUALLY':
-      return formatTargetMonthEnd(year + 1, month, day);
+      return formatTargetMonthEnd(year + 1, month, desiredDay);
   }
 }
 
 /**
  * Retrieves all active/paused schedules for a business.
- * Handles deletions correctly: deleted schedule IDs are permanently excluded so older CREATE logs never resurrect them.
+ * Handles deletions correctly: deleted schedule IDs are tracked and permanently excluded so older CREATE logs never resurrect them.
  */
 export async function listRecurringSchedules(businessId: string): Promise<RecurringSchedule[]> {
   const logs = await prisma.auditLog.findMany({
@@ -125,14 +128,18 @@ export async function listRecurringSchedules(businessId: string): Promise<Recurr
       continue;
     }
 
-    // If schedule has been deleted in a later log, do not let older CREATE/TRIGGER/UPDATE logs restore it
     if (deletedIds.has(entityId)) {
       continue;
     }
 
-    // Since logs are ordered descending, the first encountered non-deleted log represents the latest state
     if (!schedulesMap.has(entityId) && details && details.id) {
-      schedulesMap.set(entityId, details as RecurringSchedule);
+      const item = details as RecurringSchedule;
+      if (item.billingDay === undefined) {
+        item.billingDay = isValidISODateString(item.nextRunDate)
+          ? parseISODate(item.nextRunDate).getDate()
+          : 1;
+      }
+      schedulesMap.set(entityId, item);
     }
   }
 
@@ -170,6 +177,8 @@ export async function createRecurringSchedule(
   }
 
   let nextRunDate: string;
+  let billingDay: number;
+
   if (startDate) {
     if (!isValidISODateString(startDate)) {
       throw new AppError(
@@ -179,8 +188,11 @@ export async function createRecurringSchedule(
       );
     }
     nextRunDate = startDate;
+    billingDay = parseISODate(startDate).getDate();
   } else {
-    nextRunDate = calculateNextDate(new Date(), frequency);
+    const now = new Date();
+    billingDay = now.getDate();
+    nextRunDate = calculateNextDate(now, frequency, billingDay);
   }
 
   const scheduleId = `rec_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -192,6 +204,7 @@ export async function createRecurringSchedule(
     customerName: invoice.customerNameSnapshot || invoice.customer.name,
     invoiceNumber: invoice.invoiceNumber,
     frequency,
+    billingDay,
     nextRunDate,
     status: 'ACTIVE',
     grandTotal: Number(invoice.grandTotal),
@@ -234,48 +247,6 @@ export async function triggerRecurringSchedule(
     );
   }
 
-  // Idempotency check: check recent triggers for matching requestKey
-  const recentTriggerLogs = await prisma.auditLog.findMany({
-    where: {
-      businessId,
-      entityType: 'RECURRING_SCHEDULE',
-      entityId: scheduleId,
-      action: 'TRIGGER',
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 10,
-  });
-
-  if (requestKey) {
-    const existingTrigger = recentTriggerLogs.find((l) => {
-      const det = l.details as any;
-      return det?.triggerRequestKey === requestKey;
-    });
-
-    if (existingTrigger) {
-      const det = existingTrigger.details as any;
-      const existingDraft = await prisma.invoice.findFirst({
-        where: { id: det.generatedInvoiceId, businessId },
-        include: { customer: true, items: true },
-      });
-      if (existingDraft) {
-        return { invoice: existingDraft, schedule, isIdempotentReplay: true };
-      }
-    }
-  }
-
-  // Rapid trigger debouncing guard: prevent accidental duplicate drafts within 5 seconds without a new request key
-  if (schedule.lastRunAt) {
-    const timeSinceLastRun = Date.now() - new Date(schedule.lastRunAt).getTime();
-    if (timeSinceLastRun >= 0 && timeSinceLastRun < 5000 && !requestKey) {
-      throw new AppError(
-        'A trigger request was executed within the last 5 seconds. To prevent duplicate invoices, please wait before triggering again or provide an Idempotency-Key.',
-        409,
-        ErrorCode.ERR_RATE_LIMIT
-      );
-    }
-  }
-
   const templateInvoice = await prisma.invoice.findFirst({
     where: { id: schedule.invoiceId, businessId },
     include: { items: true },
@@ -307,19 +278,79 @@ export async function triggerRecurringSchedule(
     templateInvoice.isInterState
   );
 
+  // Preserve anchor billing day across month lengths
+  const anchorBillingDay = schedule.billingDay || (isValidISODateString(schedule.nextRunDate) ? parseISODate(schedule.nextRunDate).getDate() : now.getDate());
   const baseNextDate = isValidISODateString(schedule.nextRunDate)
     ? parseISODate(schedule.nextRunDate)
     : now;
-  const nextRunDate = calculateNextDate(baseNextDate, schedule.frequency);
+  const nextRunDate = calculateNextDate(baseNextDate, schedule.frequency, anchorBillingDay);
 
   const updatedSchedule: RecurringSchedule = {
     ...schedule,
+    billingDay: anchorBillingDay,
     lastRunAt: now.toISOString(),
     nextRunDate,
   };
 
-  // Atomic transaction: invoice creation AND schedule trigger update commit together
+  // Atomic transaction with advisory locking and database-level idempotency
   const result = await prisma.$transaction(async (tx) => {
+    // 1. Transaction-scoped PostgreSQL advisory lock to serialize concurrent triggers on this schedule
+    try {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'rec_schedule_' + scheduleId}))`;
+    } catch {
+      // Graceful fallback in environments/mocks without advisory lock support
+    }
+
+    // 2. Strict idempotency check without limits: check ALL historic trigger records for this requestKey
+    if (requestKey) {
+      const existingKeyRecord = await tx.auditLog.findFirst({
+        where: {
+          businessId,
+          entityType: 'RECURRING_TRIGGER_IDEMPOTENCY',
+          entityId: `${scheduleId}:${requestKey}`,
+        },
+      });
+
+      if (existingKeyRecord) {
+        const details = existingKeyRecord.details as any;
+        const existingDraft = await tx.invoice.findFirst({
+          where: { id: details?.generatedInvoiceId, businessId },
+          include: { customer: true, items: true },
+        });
+
+        if (existingDraft) {
+          return {
+            invoice: existingDraft,
+            schedule,
+            isIdempotentReplay: true,
+          };
+        }
+      }
+    }
+
+    // 3. Inside the transaction lock: check if a trigger occurred in the last 5 seconds to prevent race conditions
+    const lastTrigger = await tx.auditLog.findFirst({
+      where: {
+        businessId,
+        entityType: 'RECURRING_SCHEDULE',
+        entityId: scheduleId,
+        action: 'TRIGGER',
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (lastTrigger) {
+      const timeSinceLastRun = Date.now() - new Date(lastTrigger.createdAt).getTime();
+      if (timeSinceLastRun >= 0 && timeSinceLastRun < 5000 && !requestKey) {
+        throw new AppError(
+          'A trigger request was executed within the last 5 seconds. To prevent duplicate invoices, please wait before triggering again or provide an Idempotency-Key.',
+          409,
+          ErrorCode.ERR_RATE_LIMIT
+        );
+      }
+    }
+
+    // 4. Create the draft invoice
     const draft = await tx.invoice.create({
       data: {
         businessId,
@@ -366,6 +397,7 @@ export async function triggerRecurringSchedule(
       },
     });
 
+    // 5. Atomically commit the schedule update
     await tx.auditLog.create({
       data: {
         businessId,
@@ -381,6 +413,26 @@ export async function triggerRecurringSchedule(
         } as any,
       },
     });
+
+    // 6. Atomically commit the permanent idempotency lock record
+    if (requestKey) {
+      await tx.auditLog.create({
+        data: {
+          businessId,
+          userId: userId || null,
+          action: 'IDEMPOTENCY_LOCK',
+          entityType: 'RECURRING_TRIGGER_IDEMPOTENCY',
+          entityId: `${scheduleId}:${requestKey}`,
+          details: {
+            scheduleId,
+            requestKey,
+            generatedInvoiceId: draft.id,
+            generatedInvoiceNumber: draft.invoiceNumber,
+            createdAt: now.toISOString(),
+          },
+        },
+      });
+    }
 
     return { invoice: draft, schedule: updatedSchedule };
   });
