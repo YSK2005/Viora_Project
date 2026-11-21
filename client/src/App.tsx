@@ -1,5 +1,6 @@
 const CreditsView=lazy(()=>import('./components/pages/CreditsView').then(m=>({default:m.CreditsView})));
 const StatementsView=lazy(()=>import('./components/pages/StatementsView').then(m=>({default:m.StatementsView})));
+const RecurringView=lazy(()=>import('./components/pages/RecurringView').then(m=>({default:m.RecurringView})));
 import {PageSkeleton} from './components/common/PageSkeleton';
 import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { NavigationKey, Invoice, DashboardSummary, BusinessProfile, SystemHealth, User, UserRole } from './types';
@@ -320,10 +321,24 @@ export const App: React.FC = () => {
         onSuccess={handleAuthSuccess}
       />
 
-      {/* Toast Alert */}
+      {/* Toast Alert Screen Reader Live Region */}
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+      >
+        {actionNotice || ''}
+      </div>
+
+      {/* Visual Toast Alert */}
       {actionNotice && (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white text-xs px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2 animate-in slide-in-from-bottom-2 no-print">
-          <FileCheck2 className="w-4 h-4 text-purple-400" />
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white text-xs px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2 animate-in slide-in-from-bottom-2 no-print"
+        >
+          <FileCheck2 className="w-4 h-4 text-purple-400" aria-hidden="true" />
           <span>{actionNotice}</span>
         </div>
       )}
@@ -412,6 +427,7 @@ export const App: React.FC = () => {
         {currentNav === 'settings' && <SettingsView />}
         {currentNav==='credits' && <CreditsView onChanged={loadData} canIssue={userRole==='OWNER'||userRole==='ACCOUNTANT'} />}
         {currentNav==='statements' && <StatementsView />}
+        {currentNav === 'recurring' && <RecurringView onInvoiceCreated={loadData} />}
         </Suspense>
       </AppLayout>
 

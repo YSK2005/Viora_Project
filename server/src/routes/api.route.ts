@@ -1,4 +1,5 @@
 import {creditsRouter} from './v1/credits.route';
+import { recurringRouter } from './v1/recurring.route';
 import { Router } from 'express';
 import { healthRouter } from './health.route';
 import { authRouter } from './v1/auth.route';
@@ -23,6 +24,9 @@ router.use('/v1/auth', authRouter);
 
 router.use('/credit-notes', requireAuth, creditsRouter);
 router.use('/v1/credit-notes', requireAuth, creditsRouter);
+
+router.use('/recurring', requireAuth, recurringRouter);
+router.use('/v1/recurring', requireAuth, recurringRouter);
 
 // Core business endpoints protected by requireAuth
 router.use('/business', requireAuth, businessRouter);

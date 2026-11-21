@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Menu,
   Search,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { NavigationKey, SystemHealth } from '../../types';
 
@@ -39,6 +41,7 @@ const PAGE_TITLES: Record<NavigationKey, { title: string; subtitle: string }> = 
   },
   credits: {title:'Credit Notes',subtitle:'Full and partial credits against original invoice lines'},
   statements: {title:'Customer Statements',subtitle:'Current invoices, payments, credits and balances'},
+  recurring: {title:'Recurring Invoices',subtitle:'Automated subscriptions, client retainers and periodic schedules'},
   settings: {
     title: 'Business Settings',
     subtitle: 'Company profile, branding logo, GSTIN, and sequential numbering',
@@ -51,6 +54,27 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenGlobalSearch,
 }) => {
   const currentPage = PAGE_TITLES[currentNav];
+
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('viora_theme');
+      if (saved) return saved === 'dark';
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('viora_theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('viora_theme', 'light');
+    }
+  }, [isDark]);
+
+  const toggleTheme = () => setIsDark((prev) => !prev);
 
   return (
     <header className="h-16 bg-white border-b border-slate-200/90 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-subtle">
@@ -79,14 +103,29 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </div>
 
-      {/* Right side: Search */}
+      {/* Right side: Dark Mode Toggle & Search */}
       <div className="flex items-center gap-2 sm:gap-3">
+        {/* Dark Mode Toggle */}
+        <button
+          onClick={toggleTheme}
+          type="button"
+          className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {isDark ? (
+            <Sun className="w-5 h-5 text-amber-400" />
+          ) : (
+            <Moon className="w-5 h-5 text-slate-600" />
+          )}
+        </button>
+
         {/* Mobile Search Button */}
         <button
           onClick={onOpenGlobalSearch}
           type="button"
           className="xl:hidden p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-          aria-label="Open search"
+          aria-label="Open search dialog"
           title="Search (Ctrl + K)"
         >
           <Search className="w-5 h-5" />
@@ -96,6 +135,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <button
           onClick={onOpenGlobalSearch}
           type="button"
+          aria-label="Search records and invoices (Ctrl + K)"
           className="hidden xl:flex items-center justify-between w-72 pl-3 pr-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-400 hover:border-slate-300 hover:bg-slate-100/80 transition-all text-left shadow-sm group"
         >
           <div className="flex items-center gap-2">

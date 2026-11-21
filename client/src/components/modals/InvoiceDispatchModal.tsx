@@ -110,6 +110,7 @@ export const InvoiceDispatchModal: React.FC<InvoiceDispatchModalProps> = ({
           </div>
           <button
             onClick={onClose}
+            aria-label="Close dialog"
             className="p-1.5 text-white/80 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
           >
             <X className="w-5 h-5" />

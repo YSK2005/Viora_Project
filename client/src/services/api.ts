@@ -639,3 +639,83 @@ export async function updateBusiness(data: Partial<BusinessProfile>): Promise<Bu
   const json = await res.json();
   return json.data;
 }
+
+// -------------------------------------------------------------
+// Recurring Invoices API
+// -------------------------------------------------------------
+export interface RecurringSchedule {
+  id: string;
+  businessId: string;
+  invoiceId: string;
+  customerName: string;
+  invoiceNumber: string;
+  frequency: 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'ANNUALLY';
+  nextRunDate: string;
+  lastRunAt?: string;
+  status: 'ACTIVE' | 'PAUSED';
+  grandTotal: number;
+  itemsCount: number;
+  createdAt: string;
+}
+
+export async function fetchRecurringSchedules(): Promise<RecurringSchedule[]> {
+  const res = await apiFetch('/recurring');
+  if (!res.ok) throw new Error('Failed to fetch recurring schedules');
+  const json = await res.json();
+  return json.data?.schedules || [];
+}
+
+export async function createRecurringSchedule(data: {
+  invoiceId: string;
+  frequency?: 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'ANNUALLY';
+  startDate?: string;
+}): Promise<RecurringSchedule> {
+  const res = await apiFetch('/recurring', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || err.message || 'Failed to create recurring profile');
+  }
+  const json = await res.json();
+  return json.data?.schedule;
+}
+
+export async function triggerRecurringSchedule(id: string): Promise<{ invoice: any; schedule: RecurringSchedule }> {
+  const res = await apiFetch(`/recurring/${id}/trigger`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || err.message || 'Failed to generate recurring invoice');
+  }
+  const json = await res.json();
+  return json.data;
+}
+
+export async function toggleRecurringSchedule(id: string): Promise<RecurringSchedule> {
+  const res = await apiFetch(`/recurring/${id}/toggle`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || err.message || 'Failed to toggle recurring schedule');
+  }
+  const json = await res.json();
+  return json.data?.schedule;
+}
+
+export async function deleteRecurringSchedule(id: string): Promise<void> {
+  const res = await apiFetch(`/recurring/${id}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || err.message || 'Failed to delete recurring schedule');
+  }
+}
+

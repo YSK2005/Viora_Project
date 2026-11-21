@@ -129,6 +129,7 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
           </div>
           <button
             onClick={onClose}
+            aria-label="Close dialog"
             className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg"
           >
             <X className="w-4 h-4" />

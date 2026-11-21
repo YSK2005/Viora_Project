@@ -472,6 +472,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                           type="button"
                           onClick={() => onSelectInvoice?.(inv)}
                           title="Preview & Print"
+                          aria-label={`Preview invoice ${inv.invoiceNumber}`}
                           className="p-1.5 text-slate-400 hover:text-purple-700 hover:bg-purple-50 rounded-md transition-colors"
                         >
                           <Eye className="w-4 h-4" />
@@ -483,6 +484,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                             type="button"
                             onClick={() => onDuplicateInvoice(inv)}
                             title="Duplicate invoice as fresh draft"
+                            aria-label={`Duplicate invoice ${inv.invoiceNumber}`}
                             className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
                           >
                             <Copy className="w-4 h-4" />
@@ -499,6 +501,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                             }
                           }}
                           title="Download A4 PDF"
+                          aria-label={`Download PDF for invoice ${inv.invoiceNumber}`}
                           className="p-1.5 text-slate-400 hover:text-purple-700 hover:bg-purple-50 rounded-md transition-colors"
                         >
                           <Download className="w-4 h-4" />
@@ -510,6 +513,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                             type="button"
                             onClick={() => onEditDraft(inv)}
                             title="Edit Draft Invoice"
+                            aria-label={`Edit draft invoice ${inv.invoiceNumber}`}
                             className="px-2 py-1 text-[11px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-md flex items-center gap-1 transition-colors"
                           >
                             <FileEdit className="w-3.5 h-3.5 text-slate-600" />
@@ -522,6 +526,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                             type="button"
                             onClick={() => onDeleteDraft(inv)}
                             title="Delete Draft Invoice"
+                            aria-label={`Delete draft invoice ${inv.invoiceNumber}`}
                             className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -533,6 +538,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                             type="button"
                             onClick={() => onIssueInvoice(inv)}
                             title="Issue Official Invoice"
+                            aria-label={`Issue official invoice ${inv.invoiceNumber}`}
                             className="px-2 py-1 text-[11px] font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-md flex items-center gap-1"
                           >
                             <SendHorizontal className="w-3 h-3 text-purple-600" />
@@ -547,6 +553,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                               type="button"
                               onClick={() => openWhatsAppDispatch(inv)}
                               title="Open WhatsApp message draft"
+                              aria-label={`Share invoice ${inv.invoiceNumber} via WhatsApp`}
                               className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
                             >
                               <MessageCircle className="w-4 h-4" />
@@ -555,6 +562,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                               type="button"
                               onClick={() => openGmailDispatch(inv)}
                               title="Compose Gmail draft"
+                              aria-label={`Share invoice ${inv.invoiceNumber} via Gmail`}
                               className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
                             >
                               <Mail className="w-4 h-4" />
@@ -570,6 +578,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                               type="button"
                               onClick={() => onCancelInvoice(inv)}
                               title="Cancel Invoice"
+                              aria-label={`Cancel invoice ${inv.invoiceNumber}`}
                               className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-md transition-colors"
                             >
                               <Ban className="w-4 h-4" />
@@ -583,6 +592,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                               type="button"
                               onClick={() => onRecordPayment(inv)}
                               title="Record Payment"
+                              aria-label={`Record payment for invoice ${inv.invoiceNumber}`}
                               className="px-2 py-1 text-[11px] font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-md flex items-center gap-1"
                             >
                               <CreditCard className="w-3 h-3 text-purple-600" />

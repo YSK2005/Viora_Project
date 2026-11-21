@@ -491,6 +491,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
           </div>
           <button
             onClick={onClose}
+            aria-label="Close dialog"
             className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200/60 transition-colors"
           >
             <X className="w-5 h-5" />

@@ -10,6 +10,7 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  Repeat,
 } from 'lucide-react';
 import { NavigationKey, User, UserRole } from '../../types';
 import { BillyWordmark } from '../common/BillyWordmark';
@@ -43,6 +44,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'reports', label: 'Sales Reports', icon: BarChart3 },
   { key: 'credits', label: 'Credit Notes', icon: Receipt },
   { key: 'statements', label: 'Customer Statements', icon: Users },
+  { key: 'recurring', label: 'Recurring', icon: Repeat },
   { key: 'settings', label: 'Business Settings', icon: Settings },
 ];
 
@@ -98,6 +100,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             type="button"
             className="hidden lg:flex p-1.5 rounded-lg text-navy-400 hover:text-white hover:bg-navy-800 transition-colors"
             title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {isCollapsed ? (
               <ChevronRight className="w-4 h-4" />
@@ -216,6 +219,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <button
                     onClick={onLogout}
                     title="Sign Out"
+                    aria-label="Sign Out"
                     className="p-1.5 text-rose-400 hover:text-white hover:bg-rose-500/20 rounded-lg transition-colors"
                   >
                     <LogOut className="w-4 h-4" />

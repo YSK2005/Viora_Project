@@ -133,6 +133,17 @@ router.post(
   }
 );
 
+// In-memory lockout tracker for brute force / credential stuffing protection
+const MAX_FAILED_LOGIN_ATTEMPTS = 5;
+const ACCOUNT_LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes lockout
+
+interface LoginAttemptInfo {
+  count: number;
+  lockedUntil?: number;
+}
+
+const failedLoginTracker = new Map<string, LoginAttemptInfo>();
+
 /**
  * POST /api/auth/login
  * Validates credentials and creates secure session
@@ -143,9 +154,21 @@ router.post(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const { email, password } = req.body;
+      const normalizedEmail = email.toLowerCase().trim();
+
+      // Check lockout status
+      const attemptInfo = failedLoginTracker.get(normalizedEmail);
+      if (attemptInfo?.lockedUntil && attemptInfo.lockedUntil > Date.now()) {
+        const remainingMinutes = Math.ceil((attemptInfo.lockedUntil - Date.now()) / 60000);
+        throw new AppError(
+          `Account is temporarily locked due to excessive failed attempts. Try again in ${remainingMinutes} minute(s).`,
+          429,
+          ErrorCode.ERR_RATE_LIMIT
+        );
+      }
 
       const user = await prisma.user.findUnique({
-        where: { email },
+        where: { email: normalizedEmail },
         include: {
           memberships: {
             include: { business: true },
@@ -154,8 +177,29 @@ router.post(
       });
 
       if (!user || !verifyPassword(password, user.passwordHash)) {
-        throw new AppError('Invalid email or password', 401, ErrorCode.ERR_INVALID_CREDENTIALS);
+        const current = failedLoginTracker.get(normalizedEmail) || { count: 0 };
+        current.count += 1;
+        if (current.count >= MAX_FAILED_LOGIN_ATTEMPTS) {
+          current.lockedUntil = Date.now() + ACCOUNT_LOCKOUT_MS;
+          failedLoginTracker.set(normalizedEmail, current);
+          throw new AppError(
+            'Account has been temporarily locked due to 5 consecutive failed login attempts. Try again in 15 minutes.',
+            429,
+            ErrorCode.ERR_RATE_LIMIT
+          );
+        } else {
+          failedLoginTracker.set(normalizedEmail, current);
+          const remainingAttempts = MAX_FAILED_LOGIN_ATTEMPTS - current.count;
+          throw new AppError(
+            `Invalid email or password. ${remainingAttempts} attempt(s) remaining before temporary lockout.`,
+            401,
+            ErrorCode.ERR_INVALID_CREDENTIALS
+          );
+        }
       }
+
+      // Reset failed attempts counter upon successful authentication
+      failedLoginTracker.delete(normalizedEmail);
 
       const memberships = user.memberships;
       if (memberships.length === 0) {

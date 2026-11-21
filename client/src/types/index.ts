@@ -7,7 +7,8 @@ export type NavigationKey =
   | 'reports'
   | 'settings'
   | 'credits'
-  | 'statements';
+  | 'statements'
+  | 'recurring';
 
 export type UserRole = 'OWNER' | 'ACCOUNTANT' | 'VIEWER';
 

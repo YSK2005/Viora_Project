@@ -27,7 +27,7 @@ interface PageMeta {
   mockStats: { label: string; value: string }[];
 }
 
-const PAGE_DEFINITIONS: Record<Exclude<NavigationKey, 'dashboard' | 'invoices' | 'credits' | 'statements'>, PageMeta> = {
+const PAGE_DEFINITIONS: Record<Exclude<NavigationKey, 'dashboard' | 'invoices' | 'credits' | 'statements' | 'recurring'>, PageMeta> = {
   customers: {
     title: 'Customer Directory & Accounts',
     category: 'Client Relationship Management',
@@ -134,7 +134,7 @@ export const PlaceholderView: React.FC<PlaceholderViewProps> = ({
   navKey,
   onNavigateToDashboard,
 }) => {
-  if (navKey === 'dashboard' || navKey === 'invoices' || navKey === 'credits' || navKey === 'statements') {
+  if (navKey === 'dashboard' || navKey === 'invoices' || navKey === 'credits' || navKey === 'statements' || navKey === 'recurring') {
     return null;
   }
 

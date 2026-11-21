@@ -30,3 +30,16 @@ const handleShutdown = (signal: string) => {
 
 process.on('SIGTERM', () => handleShutdown('SIGTERM'));
 process.on('SIGINT', () => handleShutdown('SIGINT'));
+
+process.on('unhandledRejection', (reason: unknown) => {
+  console.error('💥 Unhandled Promise Rejection:', reason);
+  if (env.NODE_ENV === 'production') {
+    handleShutdown('unhandledRejection');
+  }
+});
+
+process.on('uncaughtException', (err: Error) => {
+  console.error('💥 Uncaught Exception:', err);
+  handleShutdown('uncaughtException');
+});
+

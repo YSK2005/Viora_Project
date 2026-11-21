@@ -4,8 +4,55 @@
 
 @layer base {
   body {
-    @apply bg-slate-50 text-slate-800 antialiased;
+    @apply bg-slate-50 text-slate-800 antialiased dark:bg-navy-950 dark:text-slate-100;
   }
+}
+
+/* Dark mode overrides */
+.dark body {
+  background-color: #0b0f19;
+  color: #f1f5f9;
+}
+.dark .bg-white {
+  background-color: #111827 !important;
+  color: #f1f5f9;
+}
+.dark .bg-slate-50 {
+  background-color: #0b0f19 !important;
+  color: #f1f5f9;
+}
+.dark .bg-slate-100 {
+  background-color: #1e293b !important;
+  color: #f1f5f9;
+}
+.dark .border-slate-200,
+.dark .border-slate-200\/90,
+.dark .border-slate-100 {
+  border-color: #1f2937 !important;
+}
+.dark .text-navy-900,
+.dark .text-slate-900 {
+  color: #f8fafc !important;
+}
+.dark .text-slate-700,
+.dark .text-slate-600 {
+  color: #cbd5e1 !important;
+}
+.dark .text-slate-500,
+.dark .text-slate-400 {
+  color: #94a3b8 !important;
+}
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: #1f2937 !important;
+  border-color: #374151 !important;
+  color: #f9fafb !important;
+}
+.dark .form-input {
+  background-color: #1f2937;
+  border-color: #374151;
+  color: #f9fafb;
 }
 
 /* Custom subtle scrollbar */
