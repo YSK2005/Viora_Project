@@ -9,6 +9,7 @@ import {
   triggerRecurringSchedule,
   toggleRecurringSchedule,
   deleteRecurringSchedule,
+  isValidISODateString,
 } from '../../repositories/recurring.repository';
 
 const router = Router();
@@ -16,7 +17,16 @@ const router = Router();
 const createScheduleSchema = z.object({
   invoiceId: z.string().uuid('Valid invoice ID required'),
   frequency: z.enum(['WEEKLY', 'MONTHLY', 'QUARTERLY', 'ANNUALLY']).default('MONTHLY'),
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/, 'Invalid date format (YYYY-MM-DD)').optional(),
+  startDate: z
+    .string()
+    .refine((val) => isValidISODateString(val), {
+      message: 'Invalid start date format or non-existent calendar date (expected YYYY-MM-DD)',
+    })
+    .optional(),
+});
+
+const triggerScheduleSchema = z.object({
+  requestKey: z.string().max(128).optional(),
 });
 
 /**
@@ -60,19 +70,32 @@ router.post(
 /**
  * POST /api/v1/recurring/:id/trigger
  * Manually trigger the recurring schedule to generate the next draft invoice
+ * Supports idempotency via Idempotency-Key header or requestKey in body
  */
 router.post(
   '/:id/trigger',
   requireRole(['OWNER', 'ACCOUNTANT']),
+  validateRequest({ body: triggerScheduleSchema.optional() }),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
-      const result = await triggerRecurringSchedule(req.business.id, req.user?.id, id);
-      return sendSuccess(
-        res,
-        result,
-        `Generated draft invoice ${result.invoice.invoiceNumber} for recurring schedule`
+      const idempotencyKey =
+        (req.headers['idempotency-key'] as string) ||
+        (req.headers['x-idempotency-key'] as string) ||
+        req.body?.requestKey;
+
+      const result = await triggerRecurringSchedule(
+        req.business.id,
+        req.user?.id,
+        id,
+        idempotencyKey
       );
+
+      const message = result.isIdempotentReplay
+        ? `Idempotent replay: Draft invoice ${result.invoice.invoiceNumber} previously generated`
+        : `Generated draft invoice ${result.invoice.invoiceNumber} for recurring schedule`;
+
+      return sendSuccess(res, result, message);
     } catch (error) {
       next(error);
     }
