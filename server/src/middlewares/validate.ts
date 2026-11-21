@@ -1,3 +1,4 @@
+import {ErrorCode} from '../utils/errorCodes';
 import { Request, Response, NextFunction } from 'express';
 import { ZodTypeAny, ZodError } from 'zod';
 import { sendError } from '../utils/response';
@@ -26,7 +27,7 @@ export const validateRequest = (schema: {
           res,
           'Validation failed',
           400,
-          'ERR_VALIDATION',
+          ErrorCode.ERR_VALIDATION,
           issues.map((err: any) => ({
             field: Array.isArray(err.path) ? err.path.join('.') : String(err.path || ''),
             message: err.message,

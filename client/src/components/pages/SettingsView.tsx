@@ -249,10 +249,10 @@ export const SettingsView: React.FC = () => {
               {/* Upload Controls */}
               <div className="flex-1 space-y-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label htmlFor="settingsview-field-1" className="block text-xs font-semibold text-slate-700 mb-1">
                     Upload Logo Image
                   </label>
-                  <input
+                  <input id="settingsview-field-1"
                     ref={fileInputRef}
                     type="file"
                     accept="image/png,image/jpeg,image/svg+xml,image/webp"
@@ -282,10 +282,10 @@ export const SettingsView: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label htmlFor="settingsview-field-2" className="block text-xs font-semibold text-slate-700 mb-1">
                 Company / Legal Entity Name <span className="text-rose-500">*</span>
               </label>
-              <input
+              <input id="settingsview-field-2"
                 type="text"
                 required
                 value={name}
@@ -297,7 +297,7 @@ export const SettingsView: React.FC = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label htmlFor="settingsview-field-3" className="block text-xs font-semibold text-slate-700 mb-1">
                   Company Gmail / Email <span className="text-rose-500">*</span>
                   <span className="ml-1 text-[10px] text-purple-700 font-normal">(Mandatory for sending invoices)</span>
                 </label>
@@ -357,7 +357,7 @@ export const SettingsView: React.FC = () => {
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   GSTIN (Tax Identification Number)
                 </label>
-                <input
+                <input id="settingsview-field-3"
                   type="text"
                   value={gstin}
                   onChange={(e) => setGstin(e.target.value.toUpperCase())}
@@ -384,10 +384,10 @@ export const SettingsView: React.FC = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label htmlFor="settingsview-field-4" className="block text-xs font-semibold text-slate-700 mb-1">
                   Invoice Number Prefix
                 </label>
-                <input
+                <input id="settingsview-field-4"
                   type="text"
                   maxLength={10}
                   value={invoicePrefix}

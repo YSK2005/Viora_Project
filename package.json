@@ -16,16 +16,34 @@
     "build:client": "npm run build --workspace=client",
     "build:server": "npm run build --workspace=server",
     "type-check": "npm run type-check --workspace=server && npm run type-check --workspace=client",
-    "lint": "npm run lint --workspace=server && npm run lint --workspace=client",
+    "lint": "eslint client/src server/src",
     "test:backend": "npm run test:backend --workspace=server",
-    "test:release": "npx tsx server/test-p0.ts && npx tsx server/test-p1.ts && npx tsx server/test-endpoints.ts && npx tsx server/test-stabilization.ts && npm run test:review",
-    "release:check": "npm run type-check && npm run build && npm run test:release",
+    "test:release": "npx tsx server/test-p0.ts && npx tsx server/test-p1.ts && npx tsx server/test-endpoints.ts && npx tsx server/test-stabilization.ts && npm run test:review && npx tsx server/test-roadmap.ts",
+    "release:check": "npm run type-check && npm run lint && npm run build && npm run test:unit && npm run test:release",
     "db:reset": "npm run db:reset --workspace=server",
     "start": "npm run start --workspace=server",
-    "test:review": "npx tsx server/test-review-security.ts"
+    "test:review": "npx tsx server/test-review-security.ts",
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "@axe-core/playwright": "^4.14.0",
+    "@eslint/js": "^10.0.0",
+    "@playwright/test": "^1.65.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.13",
+    "@types/node": "^24.0.0",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "concurrently": "^8.2.2",
+    "eslint": "^10.15.0",
+    "jsdom": "^26.1.0",
+    "prettier": "^3.10.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript-eslint": "^8.73.0",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.1"
   },
   "overrides": {
     "esbuild": "^0.25.0"
@@ -40,5 +58,8 @@
     "prisma"
   ],
   "author": "Viora Tech Internship Team",
-  "license": "ISC"
+  "license": "ISC",
+  "engines": {
+    "node": ">=22.12.0"
+  }
 }

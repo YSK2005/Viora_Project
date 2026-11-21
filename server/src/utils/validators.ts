@@ -25,7 +25,7 @@ export function validateAndNormalizeIndianPhone(val: unknown): string {
     throw new Error('Phone number must not contain letters');
   }
 
-  let cleaned = trimmed.replace(/[\s\-\(\)\.]/g, '');
+  let cleaned = trimmed.replace(/[\s().-]/g, '');
 
   if (cleaned.startsWith('+91')) {
     cleaned = cleaned.slice(3);

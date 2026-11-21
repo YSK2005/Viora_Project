@@ -221,8 +221,9 @@ router.get(
         },
         select: {
           grandTotal: true,
+          creditNotes: {where: endDate ? {issuedAt:{lte:istDateToUtcBoundary(endDate,true)}} : undefined,select:{total:true}},
           payments: {
-            where: endDate ? { paymentDate: { lte: istDateToUtcBoundary(endDate, true) } } : undefined,
+            where: {isReversed:false, ...(endDate ? { paymentDate: { lte: istDateToUtcBoundary(endDate, true) } } : {})},
             select: { amount: true },
           },
         },
@@ -231,13 +232,16 @@ router.get(
       let totalReceivables = toDecimal(0);
       for (const inv of allIssuedUpToDate) {
         const paid = inv.payments.reduce((acc, p) => acc.plus(toDecimal(p.amount)), toDecimal(0));
-        const remaining = toDecimal(inv.grandTotal).minus(paid);
+        const credited=inv.creditNotes.reduce((sum,note)=>sum.plus(note.total),toDecimal(0));
+        const remaining = toDecimal(inv.grandTotal).minus(credited).minus(paid);
         if (remaining.greaterThan(0)) {
           totalReceivables = totalReceivables.plus(remaining);
         }
       }
 
-      const periodNet = Number(round2(totalSales.minus(totalCollected)));
+      const creditTotals = await prisma.creditNote.aggregate({where:{businessId:business.id,issuedAt:{...(startDate?{gte:istDateToUtcBoundary(startDate,false)}:{}),...(endDate?{lte:istDateToUtcBoundary(endDate,true)}:{})}},_sum:{total:true,taxAmount:true}});
+      const totalCredits=toDecimal(creditTotals._sum.total || 0);
+      const periodNet = Number(round2(totalSales.minus(totalCredits).minus(totalCollected)));
       const closingReceivables = Number(round2(totalReceivables));
 
       return sendSuccess(
@@ -252,6 +256,9 @@ router.get(
           summary: {
             totalIssuedInvoices: invoices.length,
             totalSales: Number(round2(totalSales)),
+            totalCredits: Number(totalCredits),
+            netSales: Number(totalSales.minus(totalCredits)),
+            creditedTax: Number(creditTotals._sum.taxAmount || 0),
             totalTax: Number(round2(totalTax)),
             totalDiscount: Number(round2(totalDiscount)),
             totalCollected: Number(round2(totalCollected)),

@@ -88,6 +88,8 @@ model Business {
   gstin             String?
   state             String?              @default("Karnataka")
   invoicePrefix     String               @default("INV")
+  nextCreditNumber  Int                  @default(1)
+  creditNotes       CreditNote[]
   nextInvoiceNumber Int                  @default(1)
   memberships       BusinessMembership[]
   customers         Customer[]
@@ -161,6 +163,8 @@ model Invoice {
   igstTotal      Decimal       @default(0.00) @db.Decimal(12, 2)
   taxTotal       Decimal       @default(0.00) @db.Decimal(12, 2)
   grandTotal     Decimal       @db.Decimal(12, 2)
+  creditedTotal  Decimal       @default(0.00) @db.Decimal(12, 2)
+  creditNotes    CreditNote[]
   notes          String?
 
   // Snapshots preserved upon issuance
@@ -195,6 +199,7 @@ model InvoiceItem {
   invoice             Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   productId           String?
   product             Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  creditItems         CreditNoteItem[]
   descriptionSnapshot String
   unit                String   @default("PCS")
   unitSnapshot        String?
@@ -256,4 +261,44 @@ model AuditLog {
   @@index([businessId, createdAt])
   @@index([entityType, entityId])
   @@map("audit_logs")
+}
+
+model CreditNote {
+  id String @id @default(uuid())
+  businessId String
+  business Business @relation(fields:[businessId],references:[id],onDelete:Restrict)
+  invoiceId String
+  invoice Invoice @relation(fields:[invoiceId],references:[id],onDelete:Restrict)
+  number String
+  reason String
+  requestKey String
+  createdByUserId String
+  issuedAt DateTime @default(now())
+  taxableAmount Decimal @db.Decimal(12,2)
+  taxAmount Decimal @db.Decimal(12,2)
+  total Decimal @db.Decimal(12,2)
+  items CreditNoteItem[]
+  @@unique([businessId,number])
+  @@unique([businessId,requestKey])
+  @@index([businessId,issuedAt])
+  @@index([invoiceId])
+  @@map("credit_notes")
+}
+model CreditNoteItem {
+  id String @id @default(uuid())
+  creditNoteId String
+  creditNote CreditNote @relation(fields:[creditNoteId],references:[id],onDelete:Restrict)
+  invoiceItemId String
+  invoiceItem InvoiceItem @relation(fields:[invoiceItemId],references:[id],onDelete:Restrict)
+  description String
+  quantity Decimal @db.Decimal(12,3)
+  taxableAmount Decimal @db.Decimal(12,2)
+  cgstAmount Decimal @db.Decimal(12,2)
+  sgstAmount Decimal @db.Decimal(12,2)
+  igstAmount Decimal @db.Decimal(12,2)
+  taxAmount Decimal @db.Decimal(12,2)
+  total Decimal @db.Decimal(12,2)
+  @@index([invoiceItemId])
+  @@index([creditNoteId])
+  @@map("credit_note_items")
 }

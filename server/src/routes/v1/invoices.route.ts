@@ -1,7 +1,10 @@
+import {ErrorCode} from '../../utils/errorCodes';
+import {findInvoicePage} from '../../repositories/invoices.repository';
+import {retryRead} from '../../utils/retryRead';
 import { Router, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { randomBytes } from 'crypto';
-import { prisma, Prisma } from '../../config/prisma';
+import { prisma } from '../../config/prisma';
 import { sendSuccess } from '../../utils/response';
 import { validateRequest } from '../../middlewares/validate';
 import { AppError } from '../../middlewares/errorHandler';
@@ -9,12 +12,9 @@ import { AuthenticatedRequest, requireRole } from '../../middlewares/auth';
 import {
   calculateInvoiceTotals,
   derivePaymentStatus,
-  round2,
-  toDecimal,
 } from '../../utils/money';
 import { generateInvoicePdfStream, InvoicePdfData } from '../../services/pdf.service';
 import { createPaymentSchema, handleRecordPayment } from './payments.route';
-import { toTimezoneBoundary } from '../../utils/dateBoundary';
 import { logAuditEvent } from '../../utils/audit';
 
 const router = Router();
@@ -49,8 +49,9 @@ const updateInvoiceSchema = createInvoiceSchema;
 
 const getInvoicesQuerySchema = z.object({
   status: z.enum(['ALL', 'DRAFT', 'ISSUED', 'CANCELLED']).optional().default('ALL'),
-  paymentStatus: z.enum(['ALL', 'UNPAID', 'PARTIALLY_PAID', 'PAID']).optional().default('ALL'),
+  paymentStatus: z.enum(['ALL', 'UNPAID', 'PARTIALLY_PAID', 'PAID', 'UNSETTLED']).optional().default('ALL'),
   customerId: z.string().optional(),
+  customerName: z.string().optional(),
   search: z.string().optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
@@ -79,52 +80,11 @@ router.get(
         limit,
       } = req.query as any;
 
-      const conditions = [Prisma.sql`i."businessId" = ${business.id}`];
-      if (status !== 'ALL') conditions.push(Prisma.sql`i.status::text = ${status}`);
-      if (customerId?.trim()) conditions.push(Prisma.sql`i."customerId" = ${customerId.trim()}`);
-      if (startDate) conditions.push(Prisma.sql`i."invoiceDate" >= ${toTimezoneBoundary(startDate, false)}`);
-      if (endDate) conditions.push(Prisma.sql`i."invoiceDate" <= ${toTimezoneBoundary(endDate, true)}`);
-      if (search?.trim()) {
-        const q = search.trim();
-        conditions.push(Prisma.sql`(strpos(lower(i."invoiceNumber"), lower(${q})) > 0
-          OR strpos(lower(i."customerNameSnapshot"), lower(${q})) > 0
-          OR strpos(lower(c.name), lower(${q})) > 0)`);
-      }
-      // Aggregate in PostgreSQL and page IDs before loading invoice/customer records.
-      // Keep count, page, and balances on the same consistent database snapshot.
-      const base = Prisma.sql`SELECT i.id, i."invoiceDate", i."createdAt", i."grandTotal",
-          COALESCE(p.paid, 0) AS paid
-        FROM invoices i JOIN customers c ON c.id = i."customerId"
-        LEFT JOIN LATERAL (
-          SELECT SUM(amount) AS paid FROM payments
-          WHERE "invoiceId" = i.id AND "isReversed" = false
-        ) p ON true
-        WHERE ${Prisma.join(conditions, ' AND ')}`;
-      const paymentCondition = paymentStatus === 'PAID'
-        ? Prisma.sql`"grandTotal" <> 0 AND paid >= "grandTotal"`
-        : paymentStatus === 'PARTIALLY_PAID'
-        ? Prisma.sql`paid > 0 AND paid < "grandTotal"`
-        : paymentStatus === 'UNPAID'
-        ? Prisma.sql`"grandTotal" = 0 OR paid <= 0`
-        : Prisma.sql`true`;
-      const { invoices, totalCount, paidById } = await prisma.$transaction(async (tx) => {
-        const counts = await tx.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
-          SELECT COUNT(*) AS count FROM (${base}) matched WHERE ${paymentCondition}`);
-        const rows = await tx.$queryRaw<Array<{ id: string; paid: Prisma.Decimal }>>(Prisma.sql`
-          SELECT id, paid FROM (${base}) matched WHERE ${paymentCondition}
-          ORDER BY "invoiceDate" DESC, "createdAt" DESC, id DESC
-          LIMIT ${limit} OFFSET ${(page - 1) * limit}`);
-        const invoices = await tx.invoice.findMany({
-          where: { businessId: business.id, id: { in: rows.map(row => row.id) } },
-          orderBy: [{ invoiceDate: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
-          include: { customer: { select: { id: true, name: true, email: true, phone: true, state: true } } },
-        });
-        return { invoices, totalCount: Number(counts[0].count), paidById: new Map(rows.map(row => [row.id, row.paid])) };
-      }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+      const {invoices,totalCount,paidById}=await retryRead(()=>findInvoicePage({business,status,paymentStatus,customerId,customerName: req.query.customerName as string | undefined,search,startDate,endDate,page,limit}));
 
       // Augment invoices with derived payment status and freeze issue-time snapshots if issued
       const pagedInvoices = invoices.map((inv) => {
-        const paymentInfo = derivePaymentStatus(inv.grandTotal, [{ amount: paidById.get(inv.id) || 0 }]);
+        const paymentInfo = derivePaymentStatus(inv.grandTotal, [{ amount: paidById.get(inv.id) || 0 }], inv.creditedTotal);
         const isIssued = inv.status === 'ISSUED' || inv.status === 'CANCELLED';
 
         return {
@@ -147,6 +107,8 @@ router.get(
           igstTotal: Number(inv.igstTotal),
           taxTotal: Number(inv.taxTotal),
           grandTotal: Number(inv.grandTotal),
+          creditedTotal: Number(inv.creditedTotal),
+          refundDue: Math.max(0, Number(paymentInfo.totalPaid) + Number(inv.creditedTotal) - Number(inv.grandTotal)),
           paymentStatus: paymentInfo.paymentStatus,
           totalPaid: Number(paymentInfo.totalPaid),
           balanceRemaining: Number(paymentInfo.balanceRemaining),
@@ -201,10 +163,10 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response, next: NextFu
     });
 
     if (!inv) {
-      throw new AppError('Invoice not found', 404, 'ERR_INVOICE_NOT_FOUND');
+      throw new AppError('Invoice not found', 404, ErrorCode.ERR_INVOICE_NOT_FOUND);
     }
 
-    const paymentInfo = derivePaymentStatus(inv.grandTotal, inv.payments);
+    const paymentInfo = derivePaymentStatus(inv.grandTotal, inv.payments, inv.creditedTotal);
     const isIssued = inv.status === 'ISSUED' || inv.status === 'CANCELLED';
 
     // B8: Freeze customer and business details for issued invoices
@@ -250,6 +212,8 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response, next: NextFu
         igstTotal: Number(inv.igstTotal),
         taxTotal: Number(inv.taxTotal),
         grandTotal: Number(inv.grandTotal),
+          creditedTotal: Number(inv.creditedTotal),
+          refundDue: Math.max(0, Number(paymentInfo.totalPaid) + Number(inv.creditedTotal) - Number(inv.grandTotal)),
         paymentStatus: paymentInfo.paymentStatus,
         totalPaid: Number(paymentInfo.totalPaid),
         balanceRemaining: Number(paymentInfo.balanceRemaining),
@@ -307,10 +271,10 @@ router.get('/:id/pdf', async (req: AuthenticatedRequest, res: Response, next: Ne
     });
 
     if (!inv) {
-      throw new AppError('Invoice not found', 404, 'ERR_INVOICE_NOT_FOUND');
+      throw new AppError('Invoice not found', 404, ErrorCode.ERR_INVOICE_NOT_FOUND);
     }
 
-    const paymentInfo = derivePaymentStatus(inv.grandTotal, inv.payments);
+    const paymentInfo = derivePaymentStatus(inv.grandTotal, inv.payments, inv.creditedTotal);
 
     const pdfData: InvoicePdfData = {
       invoiceNumber: inv.invoiceNumber,
@@ -328,6 +292,8 @@ router.get('/:id/pdf', async (req: AuthenticatedRequest, res: Response, next: Ne
       igstTotal: Number(inv.igstTotal),
       taxTotal: Number(inv.taxTotal),
       grandTotal: Number(inv.grandTotal),
+      creditedTotal: Number(inv.creditedTotal),
+      refundDue: Math.max(0,Number(paymentInfo.totalPaid)+Number(inv.creditedTotal)-Number(inv.grandTotal)),
       totalPaid: Number(paymentInfo.totalPaid),
       balanceRemaining: Number(paymentInfo.balanceRemaining),
       paymentStatus: paymentInfo.paymentStatus,
@@ -403,20 +369,20 @@ router.post(
         where: { id: customerId, businessId: business.id },
       });
       if (!customer) {
-        throw new AppError('Customer not found', 404, 'ERR_CUSTOMER_NOT_FOUND');
+        throw new AppError('Customer not found', 404, ErrorCode.ERR_CUSTOMER_NOT_FOUND);
       }
       if (customer.isArchived) {
-        throw new AppError('Cannot create an invoice for an archived customer', 400, 'ERR_CUSTOMER_ARCHIVED');
+        throw new AppError('Cannot create an invoice for an archived customer', 400, ErrorCode.ERR_CUSTOMER_ARCHIVED);
       }
 
       // Validate dates
       const invDateObj = new Date(invoiceDate);
       const dueDateObj = new Date(dueDate);
       if (isNaN(invDateObj.getTime()) || isNaN(dueDateObj.getTime())) {
-        throw new AppError('Invalid date provided', 400, 'ERR_INVALID_DATE_FORMAT');
+        throw new AppError('Invalid date provided', 400, ErrorCode.ERR_INVALID_DATE_FORMAT);
       }
       if (dueDateObj < invDateObj) {
-        throw new AppError('Due date cannot precede invoice date', 400, 'ERR_INVALID_DATES');
+        throw new AppError('Due date cannot precede invoice date', 400, ErrorCode.ERR_INVALID_DATES);
       }
 
       // Determine Inter-state supply (IGST) vs Intra-state supply (CGST+SGST)
@@ -430,7 +396,7 @@ router.post(
       try {
         calculated = calculateInvoiceTotals(items, isInterState);
       } catch (calcErr: any) {
-        throw new AppError(calcErr.message || 'Invoice calculation error', 400, 'ERR_INVALID_INVOICE_CALCULATION');
+        throw new AppError(calcErr.message || 'Invoice calculation error', 400, ErrorCode.ERR_INVALID_INVOICE_CALCULATION);
       }
 
       // B2: Collision-safe unique draft identifier
@@ -539,14 +505,14 @@ router.put(
       });
 
       if (!existing) {
-        throw new AppError('Invoice not found', 404, 'ERR_INVOICE_NOT_FOUND');
+        throw new AppError('Invoice not found', 404, ErrorCode.ERR_INVOICE_NOT_FOUND);
       }
 
       if (existing.status !== 'DRAFT') {
         throw new AppError(
           'Issued or cancelled invoices cannot be edited. Create a new invoice or credit note.',
           409,
-          'ERR_IMMUTABLE_INVOICE'
+          ErrorCode.ERR_IMMUTABLE_INVOICE
         );
       }
 
@@ -554,13 +520,13 @@ router.put(
         where: { id: customerId, businessId: business.id },
       });
       if (!customer) {
-        throw new AppError('Customer not found', 404, 'ERR_CUSTOMER_NOT_FOUND');
+        throw new AppError('Customer not found', 404, ErrorCode.ERR_CUSTOMER_NOT_FOUND);
       }
 
       const invDateObj = new Date(invoiceDate);
       const dueDateObj = new Date(dueDate);
       if (dueDateObj < invDateObj) {
-        throw new AppError('Due date cannot precede invoice date', 400, 'ERR_INVALID_DATES');
+        throw new AppError('Due date cannot precede invoice date', 400, ErrorCode.ERR_INVALID_DATES);
       }
 
       const resolvedSupplyPlace = placeOfSupply ? placeOfSupply.trim() : (customer.state || business.state || 'Karnataka');
@@ -572,19 +538,19 @@ router.put(
       try {
         calculated = calculateInvoiceTotals(items, isInterState);
       } catch (error: any) {
-        throw new AppError(error.message, 400, 'ERR_INVALID_INVOICE_CALCULATION');
+        throw new AppError(error.message, 400, ErrorCode.ERR_INVALID_INVOICE_CALCULATION);
       }
       if (customer.isArchived) {
-        throw new AppError('Cannot invoice an archived customer', 400, 'ERR_CUSTOMER_ARCHIVED');
+        throw new AppError('Cannot invoice an archived customer', 400, ErrorCode.ERR_CUSTOMER_ARCHIVED);
       }
 
       const updated = await prisma.$transaction(async (tx) => {
         const locked = await tx.$queryRaw<Array<{ status: string }>>`
           SELECT status FROM invoices WHERE id = ${id} AND "businessId" = ${business.id} FOR UPDATE
         `;
-        if (!locked.length) throw new AppError('Invoice not found', 404, 'ERR_INVOICE_NOT_FOUND');
+        if (!locked.length) throw new AppError('Invoice not found', 404, ErrorCode.ERR_INVOICE_NOT_FOUND);
         if (locked[0].status !== 'DRAFT') {
-          throw new AppError('Issued or cancelled invoices cannot be edited', 409, 'ERR_IMMUTABLE_INVOICE');
+          throw new AppError('Issued or cancelled invoices cannot be edited', 409, ErrorCode.ERR_IMMUTABLE_INVOICE);
         }
         await tx.invoiceItem.deleteMany({
           where: { invoiceId: id },
@@ -689,14 +655,14 @@ router.delete(
         `;
 
         if (!locked || locked.length === 0) {
-          throw new AppError('Invoice not found', 404, 'ERR_INVOICE_NOT_FOUND');
+          throw new AppError('Invoice not found', 404, ErrorCode.ERR_INVOICE_NOT_FOUND);
         }
 
         if (locked[0].status !== 'DRAFT') {
           throw new AppError(
             'Only draft invoices can be deleted. Issued invoices cannot be deleted.',
             409,
-            'ERR_CANNOT_DELETE_NON_DRAFT'
+            ErrorCode.ERR_CANNOT_DELETE_NON_DRAFT
           );
         }
 
@@ -750,19 +716,20 @@ router.post(
         `;
 
         if (!locked || locked.length === 0) {
-          throw new AppError('Invoice not found', 404, 'ERR_INVOICE_NOT_FOUND');
+          throw new AppError('Invoice not found', 404, ErrorCode.ERR_INVOICE_NOT_FOUND);
         }
 
         const inv = locked[0];
 
         if (inv.status === 'CANCELLED') {
-          throw new AppError('Invoice is already cancelled', 400, 'ERR_ALREADY_CANCELLED');
+          throw new AppError('Invoice is already cancelled', 400, ErrorCode.ERR_ALREADY_CANCELLED);
         }
 
         if (inv.status === 'DRAFT') {
-          throw new AppError('Draft invoices should be deleted, not cancelled', 400, 'ERR_CANNOT_CANCEL_DRAFT');
+          throw new AppError('Draft invoices should be deleted, not cancelled', 400, ErrorCode.ERR_CANNOT_CANCEL_DRAFT);
         }
 
+        if (await tx.creditNote.count({where:{invoiceId:id}})) throw new AppError('Credited invoices cannot be cancelled',409,ErrorCode.ERR_INVOICE_HAS_CREDITS);
         const paymentsCount = await tx.payment.count({
           where: { invoiceId: id },
         });
@@ -771,7 +738,7 @@ router.post(
           throw new AppError(
             'Invoices with recorded payments cannot be cancelled directly. Please refund or remove payments first.',
             400,
-            'ERR_INVOICE_HAS_PAYMENTS'
+            ErrorCode.ERR_INVOICE_HAS_PAYMENTS
           );
         }
 
@@ -827,19 +794,19 @@ router.post(
 
       const lockedInvoice = lockedInvoices && lockedInvoices[0];
       if (!lockedInvoice) {
-        throw new AppError('Invoice not found', 404, 'ERR_INVOICE_NOT_FOUND');
+        throw new AppError('Invoice not found', 404, ErrorCode.ERR_INVOICE_NOT_FOUND);
       }
 
       if (lockedInvoice.status === 'ISSUED') {
-        throw new AppError('Invoice has already been issued', 409, 'ERR_ALREADY_ISSUED');
+        throw new AppError('Invoice has already been issued', 409, ErrorCode.ERR_ALREADY_ISSUED);
       }
 
       if (lockedInvoice.status === 'CANCELLED') {
-        throw new AppError('Cancelled invoices cannot be issued', 400, 'ERR_CANNOT_ISSUE_CANCELLED');
+        throw new AppError('Cancelled invoices cannot be issued', 400, ErrorCode.ERR_CANNOT_ISSUE_CANCELLED);
       }
 
       if (lockedInvoice.status !== 'DRAFT') {
-        throw new AppError('Only draft invoices can be issued', 400, 'ERR_INVALID_INVOICE_STATE');
+        throw new AppError('Only draft invoices can be issued', 400, ErrorCode.ERR_INVALID_INVOICE_STATE);
       }
 
       // B20: Zero-total invoice cannot be issued
@@ -847,13 +814,13 @@ router.post(
         throw new AppError(
           'Cannot issue an invoice with a total amount of zero or less',
           400,
-          'ERR_ZERO_TOTAL_INVOICE'
+          ErrorCode.ERR_ZERO_TOTAL_INVOICE
         );
       }
 
       const itemCount = await tx.invoiceItem.count({ where: { invoiceId: id } });
       if (itemCount === 0) {
-        throw new AppError('Cannot issue an invoice with zero items', 400, 'ERR_EMPTY_INVOICE');
+        throw new AppError('Cannot issue an invoice with zero items', 400, ErrorCode.ERR_EMPTY_INVOICE);
       }
 
       // 2. Verify business profile and contact credentials
@@ -862,7 +829,7 @@ router.post(
       });
 
       if (!business) {
-        throw new AppError('Business profile not found', 404, 'ERR_BUSINESS_NOT_FOUND');
+        throw new AppError('Business profile not found', 404, ErrorCode.ERR_BUSINESS_NOT_FOUND);
       }
 
       const cleanBizPhone = (business.phone || '').replace(/\D/g, '');
@@ -873,7 +840,7 @@ router.post(
         throw new AppError(
           'Company WhatsApp number (min 10 digits) and Gmail/Email are mandatory to issue and send invoices. Please configure them in Settings.',
           400,
-          'ERR_COMPANY_CONTACT_MANDATORY'
+          ErrorCode.ERR_COMPANY_CONTACT_MANDATORY
         );
       }
 
@@ -883,7 +850,7 @@ router.post(
       });
 
       if (!customer) {
-        throw new AppError('Customer not found', 404, 'ERR_CUSTOMER_NOT_FOUND');
+        throw new AppError('Customer not found', 404, ErrorCode.ERR_CUSTOMER_NOT_FOUND);
       }
 
       const cleanCustPhone = (customer.phone || '').replace(/\D/g, '');
@@ -894,7 +861,7 @@ router.post(
         throw new AppError(
           'Customer must have at least one contact method (10-digit phone number or email) to receive the invoice.',
           400,
-          'ERR_CUSTOMER_CONTACT_MANDATORY'
+          ErrorCode.ERR_CUSTOMER_CONTACT_MANDATORY
         );
       }
 
@@ -981,5 +948,20 @@ router.post(
     }
   }
 );
+
+router.post('/bulk-delete',requireRole(['OWNER','ACCOUNTANT']),validateRequest({body:z.object({ids:z.array(z.string().uuid()).min(1).max(50)})}),async(req:AuthenticatedRequest,res:Response,next:NextFunction)=>{
+ try{
+  const ids=[...new Set(req.body.ids as string[])].sort(),businessId=req.business.id;
+  await prisma.$transaction(async tx=>{
+    // Sorted lock order prevents deadlocks between overlapping bulk requests.
+    for(const id of ids){
+      const rows=await tx.$queryRaw<Array<{status:string}>>`SELECT status FROM invoices WHERE id=${id} AND "businessId"=${businessId} FOR UPDATE`;
+      if(rows.length!==1||rows[0].status!=='DRAFT')throw new AppError('Every selected invoice must be an accessible draft',409,ErrorCode.ERR_BULK_DRAFT_ONLY);
+    }
+    await tx.invoice.deleteMany({where:{id:{in:ids},businessId,status:'DRAFT'}});
+    await tx.auditLog.create({data:{businessId,userId:req.user!.id,action:'INVOICE_BULK_DELETE',entityType:'INVOICE',entityId:ids[0],details:{ids}}});
+  });return sendSuccess(res,{deleted:ids.length});
+ }catch(error){next(error);}
+});
 
 export const invoicesRouter = router;

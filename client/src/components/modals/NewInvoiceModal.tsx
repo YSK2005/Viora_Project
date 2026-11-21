@@ -1,3 +1,5 @@
+import {ProductSearchSelect} from '../common/ProductSearchSelect';
+import {useDialog} from '../../hooks/useDialog';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   X,
@@ -11,7 +13,6 @@ import {
 import { Customer, Product, Invoice, BusinessProfile } from '../../types';
 import {
   fetchCustomers,
-  fetchProducts,
   fetchBusiness,
   createInvoice,
   updateDraftInvoice,
@@ -46,8 +47,8 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
   onSuccess,
   editingInvoice,
 }) => {
+  const dialogProps = useDialog(isOpen, () => {if(!isSubmitting) onClose();}, 'New invoice');
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
   const [businessState, setBusinessState] = useState('Karnataka');
   const [customerId, setCustomerId] = useState('');
@@ -117,7 +118,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
         if (parsed && Array.isArray(parsed.items) && parsed.items.length > 0) {
           setHasUnsavedDraft(true);
         }
-      } catch {}
+      } catch { /* Stored drafts may be unavailable. */ }
     }
   }, [isOpen, editingInvoice]);
 
@@ -153,7 +154,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
       if (parsed.notes !== undefined) setNotes(parsed.notes);
       if (parsed.items) setItems(parsed.items);
       setHasUnsavedDraft(false);
-    } catch {}
+    } catch { /* Stored drafts may be unavailable. */ }
   };
 
   const handleDiscardDraft = () => {
@@ -166,9 +167,8 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
     if (!isOpen) return;
     setError(null);
 
-    Promise.all([fetchCustomers(), fetchProducts(), fetchBusiness()]).then(([cRes, pRes, bRes]) => {
+    Promise.all([fetchCustomers(), fetchBusiness()]).then(([cRes, bRes]) => {
       setCustomers(cRes.customers);
-      setProducts(pRes.products.filter((product) => product.isActive));
       setBusinessProfile(bRes);
       const bState = bRes.state || 'Karnataka';
       setBusinessState(bState);
@@ -205,7 +205,8 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
         }
       }
     }).catch((err) => {
-      console.error('Failed to load customers, products, or business profile:', err);
+      console.error('Failed to load invoice form:', err);
+      setError('Unable to load invoice setup. Close and reopen to retry.');
     });
   }, [isOpen, editingInvoice]);
 
@@ -255,8 +256,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
     }
   };
 
-  const handleProductSelect = (index: number, prodId: string) => {
-    const prod = products.find((p) => p.id === prodId);
+  const handleProductSelect = (index: number, prod?: Product) => {
     const next = [...items];
     if (prod) {
       next[index] = {
@@ -472,7 +472,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-navy-950/50 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto">
+    <div {...dialogProps} className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-navy-950/50 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto">
       <div className="bg-white rounded-2xl shadow-popover border border-slate-200/90 w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden my-auto">
         {/* Modal Header */}
         <div className="p-4 sm:px-6 bg-slate-50 border-b border-slate-200/90 flex items-center justify-between">
@@ -536,7 +536,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-slate-50/70 rounded-xl border border-slate-200/70 text-xs">
             {/* Customer Picker */}
             <div className="space-y-1.5">
-              <label className="font-semibold text-slate-700 flex items-center gap-1.5">
+              <label htmlFor="newinvoicemodal-field-1" className="font-semibold text-slate-700 flex items-center gap-1.5">
                 <User className="w-3.5 h-3.5 text-teal-600" />
                 Select Customer *
               </label>
@@ -566,7 +566,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
             <div className="space-y-3">
               <div>
                 <label className="font-semibold text-slate-700 block mb-1">Invoice Date *</label>
-                <input
+                <input id="newinvoicemodal-field-1"
                   type="date"
                   value={invoiceDate}
                   onChange={(e) => setInvoiceDate(e.target.value)}
@@ -575,8 +575,8 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
               </div>
 
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Due Date *</label>
-                <input
+                <label htmlFor="newinvoicemodal-field-2" className="font-semibold text-slate-700 block mb-1">Due Date *</label>
+                <input id="newinvoicemodal-field-2"
                   type="date"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
@@ -598,7 +598,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
               />
 
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Supply Tax Treatment</label>
+                <label htmlFor="newinvoicemodal-field-3" className="font-semibold text-slate-700 block mb-1">Supply Tax Treatment</label>
                 <div className="flex items-center gap-2 pt-1">
                   <button
                     type="button"
@@ -667,18 +667,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
                       <tr key={idx} className="hover:bg-slate-50/50">
                         {/* Catalog Select */}
                         <td className="py-2 px-2">
-                          <select
-                            value={row.productId}
-                            onChange={(e) => handleProductSelect(idx, e.target.value)}
-                            className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-slate-800"
-                          >
-                            <option value="">-- Custom Item --</option>
-                            {products.map((p) => (
-                              <option key={p.id} value={p.id}>
-                                {p.name} (₹{p.unitPrice})
-                              </option>
-                            ))}
-                          </select>
+<ProductSearchSelect value={row.productId} onChange={product=>handleProductSelect(idx,product)}/>
                         </td>
 
                         {/* Description */}
@@ -795,7 +784,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
             {/* Notes */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-700 block">Notes & Terms of Payment</label>
-              <textarea
+              <textarea id="newinvoicemodal-field-3"
                 rows={4}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}

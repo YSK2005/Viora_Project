@@ -37,6 +37,8 @@ const PAGE_TITLES: Record<NavigationKey, { title: string; subtitle: string }> = 
     title: 'Sales & Tax Reports',
     subtitle: 'Sales timelines, GST tax summaries, and revenue insights',
   },
+  credits: {title:'Credit Notes',subtitle:'Full and partial credits against original invoice lines'},
+  statements: {title:'Customer Statements',subtitle:'Current invoices, payments, credits and balances'},
   settings: {
     title: 'Business Settings',
     subtitle: 'Company profile, branding logo, GSTIN, and sequential numbering',

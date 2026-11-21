@@ -1,3 +1,4 @@
+import {useDialog} from '../../hooks/useDialog';
 import React from 'react';
 import {
   LayoutDashboard,
@@ -40,6 +41,8 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'products', label: 'Products & Services', icon: Package },
   { key: 'payments', label: 'Payments', icon: CreditCard },
   { key: 'reports', label: 'Sales Reports', icon: BarChart3 },
+  { key: 'credits', label: 'Credit Notes', icon: Receipt },
+  { key: 'statements', label: 'Customer Statements', icon: Users },
   { key: 'settings', label: 'Business Settings', icon: Settings },
 ];
 
@@ -54,6 +57,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   userRole,
   onLogout,
 }) => {
+  const dialogProps=useDialog(isMobileOpen,onCloseMobile,'Main navigation');
   return (
     <>
       {/* Mobile backdrop overlay */}
@@ -65,11 +69,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       {/* Sidebar container */}
-      <aside
+      <div {...(isMobileOpen ? dialogProps : {})} ref={dialogProps.ref} data-sidebar
         className={`fixed top-0 bottom-0 left-0 z-50 flex flex-col bg-navy-950 border-r border-navy-800 transition-all duration-300 ease-in-out ${
           isCollapsed ? 'w-20' : 'w-64'
         } ${
-          isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+          isMobileOpen ? 'translate-x-0 visible' : '-translate-x-full invisible lg:visible lg:translate-x-0'
         }`}
       >
         {/* Brand Header */}
@@ -103,6 +107,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         </div>
 
+        <button className="lg:hidden p-3 text-white" onClick={onCloseMobile} aria-label="Close navigation">Close menu</button>
         {/* Navigation list */}
         <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
           {!isCollapsed && (
@@ -118,6 +123,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             return (
               <button
                 key={item.key}
+                aria-label={item.label}
+                aria-current={isActive ? 'page' : undefined}
                 onClick={() => {
                   onNavigate(item.key);
                   onCloseMobile();
@@ -218,7 +225,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           </div>
         )}
-      </aside>
+      </div>
     </>
   );
 };

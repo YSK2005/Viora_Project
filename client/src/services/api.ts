@@ -26,11 +26,22 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
 
   headers.set('X-Viora-Client', 'web');
 
-  return fetch(url, {
-    ...init,
-    headers,
-    credentials: 'include', // Includes HTTP-only session cookie
-  });
+  const controller = new AbortController();
+  const cancel = () => controller.abort(init.signal?.reason);
+  if (init.signal?.aborted) cancel();
+  init.signal?.addEventListener('abort', cancel, {once:true});
+  const timer = window.setTimeout(() => controller.abort(), 20_000);
+  try {
+    const response = await fetch(url, {...init, headers, credentials:'include', signal:controller.signal});
+    if (response.status >= 500 || response.status === 429) window.dispatchEvent(new CustomEvent('viora:network', {detail:response.status===429 ? 'Too many requests. Please wait before retrying.' : 'Server unavailable. Your changes may not have completed.'}));
+    return response;
+  } catch (error) {
+    if (!init.signal?.aborted) window.dispatchEvent(new CustomEvent('viora:network', {detail:controller.signal.aborted ? 'Request timed out. Check your records before retrying a payment or invoice.' : 'Connection lost. Check your connection and retry.'}));
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    init.signal?.removeEventListener('abort',cancel);
+  }
 }
 
 export interface AuthResponse {
@@ -199,6 +210,7 @@ export async function fetchInvoices(params?: {
   paymentStatus?: string;
   search?: string;
   customerId?: string;
+  customerName?: string;
   startDate?: string;
   endDate?: string;
   limit?: number;
@@ -210,6 +222,7 @@ export async function fetchInvoices(params?: {
     if (params?.paymentStatus && params.paymentStatus !== 'ALL') query.append('paymentStatus', params.paymentStatus);
     if (params?.search) query.append('search', params.search);
     if (params?.customerId) query.append('customerId', params.customerId);
+    if (params?.customerName) query.append('customerName', params.customerName);
     if (params?.startDate) query.append('startDate', params.startDate);
     if (params?.endDate) query.append('endDate', params.endDate);
     if (params?.limit) query.append('limit', String(params.limit));

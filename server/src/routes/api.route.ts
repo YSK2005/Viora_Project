@@ -1,3 +1,4 @@
+import {creditsRouter} from './v1/credits.route';
 import { Router } from 'express';
 import { healthRouter } from './health.route';
 import { authRouter } from './v1/auth.route';
@@ -19,6 +20,9 @@ router.use('/health', healthRouter);
 // Authentication & Session endpoints (public)
 router.use('/auth', authRouter);
 router.use('/v1/auth', authRouter);
+
+router.use('/credit-notes', requireAuth, creditsRouter);
+router.use('/v1/credit-notes', requireAuth, creditsRouter);
 
 // Core business endpoints protected by requireAuth
 router.use('/business', requireAuth, businessRouter);

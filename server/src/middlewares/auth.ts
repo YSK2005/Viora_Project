@@ -1,3 +1,4 @@
+import {ErrorCode} from '../utils/errorCodes';
 import { Request, Response, NextFunction } from 'express';
 import { AppError } from './errorHandler';
 import { parseCookies, validateSessionToken } from '../utils/auth';
@@ -47,12 +48,12 @@ export async function requireAuth(
   try {
     const rawToken = extractToken(req);
     if (!rawToken) {
-      throw new AppError('Authentication required. Please sign in.', 401, 'ERR_UNAUTHORIZED');
+      throw new AppError('Authentication required. Please sign in.', 401, ErrorCode.ERR_UNAUTHORIZED);
     }
 
     const session = await validateSessionToken(rawToken);
     if (!session || !session.user) {
-      throw new AppError('Session expired or invalid. Please sign in again.', 401, 'ERR_UNAUTHORIZED');
+      throw new AppError('Session expired or invalid. Please sign in again.', 401, ErrorCode.ERR_UNAUTHORIZED);
     }
 
     const user = session.user;
@@ -60,7 +61,7 @@ export async function requireAuth(
 
     // Revoked or orphaned users must never gain access implicitly.
     if (memberships.length === 0) {
-      throw new AppError('No business access. Contact a business owner.', 403, 'ERR_NO_MEMBERSHIP');
+      throw new AppError('No business access. Contact a business owner.', 403, ErrorCode.ERR_NO_MEMBERSHIP);
     }
 
     // Determine active business
@@ -72,7 +73,7 @@ export async function requireAuth(
       if (found) {
         activeMembership = found;
       } else {
-        throw new AppError('You do not have access to the specified business', 403, 'ERR_FORBIDDEN_BUSINESS');
+        throw new AppError('You do not have access to the specified business', 403, ErrorCode.ERR_FORBIDDEN_BUSINESS);
       }
     } else if (session.activeBusinessId) {
       const found = memberships.find((m) => m.businessId === session.activeBusinessId);
@@ -105,7 +106,7 @@ export function requireRole(allowedRoles: UserRole[]) {
         new AppError(
           `Permission denied. Required role: ${allowedRoles.join(' or ')}. Your role: ${req.role || 'NONE'}`,
           403,
-          'ERR_FORBIDDEN_ROLE'
+          ErrorCode.ERR_FORBIDDEN_ROLE
         )
       );
     }

@@ -1,3 +1,4 @@
+import {ErrorCode} from '../../utils/errorCodes';
 import { Router, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../config/prisma';
@@ -207,23 +208,23 @@ router.post(
         });
 
         if (!payment || payment.invoice.businessId !== businessId) {
-          throw new AppError('Payment not found', 404, 'ERR_PAYMENT_NOT_FOUND');
+          throw new AppError('Payment not found', 404, ErrorCode.ERR_PAYMENT_NOT_FOUND);
         }
 
         if (payment.isReversed) {
-          throw new AppError('This payment has already been reversed', 400, 'ERR_PAYMENT_ALREADY_REVERSED');
+          throw new AppError('This payment has already been reversed', 400, ErrorCode.ERR_PAYMENT_ALREADY_REVERSED);
         }
 
         // 2. Lock invoice row for update
-        const [lockedInvoice] = await tx.$queryRaw<Array<{ id: string; grandTotal: any; status: string }>>`
-          SELECT id, "grandTotal", status
+        const [lockedInvoice] = await tx.$queryRaw<Array<{ id: string; grandTotal: any; creditedTotal: any; status: string }>>`
+          SELECT id, "grandTotal", "creditedTotal", status
           FROM "invoices"
           WHERE id = ${payment.invoiceId} AND "businessId" = ${businessId}
           FOR UPDATE
         `;
 
         if (!lockedInvoice) {
-          throw new AppError('Invoice not found', 404, 'ERR_INVOICE_NOT_FOUND');
+          throw new AppError('Invoice not found', 404, ErrorCode.ERR_INVOICE_NOT_FOUND);
         }
 
         // 3. Mark payment as reversed (Preserves original payment record!)
@@ -243,7 +244,7 @@ router.post(
           where: { invoiceId: payment.invoiceId },
         });
 
-        const derived = derivePaymentStatus(lockedInvoice.grandTotal, allPayments);
+        const derived = derivePaymentStatus(lockedInvoice.grandTotal, allPayments, lockedInvoice.creditedTotal);
 
         // 5. Create immutable audit log entry
         await logAuditEvent(
@@ -316,7 +317,7 @@ export async function handleRecordPayment(
         throw new AppError(
           `Duplicate payment submission detected for requestKey: ${body.requestKey}`,
           409,
-          'ERR_DUPLICATE_PAYMENT_REQUEST'
+          ErrorCode.ERR_DUPLICATE_PAYMENT_REQUEST
         );
       }
 
@@ -326,11 +327,11 @@ export async function handleRecordPayment(
             Array<{
               id: string;
               invoiceNumber: string;
-              grandTotal: any;
+              grandTotal: any; creditedTotal: any;
               status: string;
             }>
           >`
-            SELECT id, "invoiceNumber", "grandTotal", status
+            SELECT id, "invoiceNumber", "grandTotal", "creditedTotal", status
             FROM "invoices"
             WHERE id = ${invoiceId} AND "businessId" = ${businessId}
             FOR UPDATE
@@ -339,18 +340,18 @@ export async function handleRecordPayment(
             Array<{
               id: string;
               invoiceNumber: string;
-              grandTotal: any;
+              grandTotal: any; creditedTotal: any;
               status: string;
             }>
           >`
-            SELECT id, "invoiceNumber", "grandTotal", status
+            SELECT id, "invoiceNumber", "grandTotal", "creditedTotal", status
             FROM "invoices"
             WHERE id = ${invoiceId}
             FOR UPDATE
           `;
 
       if (!lockedInvoices || lockedInvoices.length === 0) {
-        throw new AppError('Invoice not found', 404, 'ERR_INVOICE_NOT_FOUND');
+        throw new AppError('Invoice not found', 404, ErrorCode.ERR_INVOICE_NOT_FOUND);
       }
 
       const invoice = lockedInvoices[0];
@@ -359,7 +360,7 @@ export async function handleRecordPayment(
         throw new AppError(
           `Cannot record payment for an invoice in ${invoice.status} status. Only ISSUED invoices can receive payments.`,
           400,
-          'ERR_INVALID_INVOICE_STATUS'
+          ErrorCode.ERR_INVALID_INVOICE_STATUS
         );
       }
 
@@ -378,9 +379,9 @@ export async function handleRecordPayment(
         },
       });
 
-      const currentStatus = derivePaymentStatus(invoice.grandTotal, existingPayments);
+      const currentStatus = derivePaymentStatus(invoice.grandTotal, existingPayments, invoice.creditedTotal);
       if (currentStatus.paymentStatus === 'PAID' || currentStatus.balanceRemaining.lessThanOrEqualTo(0)) {
-        throw new AppError('This invoice has already been fully paid', 400, 'ERR_INVOICE_ALREADY_PAID');
+        throw new AppError('This invoice has already been fully paid', 400, ErrorCode.ERR_INVOICE_ALREADY_PAID);
       }
 
       // 4. Validate that payment amount does not exceed remaining balance
@@ -388,7 +389,7 @@ export async function handleRecordPayment(
         throw new AppError(
           `Payment amount (₹${paymentAmount.toString()}) exceeds outstanding balance (₹${currentStatus.balanceRemaining.toString()})`,
           400,
-          'ERR_OVERPAYMENT_REJECTED'
+          ErrorCode.ERR_OVERPAYMENT_REJECTED
         );
       }
 
@@ -409,7 +410,7 @@ export async function handleRecordPayment(
 
       // 6. Recalculate updated status
       const updatedPayments = [...existingPayments, newPayment];
-      const updatedStatus = derivePaymentStatus(invoice.grandTotal, updatedPayments);
+      const updatedStatus = derivePaymentStatus(invoice.grandTotal, updatedPayments, invoice.creditedTotal);
 
       // 7. Audit log
       if (businessId) {
@@ -455,7 +456,7 @@ export async function handleRecordPayment(
       throw new AppError(
         `Duplicate payment submission detected for requestKey: ${body.requestKey}`,
         409,
-        'ERR_DUPLICATE_PAYMENT_REQUEST'
+        ErrorCode.ERR_DUPLICATE_PAYMENT_REQUEST
       );
     }
     throw error;

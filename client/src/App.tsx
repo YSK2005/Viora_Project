@@ -1,13 +1,16 @@
-import React, { useState, useEffect, useCallback } from 'react';
+const CreditsView=lazy(()=>import('./components/pages/CreditsView').then(m=>({default:m.CreditsView})));
+const StatementsView=lazy(()=>import('./components/pages/StatementsView').then(m=>({default:m.StatementsView})));
+import {PageSkeleton} from './components/common/PageSkeleton';
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { NavigationKey, Invoice, DashboardSummary, BusinessProfile, SystemHealth, User, UserRole } from './types';
 import { AppLayout } from './components/layout/AppLayout';
-import { DashboardView } from './components/pages/DashboardView';
-import { InvoicesView } from './components/pages/InvoicesView';
-import { CustomersView } from './components/pages/CustomersView';
-import { ProductsView } from './components/pages/ProductsView';
-import { PaymentsView } from './components/pages/PaymentsView';
-import { ReportsView } from './components/pages/ReportsView';
-import { SettingsView } from './components/pages/SettingsView';
+const DashboardView = lazy(() => import('./components/pages/DashboardView').then(m => ({default:m.DashboardView})));
+const InvoicesView = lazy(() => import('./components/pages/InvoicesView').then(m => ({default:m.InvoicesView})));
+const CustomersView = lazy(() => import('./components/pages/CustomersView').then(m => ({default:m.CustomersView})));
+const ProductsView = lazy(() => import('./components/pages/ProductsView').then(m => ({default:m.ProductsView})));
+const PaymentsView = lazy(() => import('./components/pages/PaymentsView').then(m => ({default:m.PaymentsView})));
+const ReportsView = lazy(() => import('./components/pages/ReportsView').then(m => ({default:m.ReportsView})));
+const SettingsView = lazy(() => import('./components/pages/SettingsView').then(m => ({default:m.SettingsView})));
 import { NewInvoiceModal } from './components/modals/NewInvoiceModal';
 import { InvoicePreviewModal } from './components/modals/InvoicePreviewModal';
 import { RecordPaymentModal } from './components/modals/RecordPaymentModal';
@@ -291,6 +294,10 @@ export const App: React.FC = () => {
     }
   };
 
+  if (window.location.pathname !== '/' && window.location.pathname !== '/index.html') {
+    return <main className="p-8 max-w-xl mx-auto"><h1 className="text-3xl font-bold">404 — Page not found</h1><p className="my-4">This page does not exist.</p><a className="underline" href="/">Go to dashboard</a></main>;
+  }
+
   if (isAuthChecking) {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
@@ -302,6 +309,8 @@ export const App: React.FC = () => {
       </div>
     );
   }
+
+  if (!currentUser) return <AuthModal isOpen onSuccess={handleAuthSuccess} />;
 
   return (
     <>
@@ -329,6 +338,7 @@ export const App: React.FC = () => {
         onOpenGlobalSearch={() => setIsGlobalSearchOpen(true)}
       >
         {loadError && <div role="alert" className="mb-4 rounded-lg border border-red-300 bg-red-50 p-4 text-red-900">{loadError} <button onClick={loadData} className="underline font-semibold">Retry</button></div>}
+        <Suspense fallback={<PageSkeleton />}>
         {currentNav === 'dashboard' && (
           <DashboardView
             summary={dashboardSummary}
@@ -348,6 +358,7 @@ export const App: React.FC = () => {
 
         {currentNav === 'invoices' && (
           <InvoicesView
+            summary={dashboardSummary}
             invoices={invoices}
             onSelectInvoice={(inv) => setPreviewInvoiceId(inv.id)}
             onNewInvoice={handleOpenNewInvoice}
@@ -399,6 +410,9 @@ export const App: React.FC = () => {
         {currentNav === 'reports' && <ReportsView />}
 
         {currentNav === 'settings' && <SettingsView />}
+        {currentNav==='credits' && <CreditsView onChanged={loadData} canIssue={userRole==='OWNER'||userRole==='ACCOUNTANT'} />}
+        {currentNav==='statements' && <StatementsView />}
+        </Suspense>
       </AppLayout>
 
       {/* New / Edit Invoice Modal */}

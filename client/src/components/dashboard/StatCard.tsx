@@ -13,7 +13,7 @@ interface StatCardProps {
   accent: 'teal' | 'navy' | 'emerald' | 'amber' | 'purple';
 }
 
-export const StatCard: React.FC<StatCardProps> = ({
+export const StatCard: React.FC<StatCardProps> = React.memo(({
   title,
   value,
   subtext,
@@ -77,4 +77,4 @@ export const StatCard: React.FC<StatCardProps> = ({
       )}
     </div>
   );
-};
+});

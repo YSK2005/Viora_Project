@@ -32,10 +32,10 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 20
+      - name: Setup Node.js 24
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: 'npm'
 
       - name: Install Monorepo Dependencies
@@ -88,3 +88,17 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:password@localhost:5432/viora_bills_test?schema=public
         run: npm run test:review
+
+      - name: Lint and component tests
+        run: npm run lint && npm run test:unit
+      - name: Credit and security integration tests
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/viora_bills_test?schema=public
+        run: npx tsx server/test-roadmap.ts
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+      - name: Browser smoke tests
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/viora_bills_test?schema=public
+          PLAYWRIGHT_USE_BUNDLED: '1'
+        run: npm run test:e2e

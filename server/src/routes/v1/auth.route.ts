@@ -1,3 +1,4 @@
+import {ErrorCode} from '../../utils/errorCodes';
 import { Router, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../config/prisma';
@@ -18,14 +19,14 @@ const router = Router();
 
 const registerSchema = z.object({
   email: z.string().trim().email('Invalid email address').toLowerCase(),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  password: z.string().min(12, 'Password must be at least 12 characters').max(128),
   name: z.string().trim().min(2, 'Name must be at least 2 characters').max(100),
   businessName: z.string().trim().min(2).max(100).optional(),
 });
 
 const loginSchema = z.object({
   email: z.string().trim().email('Invalid email address').toLowerCase(),
-  password: z.string().min(1, 'Password is required'),
+  password: z.string().min(1, 'Password is required').max(128),
 });
 
 const switchBusinessSchema = z.object({
@@ -51,7 +52,7 @@ router.post(
 
       const existingUser = await prisma.user.findUnique({ where: { email } });
       if (existingUser) {
-        throw new AppError('An account with this email already exists', 409, 'ERR_USER_EXISTS');
+        throw new AppError('An account with this email already exists', 409, ErrorCode.ERR_USER_EXISTS);
       }
 
       const passwordHash = hashPassword(password);
@@ -153,12 +154,12 @@ router.post(
       });
 
       if (!user || !verifyPassword(password, user.passwordHash)) {
-        throw new AppError('Invalid email or password', 401, 'ERR_INVALID_CREDENTIALS');
+        throw new AppError('Invalid email or password', 401, ErrorCode.ERR_INVALID_CREDENTIALS);
       }
 
       const memberships = user.memberships;
       if (memberships.length === 0) {
-        throw new AppError('No business access. Contact a business owner.', 403, 'ERR_NO_MEMBERSHIP');
+        throw new AppError('No business access. Contact a business owner.', 403, ErrorCode.ERR_NO_MEMBERSHIP);
       }
 
       const activeMembership = memberships[0];
@@ -264,7 +265,7 @@ router.post(
       });
 
       if (!membership) {
-        throw new AppError('You do not have access to this business', 403, 'ERR_FORBIDDEN_BUSINESS');
+        throw new AppError('You do not have access to this business', 403, ErrorCode.ERR_FORBIDDEN_BUSINESS);
       }
 
       await prisma.session.update({
@@ -298,7 +299,7 @@ router.post(
 
       const user = await prisma.user.findUnique({ where: { email } });
       if (!user) {
-        throw new AppError('This person must register their own account before being added.', 409, 'ERR_MEMBER_REGISTRATION_REQUIRED');
+        throw new AppError('This person must register their own account before being added.', 409, ErrorCode.ERR_MEMBER_REGISTRATION_REQUIRED);
       }
 
       const existingMembership = await prisma.businessMembership.findUnique({

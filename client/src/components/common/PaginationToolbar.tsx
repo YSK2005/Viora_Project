@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useId} from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface PaginationToolbarProps {
@@ -22,6 +22,7 @@ export const PaginationToolbar: React.FC<PaginationToolbarProps> = ({
   itemLabel = 'records',
   className = '',
 }) => {
+  const pageSizeId = useId();
   const startItem = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
   const endItem = Math.min(currentPage * pageSize, totalCount);
 
@@ -40,11 +41,11 @@ export const PaginationToolbar: React.FC<PaginationToolbarProps> = ({
 
         {onPageSizeChange && (
           <div className="flex items-center gap-1.5 ml-3 border-l border-slate-200 pl-3">
-            <label htmlFor="page-size-select" className="text-slate-500 text-[11px]">
+            <label htmlFor={pageSizeId} className="text-slate-500 text-[11px]">
               Per page:
             </label>
             <select
-              id="page-size-select"
+              id={pageSizeId}
               value={pageSize}
               onChange={(e) => onPageSizeChange(Number(e.target.value))}
               className="py-1 px-2 border border-slate-200 rounded bg-slate-50 text-slate-800 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"

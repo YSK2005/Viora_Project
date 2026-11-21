@@ -1,3 +1,4 @@
+import {useDialog} from '../../hooks/useDialog';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Product } from '../../types';
 import {
@@ -32,6 +33,7 @@ export const ProductsView: React.FC = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const dialogProps = useDialog(isModalOpen, () => setIsModalOpen(false), 'Product details');
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -417,7 +419,7 @@ export const ProductsView: React.FC = () => {
 
       {/* Add Product Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/40 backdrop-blur-xs animate-in fade-in duration-150">
+        <div {...dialogProps} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/40 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="bg-white rounded-2xl shadow-popover border border-slate-200/90 w-full max-w-lg overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-200/80 flex items-center justify-between bg-slate-50/50">
               <div className="flex items-center gap-2.5">
@@ -446,10 +448,10 @@ export const ProductsView: React.FC = () => {
 
             <form onSubmit={handleSaveProduct} className="p-6 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label htmlFor="productsview-field-1" className="block text-xs font-semibold text-slate-700 mb-1">
                   Product / Service Name <span className="text-rose-500">*</span>
                 </label>
-                <input
+                <input id="productsview-field-1"
                   type="text"
                   required
                   value={name}
@@ -460,10 +462,10 @@ export const ProductsView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label htmlFor="productsview-field-2" className="block text-xs font-semibold text-slate-700 mb-1">
                   Description
                 </label>
-                <textarea
+                <textarea id="productsview-field-2"
                   rows={2}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -474,10 +476,10 @@ export const ProductsView: React.FC = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label htmlFor="productsview-field-3" className="block text-xs font-semibold text-slate-700 mb-1">
                     Unit <span className="text-rose-500">*</span>
                   </label>
-                  <select
+                  <select id="productsview-field-3"
                     value={unit}
                     onChange={(e) => setUnit(e.target.value)}
                     className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
@@ -493,10 +495,10 @@ export const ProductsView: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label htmlFor="productsview-field-4" className="block text-xs font-semibold text-slate-700 mb-1">
                     Unit Price (₹) <span className="text-rose-500">*</span>
                   </label>
-                  <input
+                  <input id="productsview-field-4"
                     type="number"
                     required
                     min="0"
@@ -509,10 +511,10 @@ export const ProductsView: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label htmlFor="productsview-field-5" className="block text-xs font-semibold text-slate-700 mb-1">
                     Tax Rate (%)
                   </label>
-                  <select
+                  <select id="productsview-field-5"
                     value={taxRate}
                     onChange={(e) => setTaxRate(e.target.value)}
                     className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"

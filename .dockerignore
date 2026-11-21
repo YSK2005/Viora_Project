@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+**/dist
+.git
+.dependency-backup-*
+**/.env
+**/.env.*
+!**/.env.example
+*.sql
+!server/prisma/migrations/**/migration.sql
+*.dump
+test-results
+playwright-report

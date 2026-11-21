@@ -1,9 +1,10 @@
 import React from 'react';
-import { Invoice } from '../../types';
+import { Invoice, DashboardSummary } from '../../types';
 import { InvoiceTable } from '../invoices/InvoiceTable';
 import { FileText, CheckCircle2, Clock, FileEdit, AlertCircle, RefreshCw, AlertTriangle } from 'lucide-react';
 
 interface InvoicesViewProps {
+  summary?: DashboardSummary | null;
   invoices: Invoice[];
   onSelectInvoice: (inv: Invoice) => void;
   onNewInvoice: () => void;
@@ -22,6 +23,7 @@ interface InvoicesViewProps {
 
 export const InvoicesView: React.FC<InvoicesViewProps> = ({
   invoices,
+  summary,
   onSelectInvoice,
   onNewInvoice,
   onIssueInvoice,
@@ -36,10 +38,10 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
   isStale = false,
   onRetry,
 }) => {
-  const issuedCount = invoices.filter((i) => i.status === 'ISSUED').length;
-  const draftCount = invoices.filter((i) => i.status === 'DRAFT').length;
-  const paidCount = invoices.filter((i) => i.paymentStatus === 'PAID').length;
-  const pendingCount = invoices.filter(
+  const issuedCount = summary?.metrics.totalInvoices.count ?? invoices.filter((i) => i.status === 'ISSUED').length;
+  const draftCount = summary?.metrics.totalInvoices.draftCount ?? invoices.filter((i) => i.status === 'DRAFT').length;
+  const paidCount = summary?.metrics.totalInvoices.paidCount ?? invoices.filter((i) => i.paymentStatus === 'PAID').length;
+  const pendingCount = summary ? summary.metrics.totalInvoices.partialCount + summary.metrics.totalInvoices.unpaidCount : invoices.filter(
     (i) => i.status === 'ISSUED' && (i.paymentStatus === 'UNPAID' || i.paymentStatus === 'PARTIALLY_PAID')
   ).length;
 

@@ -6,7 +6,7 @@ This document defines the repeatable procedure for environment provisioning, dat
 
 ## 1. System Requirements & Architecture
 
-- **Node.js**: v20.x or v22.x LTS
+- **Node.js**: v24.x LTS
 - **npm**: v10.x or higher
 - **Database**: PostgreSQL 15, 16, 17, or 18
 - **OS**: Linux (Ubuntu 22.04+ / Debian 12+), macOS, or Windows Server
@@ -276,8 +276,36 @@ npm run release:check
 This single command runs:
 1. `type-check`: Full TypeScript compilation across client and server workspaces.
 2. `build`: Production bundling of frontend (Vite) and backend (Node.js).
-3. `test:release`: Execution of all 4 verification suites:
+3. `test:release`: Execution of the verification suites:
    - `test-p0.ts` (Authentication, tenant isolation, lifecycle guards, pagination)
    - `test-p1.ts` (Payment reversals, audit history, Asia/Kolkata timezone, omni-search)
    - `test-endpoints.ts` (Financial rounding, PDF streaming, CRUD operations)
    - `test-stabilization.ts` (Concurrent issuance, idempotency, GSTIN/phone validation)
+
+
+## Roadmap release additions
+
+Use Node 24 and npm ci. Run type-check, lint, build, test:unit, test:release, and test:e2e
+against a dedicated test database. Apply migrations with prisma migrate deploy before starting the API.
+The 2026-11-19 validation database is separate from the original port-5433 business database.
+
+Docker: set POSTGRES_PASSWORD to a strong URL-safe secret, then docker compose up --build -d.
+The local frontend is at http://localhost:8080. For production set APP_ENV=production and
+CLIENT_URL to the HTTPS frontend origin and put TLS termination in front of the web container.
+The API and PostgreSQL have no published host ports. Back up the postgres-data volume with pg_dump.
+Container execution must be verified on a machine with a running Docker daemon.
+
+Authentication limits use per-process memory. This Compose deployment runs one API instance;
+before horizontal scaling use a shared limiter store at the proxy or application layer.
+TRUST_PROXY_HOPS must match the actual trusted proxy chain; leave 0 for direct access.
+Database retry is restricted to safe reads. Financial writes are never automatically retried.
+
+Credit notes allocate tax and discounts from the original invoice using cumulative decimal
+rounding, preserve the invoice, and cannot credit more than its original quantities. Issuance,
+invoice balance update and audit entry are atomic. Credits may create a customer credit balance;
+they do not claim a cash refund occurred. Original gross sales and period credit totals are
+reported separately. Review tax filing treatment with your accounting process before filing.
+
+Swagger reference: /api/docs; OpenAPI: /api/openapi.json. Interactive writes are disabled there.
+The manifest supports standalone display; no service worker caches private billing data.
+The private application uses noindex/nofollow rather than publishing account pages to search engines.

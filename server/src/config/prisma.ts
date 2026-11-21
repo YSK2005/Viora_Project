@@ -1,3 +1,4 @@
+import { retryRead } from '../utils/retryRead';
 import { PrismaClient, Prisma } from '../generated/prisma-client';
 export { Prisma };
 import { env } from './env';
@@ -20,7 +21,7 @@ if (env.NODE_ENV !== 'production') {
  */
 export async function checkDatabaseConnection(): Promise<{ isConnected: boolean; message: string }> {
   try {
-    await prisma.$queryRaw`SELECT 1`;
+    await retryRead(() => prisma.$queryRaw`SELECT 1`);
     return { isConnected: true, message: 'Database connection active' };
   } catch (err: any) {
     return {

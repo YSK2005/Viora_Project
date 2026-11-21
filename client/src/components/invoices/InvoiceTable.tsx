@@ -20,7 +20,7 @@ import {
   Copy,
 } from 'lucide-react';
 import { PaginationToolbar } from '../common/PaginationToolbar';
-import { downloadInvoicePdf } from '../../services/api';
+import { downloadInvoicePdf, fetchInvoices, apiFetch } from '../../services/api';
 import { openWhatsAppDispatch, openGmailDispatch } from '../../utils/dispatchInvoice';
 
 interface InvoiceTableProps {
@@ -73,43 +73,35 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
     return Array.from(map.values()).sort((a, b) => a.localeCompare(b));
   }, [invoices]);
 
-  // Filtered invoices (B4: Apply search, customer dropdown, status, and date filters, sorted by date descending)
-  const filteredInvoices = useMemo(() => {
-    return invoices
-      .filter((inv) => {
-        let matchesStatus = true;
-        if (statusFilter === 'DRAFT') matchesStatus = inv.status === 'DRAFT';
-        else if (statusFilter === 'ISSUED') matchesStatus = inv.status === 'ISSUED';
-        else if (statusFilter === 'CANCELLED') matchesStatus = inv.status === 'CANCELLED';
-        else if (statusFilter === 'PAID') matchesStatus = inv.paymentStatus === 'PAID';
-        else if (statusFilter === 'UNPAID')
-          matchesStatus = inv.paymentStatus === 'UNPAID' || inv.paymentStatus === 'PARTIALLY_PAID';
-
-        const q = searchQuery.toLowerCase().trim();
-        const customer = (inv.customerName || '').toLowerCase();
-        const num = (inv.invoiceNumber || '').toLowerCase();
-        const matchesSearch = !q || num.includes(q) || customer.includes(q);
-
-        let matchesCustomer = true;
-        if (customerFilter && customerFilter !== 'ALL') {
-          matchesCustomer = (inv.customerName || '').toLowerCase() === customerFilter.toLowerCase();
-        }
-
-        let matchesDate = true;
-        const invDate = inv.invoiceDate;
-        if (startDate && invDate < startDate) matchesDate = false;
-        if (endDate && invDate > endDate) matchesDate = false;
-
-        return matchesStatus && matchesSearch && matchesCustomer && matchesDate;
-      })
-      .sort((a, b) => {
-        // Primary sort: Invoice Date descending (newest first)
-        const dateCompare = (b.invoiceDate || '').localeCompare(a.invoiceDate || '');
-        if (dateCompare !== 0) return dateCompare;
-        // Secondary sort: Invoice Number descending
-        return (b.invoiceNumber || '').localeCompare(a.invoiceNumber || '');
-      });
-  }, [invoices, statusFilter, searchQuery, customerFilter, startDate, endDate]);
+  const [remoteInvoices,setRemoteInvoices]=useState<Invoice[]>([]);
+  const [totalCount,setTotalCount]=useState(0);
+  const [loading,setLoading]=useState(true);
+  const [listError,setListError]=useState('');
+  const [revision,setRevision]=useState(0);
+  const [selected,setSelected]=useState<string[]>([]);
+  React.useEffect(()=>{
+    let active=true;setLoading(true);setListError('');setSelected([]);
+    const timer=setTimeout(async()=>{
+      const result=await fetchInvoices({page,limit:pageSize,status:['DRAFT','ISSUED','CANCELLED'].includes(statusFilter)?statusFilter:undefined,
+        paymentStatus:statusFilter==='PAID'?'PAID':statusFilter==='UNPAID'?'UNSETTLED':undefined,
+        search:searchQuery,customerName:customerFilter||undefined,startDate,endDate});
+      if(!active)return;
+      if(!result.isBackendConnected)setListError('Unable to load invoices. Retry without changing your filters.');
+      else {setRemoteInvoices(result.invoices);setTotalCount(result.totalCount);}
+      setLoading(false);
+    },200);
+    return ()=>{active=false;clearTimeout(timer);};
+  },[page,pageSize,statusFilter,searchQuery,customerFilter,startDate,endDate,revision,invoices]);
+  const exportSelected=()=>{
+    const rows=remoteInvoices.filter(i=>selected.includes(i.id));
+    const cell=(value:unknown)=>'"'+String(value??'').replace(/^[=+@-]/,"'").replace(/"/g,'""')+'"';
+    const csv=['Invoice,Customer,Date,Total,Credited,Balance',...rows.map(i=>[i.invoiceNumber,i.customerName,i.invoiceDate,i.grandTotal,i.creditedTotal||0,i.balanceRemaining].map(cell).join(','))].join('\r\n');
+    const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));const link=document.createElement('a');link.href=url;link.download='selected-invoices.csv';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  };
+  const deleteSelected=async()=>{
+    if(!confirm('Permanently delete '+selected.length+' selected drafts? Issued invoices cannot be deleted.'))return;
+    try{const res=await apiFetch('/invoices/bulk-delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:selected})});const json=await res.json();if(!res.ok)throw Error(json.error?.message||'Delete failed');setRevision(n=>n+1);}catch(error){setListError(error instanceof Error?error.message:'Delete failed');}
+  };
 
   const handleSearchChange = (val: string) => {
     setSearchQuery(val);
@@ -126,8 +118,8 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
     setPage(1);
   };
 
-  const totalPages = Math.ceil(filteredInvoices.length / pageSize) || 1;
-  const paginatedInvoices = filteredInvoices.slice((page - 1) * pageSize, page * pageSize);
+  const totalPages = Math.ceil(totalCount / pageSize) || 1;
+  const paginatedInvoices = remoteInvoices;
 
   const formatAmount = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -146,7 +138,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
           <div className="flex items-center gap-2">
             <h2 className="text-base font-semibold text-slate-900">Invoices & Receivables</h2>
             <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
-              {filteredInvoices.length} {filteredInvoices.length === 1 ? 'record' : 'records'}
+              {totalCount} {totalCount === 1 ? 'record' : 'records'}
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
@@ -281,7 +273,9 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
       </div>
 
       {/* Table content */}
-      {filteredInvoices.length === 0 ? (
+      {loading && <p role="status" className="p-4">Loading invoices…</p>}
+      {listError && <p role="alert" className="p-4 text-red-700">{listError} <button className="underline" onClick={()=>setRevision(n=>n+1)}>Retry</button></p>}
+      {totalCount === 0 ? (
         <EmptyState
           onNewInvoice={onNewInvoice}
           onResetFilters={() => {
@@ -605,11 +599,17 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
         </>
       )}
 
+      <div className="p-4 border-t flex flex-wrap gap-3 no-print">
+        <label className="flex items-center gap-2"><input type="checkbox" checked={selected.length===remoteInvoices.length&&selected.length>0} onChange={e=>setSelected(e.target.checked?remoteInvoices.map(i=>i.id):[])}/> Select current page</label>
+        {remoteInvoices.map(i=><label key={i.id} className="flex items-center gap-1 text-xs"><input type="checkbox" checked={selected.includes(i.id)} onChange={e=>setSelected(ids=>e.target.checked?[...ids,i.id]:ids.filter(id=>id!==i.id))}/>{i.invoiceNumber}</label>)}
+        <button disabled={!selected.length} onClick={exportSelected} className="btn-secondary">Export selected CSV</button>
+        <button disabled={!selected.length||selected.some(id=>remoteInvoices.find(i=>i.id===id)?.status!=='DRAFT')} onClick={deleteSelected} className="btn-secondary">Delete selected drafts</button>
+      </div>
       {/* Pagination Toolbar */}
       <PaginationToolbar
         currentPage={page}
         totalPages={totalPages}
-        totalCount={filteredInvoices.length}
+        totalCount={totalCount}
         pageSize={pageSize}
         onPageChange={(p) => setPage(p)}
         onPageSizeChange={(sz) => {

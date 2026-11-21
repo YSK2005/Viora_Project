@@ -48,6 +48,7 @@ router.get(
         select: {
           id: true,
           grandTotal: true,
+          creditedTotal: true,
           invoiceDate: true,
           payments: {
             select: {
@@ -105,7 +106,7 @@ router.get(
       let outstandingBalance = toDecimal(0);
 
       for (const inv of issuedInvoices) {
-        const gTotal = toDecimal(inv.grandTotal);
+        const gTotal = toDecimal(inv.grandTotal).minus(inv.creditedTotal);
         totalIssuedSales = totalIssuedSales.plus(gTotal);
 
         let invoicePaid = toDecimal(0);

@@ -5,7 +5,9 @@ export type NavigationKey =
   | 'products'
   | 'payments'
   | 'reports'
-  | 'settings';
+  | 'settings'
+  | 'credits'
+  | 'statements';
 
 export type UserRole = 'OWNER' | 'ACCOUNTANT' | 'VIEWER';
 
@@ -97,6 +99,8 @@ export interface InvoiceItem {
 }
 
 export interface Invoice {
+  creditedTotal?: number;
+  refundDue?: number;
   id: string;
   invoiceNumber: string;
   customerId: string;

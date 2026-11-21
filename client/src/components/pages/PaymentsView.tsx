@@ -1,3 +1,4 @@
+import {useDialog} from '../../hooks/useDialog';
 import React, { useState, useEffect, useCallback } from 'react';
 import { PaymentRecord, UserRole } from '../../types';
 import { fetchPayments, reversePayment } from '../../services/api';
@@ -47,6 +48,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
   const [reversalError, setReversalError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  const dialogProps=useDialog(Boolean(reversingPayment),()=>{if(!isReversing)setReversingPayment(null);},'Reverse payment');
   const canReverse = userRole === 'OWNER' || userRole === 'ACCOUNTANT';
 
   const loadData = useCallback(async () => {
@@ -498,7 +500,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
       {/* Payment Reversal Modal */}
       {reversingPayment && (
         <div
-          role="dialog"
+          {...dialogProps}
           aria-modal="true"
           aria-labelledby="reverse-modal-title"
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/40 backdrop-blur-xs animate-in fade-in duration-150"

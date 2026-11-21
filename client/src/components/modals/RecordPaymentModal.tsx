@@ -1,10 +1,11 @@
+import {useDialog} from '../../hooks/useDialog';
 import React, { useState } from 'react';
 import { X, CreditCard, IndianRupee, Hash, AlertCircle, Calendar, CheckCircle2 } from 'lucide-react';
 import { Invoice } from '../../types';
 import { recordInvoicePayment } from '../../services/api';
 
 interface RecordPaymentModalProps {
-  invoice: Invoice | null;
+  invoice: Invoice;
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
@@ -16,7 +17,7 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
   onClose,
   onSuccess,
 }) => {
-  if (!isOpen || !invoice) return null;
+  const dialogProps = useDialog(isOpen, () => {if(!isSubmitting) onClose();}, 'Record payment');
 
   const todayStr = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Kolkata',
@@ -59,6 +60,8 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose, isSubmitting]);
+
+  if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,7 +114,7 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/40 backdrop-blur-xs animate-in fade-in duration-150">
+    <div {...dialogProps} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/40 backdrop-blur-xs animate-in fade-in duration-150">
       <div className="bg-white rounded-2xl shadow-popover border border-slate-200/90 w-full max-w-md overflow-hidden">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200/80 flex items-center justify-between bg-slate-50/50">
@@ -169,7 +172,7 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label htmlFor="recordpaymentmodal-field-1" className="block text-xs font-semibold text-slate-700 mb-1">
                 Payment Amount (₹) <span className="text-rose-500">*</span>
               </label>
               <div className="relative">
@@ -209,7 +212,7 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
             <label className="block text-xs font-semibold text-slate-700 mb-1">
               Payment Method <span className="text-rose-500">*</span>
             </label>
-            <select
+            <select id="recordpaymentmodal-field-1"
               value={method}
               onChange={(e) => setMethod(e.target.value)}
               className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/20"

@@ -1,3 +1,4 @@
+import {useDialog} from '../../hooks/useDialog';
 import React, { useState } from 'react';
 import { loginUser, registerUser, AuthResponse } from '../../services/api';
 import { Lock, Mail, User as UserIcon, Building2, AlertCircle, Loader2 } from 'lucide-react';
@@ -8,6 +9,7 @@ interface AuthModalProps {
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
+  const dialogProps = useDialog(isOpen, undefined, 'Auth Modal');
   const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -27,7 +29,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
       if (isRegister) {
         if (!name.trim()) throw new Error('Full Name is required');
         if (!email.trim()) throw new Error('Email is required');
-        if (password.length < 6) throw new Error('Password must be at least 6 characters');
+        if (password.length < 12) throw new Error('Password must be at least 12 characters');
 
         const authData = await registerUser({
           email: email.trim(),
@@ -53,7 +55,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
 
   return (
     <div
-      role="dialog"
+      {...dialogProps}
       aria-modal="true"
       aria-labelledby="auth-modal-title"
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 overflow-y-auto"
@@ -97,7 +99,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
                   <input
                     type="text"
                     required
-                    value={name}
+                    aria-label="Full Name" autoComplete="name" value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g. Vipul Kumawat"
                     className="w-full rounded-lg border border-slate-300 pl-10 pr-4 py-2.5 text-sm text-slate-900 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
@@ -113,7 +115,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
                   <Building2 className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                   <input
                     type="text"
-                    value={businessName}
+                    aria-label="Business / Company Name" autoComplete="organization" value={businessName}
                     onChange={(e) => setBusinessName(e.target.value)}
                     placeholder="e.g. Acme Tech Solutions"
                     className="w-full rounded-lg border border-slate-300 pl-10 pr-4 py-2.5 text-sm text-slate-900 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
@@ -132,7 +134,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
               <input
                 type="email"
                 required
-                value={email}
+                aria-label="Email Address" autoComplete="username" value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@company.com"
                 className="w-full rounded-lg border border-slate-300 pl-10 pr-4 py-2.5 text-sm text-slate-900 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
@@ -149,9 +151,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
               <input
                 type="password"
                 required
-                value={password}
+                aria-label="Password" autoComplete={isRegister ? "new-password" : "current-password"} minLength={isRegister ? 12 : 1} maxLength={128} value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder={isRegister ? 'Min 6 characters' : 'Enter your password'}
+                placeholder={isRegister ? 'Min 12 characters' : 'Enter your password'}
                 className="w-full rounded-lg border border-slate-300 pl-10 pr-4 py-2.5 text-sm text-slate-900 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
               />
             </div>
@@ -160,7 +162,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full flex items-center justify-center gap-2 rounded-lg bg-teal-600 py-3 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:ring-offset-2 disabled:opacity-50 transition-colors"
+            className="w-full flex items-center justify-center gap-2 rounded-lg bg-teal-700 py-3 text-sm font-semibold text-white shadow-sm hover:bg-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:ring-offset-2 disabled:opacity-50 transition-colors"
           >
             {isLoading ? (
               <>
@@ -182,7 +184,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
                     setIsRegister(false);
                     setError(null);
                   }}
-                  className="font-semibold text-teal-600 hover:text-teal-700 underline"
+                  className="font-semibold text-teal-700 hover:text-teal-800 underline"
                 >
                   Sign In
                 </button>
@@ -196,7 +198,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
                     setIsRegister(true);
                     setError(null);
                   }}
-                  className="font-semibold text-teal-600 hover:text-teal-700 underline"
+                  className="font-semibold text-teal-700 hover:text-teal-800 underline"
                 >
                   Create one now
                 </button>

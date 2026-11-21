@@ -1,3 +1,4 @@
+import {useDialog} from '../../hooks/useDialog';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Search,
@@ -34,6 +35,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   onSelectCustomer,
   onSelectProduct,
 }) => {
+  const dialogProps=useDialog(isOpen,onClose,'Search records');
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState<{
@@ -148,7 +150,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
 
   return (
     <div
-      role="dialog"
+      {...dialogProps}
       aria-modal="true"
       aria-label="Global Search Command Palette"
       className="fixed inset-0 z-50 flex items-start justify-center pt-16 sm:pt-24 px-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150"

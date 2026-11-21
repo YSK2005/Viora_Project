@@ -1,3 +1,4 @@
+import {useDialog} from '../../hooks/useDialog';
 import React, { useState, useEffect } from 'react';
 import {
   X,
@@ -35,6 +36,7 @@ export const InvoiceDispatchModal: React.FC<InvoiceDispatchModalProps> = ({
   customer,
   business,
 }) => {
+  const dialogProps = useDialog(isOpen, onClose, 'Invoice Dispatch Modal');
   const [waOpened, setWaOpened] = useState(false);
   const [gmailOpened, setGmailOpened] = useState(false);
 
@@ -89,7 +91,7 @@ export const InvoiceDispatchModal: React.FC<InvoiceDispatchModalProps> = ({
     'Customer';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+    <div {...dialogProps} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="px-6 py-4 bg-gradient-to-r from-purple-700 via-purple-600 to-indigo-700 text-white flex items-center justify-between">

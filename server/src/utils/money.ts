@@ -201,13 +201,14 @@ export type PaymentStatus = 'UNPAID' | 'PARTIALLY_PAID' | 'PAID';
 
 export function derivePaymentStatus(
   grandTotal: DecimalLike,
-  payments: Array<{ amount: DecimalLike; isReversed?: boolean }>
+  payments: Array<{ amount: DecimalLike; isReversed?: boolean }>,
+  creditedTotal: DecimalLike = 0
 ): {
   paymentStatus: PaymentStatus;
   totalPaid: Prisma.Decimal;
   balanceRemaining: Prisma.Decimal;
 } {
-  const total = round2(toDecimal(grandTotal));
+  const total = round2(toDecimal(grandTotal).minus(creditedTotal));
   let totalPaid = new Prisma.Decimal(0);
 
   for (const p of payments) {
@@ -221,7 +222,7 @@ export function derivePaymentStatus(
 
   let paymentStatus: PaymentStatus = 'UNPAID';
   if (total.isZero()) {
-    paymentStatus = 'UNPAID';
+    paymentStatus = toDecimal(creditedTotal).greaterThan(0) ? 'PAID' : 'UNPAID';
   } else if (totalPaid.greaterThanOrEqualTo(total)) {
     paymentStatus = 'PAID';
   } else if (totalPaid.greaterThan(0)) {

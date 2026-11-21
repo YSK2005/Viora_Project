@@ -1,3 +1,4 @@
+import {useDialog} from '../../hooks/useDialog';
 import React, { useState, useEffect } from 'react';
 import {
   X,
@@ -36,6 +37,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
   onOpenPayment,
   onEditDraft,
 }) => {
+  const dialogProps = useDialog(isOpen, onClose, 'Invoice Preview Modal');
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
@@ -169,7 +171,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
   const isInterState = invoice?.isInterState ?? false;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-navy-950/50 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto print:static print:bg-transparent print:p-0 print:overflow-visible print:block">
+    <div {...dialogProps} className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-navy-950/50 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto print:static print:bg-transparent print:p-0 print:overflow-visible print:block">
       {/* Toast Alert */}
       {actionNotice && (
         <div className="fixed top-6 right-6 z-50 bg-navy-950 text-white text-xs px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2 animate-in slide-in-from-top-2 no-print">
@@ -179,6 +181,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
       )}
 
       <div className="bg-white rounded-2xl shadow-popover border border-slate-200/90 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden my-auto print:border-none print:shadow-none print:max-w-none print:max-h-none print:overflow-visible print:w-full print:m-0 print:rounded-none">
+        {invoice && Number(invoice.creditedTotal)>0 && <div className="p-4 border-b bg-amber-50 text-amber-950">Credit notes: {formatCurrency(Number(invoice.creditedTotal))}. {Number(invoice.refundDue)>0 && <span>Customer credit owed: {formatCurrency(Number(invoice.refundDue))}. No cash refund recorded.</span>}</div>}
         {/* Top Action Toolbar (Hidden in print) */}
         <div className="no-print p-4 sm:px-6 bg-slate-50 border-b border-slate-200/90 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">

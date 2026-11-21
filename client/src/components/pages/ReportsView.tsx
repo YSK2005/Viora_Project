@@ -1,3 +1,4 @@
+import {PaginationToolbar} from '../common/PaginationToolbar';
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchSalesReport } from '../../services/api';
 import {
@@ -11,6 +12,7 @@ import {
 } from 'lucide-react';
 
 export const ReportsView: React.FC = () => {
+  const [timelinePage,setTimelinePage]=useState(1);
   const [reportData, setReportData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +30,7 @@ export const ReportsView: React.FC = () => {
         groupBy,
       });
       setReportData(data);
+      setTimelinePage(1);
     } catch (err: any) {
       setError(err.message || 'Failed to load sales report');
     } finally {
@@ -52,6 +55,8 @@ export const ReportsView: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {reportData?.summary && <div className="bg-white border rounded-xl p-4 flex flex-wrap gap-6"><span>Issued credits: {formatCurrency(reportData.summary.totalCredits||0)}</span><span>Net sales after credits: {formatCurrency(reportData.summary.netSales??reportData.summary.totalSales)}</span></div>}
+      {reportData && <PaginationToolbar currentPage={timelinePage} totalPages={Math.max(1,Math.ceil(Math.max(reportData.salesTimeline?.length||0,reportData.collectionsTimeline?.length||0)/20))} totalCount={Math.max(reportData.salesTimeline?.length||0,reportData.collectionsTimeline?.length||0)} pageSize={20} onPageChange={setTimelinePage} itemLabel="report periods"/>}
       {/* Header bar */}
       <div className="bg-white rounded-xl border border-slate-200/80 p-5 shadow-card flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -342,7 +347,7 @@ export const ReportsView: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {reportData?.salesTimeline?.map((item: any) => (
+                      {reportData?.salesTimeline?.slice((timelinePage-1)*20,timelinePage*20).map((item: any) => (
                         <tr key={item.period} className="hover:bg-slate-50">
                           <td className="py-2.5 px-4 font-mono font-medium text-slate-800">
                             {item.period}
@@ -391,7 +396,7 @@ export const ReportsView: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {reportData?.collectionsTimeline?.map((item: any) => (
+                      {reportData?.collectionsTimeline?.slice((timelinePage-1)*20,timelinePage*20).map((item: any) => (
                         <tr key={item.period} className="hover:bg-slate-50">
                           <td className="py-2.5 px-4 font-mono font-medium text-slate-800">
                             {item.period}

@@ -1,6 +1,4 @@
 import PDFDocument from 'pdfkit';
-import { Readable } from 'stream';
-import fs from 'fs';
 
 export interface InvoicePdfData {
   invoiceNumber: string;
@@ -20,6 +18,8 @@ export interface InvoicePdfData {
   igstTotal: number | string;
   taxTotal: number | string;
   grandTotal: number | string;
+  creditedTotal?: number | string;
+  refundDue?: number | string;
   totalPaid?: number | string;
   balanceRemaining?: number | string;
   paymentStatus?: string;
@@ -366,6 +366,14 @@ export function generateInvoicePdfStream(invoice: InvoicePdfData): NodeJS.Readab
   doc.text(formatINR(invoice.grandTotal), summaryBoxX + 110, sumY + 3, { width: 106, align: 'right' });
 
   currentY = Math.max(currentY + 130, sumY + 28);
+
+  if (Number(invoice.creditedTotal) > 0) {
+    if (currentY > pageHeight - 100) { doc.addPage(); currentY = margin; }
+    const creditText = 'Credit notes: ' + formatINR(invoice.creditedTotal) + ' | Current balance due: ' + formatINR(invoice.balanceRemaining) + (Number(invoice.refundDue) > 0 ? ' | Customer credit owed: ' + formatINR(invoice.refundDue) + ' (no cash refund recorded)' : '');
+    doc.font('Helvetica-Bold').fontSize(8).fillColor(primaryColor);
+    doc.text(creditText, margin, currentY, {width:contentWidth});
+    currentY = doc.y + 12;
+  }
 
   // 5. Payment Details Section (if any paid or payments recorded)
   if (invoice.payments && invoice.payments.length > 0) {

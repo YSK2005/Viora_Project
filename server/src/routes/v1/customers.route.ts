@@ -1,3 +1,5 @@
+import {ErrorCode} from '../../utils/errorCodes';
+import {customerStatement} from '../../repositories/statements.repository';
 import { Router, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../config/prisma';
@@ -229,7 +231,7 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response, next: NextFu
     });
 
     if (!customer) {
-      throw new AppError('Customer not found', 404, 'ERR_CUSTOMER_NOT_FOUND');
+      throw new AppError('Customer not found', 404, ErrorCode.ERR_CUSTOMER_NOT_FOUND);
     }
 
     return sendSuccess(res, customer, 'Customer retrieved successfully');
@@ -276,7 +278,7 @@ router.post(
           throw new AppError(
             `A customer with matching contact details already exists: ${existingDuplicate.name}`,
             409,
-            'ERR_DUPLICATE_CUSTOMER'
+            ErrorCode.ERR_DUPLICATE_CUSTOMER
           );
         }
       }
@@ -317,7 +319,7 @@ router.put(
       });
 
       if (!current) {
-        throw new AppError('Customer not found', 404, 'ERR_CUSTOMER_NOT_FOUND');
+        throw new AppError('Customer not found', 404, ErrorCode.ERR_CUSTOMER_NOT_FOUND);
       }
 
       const candidatePhone = req.body.phone !== undefined ? req.body.phone : current.phone;
@@ -330,7 +332,7 @@ router.put(
         throw new AppError(
           'Customer must have at least one contact method (10-digit Phone Number or valid Email)',
           400,
-          'ERR_CONTACT_METHOD_REQUIRED'
+          ErrorCode.ERR_CONTACT_METHOD_REQUIRED
         );
       }
 
@@ -376,7 +378,7 @@ router.delete('/:id', requireRole(['OWNER', 'ACCOUNTANT']), async (req: Authenti
     });
 
     if (!customer) {
-      throw new AppError('Customer not found', 404, 'ERR_CUSTOMER_NOT_FOUND');
+      throw new AppError('Customer not found', 404, ErrorCode.ERR_CUSTOMER_NOT_FOUND);
     }
 
     if (customer._count.invoices > 0) {
@@ -399,6 +401,10 @@ router.delete('/:id', requireRole(['OWNER', 'ACCOUNTANT']), async (req: Authenti
   } catch (error) {
     next(error);
   }
+});
+
+router.get('/:id/statement',validateRequest({query:z.object({page:z.coerce.number().int().min(1).default(1),limit:z.coerce.number().int().min(1).max(100).default(20)})}),async(req:AuthenticatedRequest,res:Response,next:NextFunction)=>{
+  try{return sendSuccess(res,await customerStatement(req.business.id,req.params.id,Number(req.query.page),Number(req.query.limit)));}catch(error){next(error);}
 });
 
 export const customersRouter = router;

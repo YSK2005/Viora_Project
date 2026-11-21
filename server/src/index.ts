@@ -1,3 +1,4 @@
+import { prisma } from './config/prisma';
 import { createApp } from './app';
 import { env } from './config/env';
 
@@ -13,10 +14,15 @@ const server = app.listen(env.PORT, () => {
   console.log(`===============================================`);
 });
 
+server.requestTimeout = 30_000;
+server.headersTimeout = 15_000;
+server.keepAliveTimeout = 5_000;
+
 // Graceful shutdown handling
 const handleShutdown = (signal: string) => {
   console.log(`\n🛑 Received ${signal}. Gracefully closing HTTP server...`);
-  server.close(() => {
+  server.close(async () => {
+    await prisma.$disconnect();
     console.log('✅ HTTP server closed. Process exiting.');
     process.exit(0);
   });

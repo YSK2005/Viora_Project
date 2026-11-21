@@ -1,3 +1,4 @@
+import {ErrorCode} from '../utils/errorCodes';
 import { Request, Response, NextFunction } from 'express';
 import { sendError } from '../utils/response';
 import { env } from '../config/env';
@@ -11,7 +12,7 @@ export class AppError extends Error {
   constructor(
     message: string,
     statusCode: number = 500,
-    code: string = 'ERR_INTERNAL',
+    code: string = ErrorCode.ERR_INTERNAL,
     details?: any
   ) {
     super(message);
@@ -26,7 +27,6 @@ export function errorHandler(
   err: any,
   req: Request,
   res: Response,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   next: NextFunction
 ) {
   let statusCode = err.statusCode || (err.status ? Number(err.status) : 500);
@@ -38,16 +38,16 @@ export function errorHandler(
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
     if (err.code === 'P2002') {
       statusCode = 409;
-      code = 'ERR_UNIQUE_CONSTRAINT_VIOLATION';
+      code = ErrorCode.ERR_UNIQUE_CONSTRAINT_VIOLATION;
       const target = Array.isArray(err.meta?.target) ? err.meta.target.join(', ') : 'field';
       message = `A record with this ${target} already exists`;
     } else if (err.code === 'P2025') {
       statusCode = 404;
-      code = 'ERR_RECORD_NOT_FOUND';
+      code = ErrorCode.ERR_RECORD_NOT_FOUND;
       message = 'The requested record was not found';
     } else if (err.code === 'P2003') {
       statusCode = 409;
-      code = 'ERR_FOREIGN_KEY_VIOLATION';
+      code = ErrorCode.ERR_FOREIGN_KEY_VIOLATION;
       message = 'Operation violates a relational data constraint';
     } else {
       statusCode = 400;
@@ -56,13 +56,16 @@ export function errorHandler(
     }
   } else if (err instanceof Prisma.PrismaClientValidationError) {
     statusCode = 400;
-    code = 'ERR_DB_VALIDATION';
+    code = ErrorCode.ERR_DB_VALIDATION;
     message = 'Invalid data provided for database operation';
   } else if (err.name === 'SyntaxError' && 'body' in err) {
     statusCode = 400;
-    code = 'ERR_MALFORMED_JSON';
+    code = ErrorCode.ERR_MALFORMED_JSON;
     message = 'Malformed JSON payload provided in request';
   }
+
+  if (res.headersSent) return next(err);
+  if (statusCode >= 500) { message = 'Service temporarily unavailable. Please try again.'; details = undefined; }
 
   // Never leak internal filesystem paths, sql queries, or stack traces in responses
   if (typeof details === 'string' && (details.includes('node_modules') || details.includes(':\\') || details.includes('/'))) {

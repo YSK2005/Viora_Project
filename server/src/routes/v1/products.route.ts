@@ -1,3 +1,4 @@
+import {ErrorCode} from '../../utils/errorCodes';
 import { Router, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../config/prisma';
@@ -102,7 +103,7 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response, next: NextFu
     });
 
     if (!product) {
-      throw new AppError('Product not found', 404, 'ERR_PRODUCT_NOT_FOUND');
+      throw new AppError('Product not found', 404, ErrorCode.ERR_PRODUCT_NOT_FOUND);
     }
 
     return sendSuccess(res, product, 'Product retrieved successfully');
@@ -156,7 +157,7 @@ router.put(
         where: { id, businessId: req.business.id },
       });
       if (!existing) {
-        throw new AppError('Product not found', 404, 'ERR_PRODUCT_NOT_FOUND');
+        throw new AppError('Product not found', 404, ErrorCode.ERR_PRODUCT_NOT_FOUND);
       }
 
       const updated = await prisma.product.update({
@@ -191,7 +192,7 @@ router.delete('/:id', requireRole(['OWNER', 'ACCOUNTANT']), async (req: Authenti
     });
 
     if (!existing) {
-      throw new AppError('Product not found', 404, 'ERR_PRODUCT_NOT_FOUND');
+      throw new AppError('Product not found', 404, ErrorCode.ERR_PRODUCT_NOT_FOUND);
     }
 
     if (existing._count.items > 0) {

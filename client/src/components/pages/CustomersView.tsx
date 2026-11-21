@@ -1,3 +1,4 @@
+import {useDialog} from '../../hooks/useDialog';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Customer } from '../../types';
 import {
@@ -40,6 +41,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const dialogProps = useDialog(isModalOpen, () => setIsModalOpen(false), 'Customer details');
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -453,7 +455,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
 
       {/* Add / Edit Customer Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/40 backdrop-blur-xs animate-in fade-in duration-150">
+        <div {...dialogProps} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/40 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="bg-white rounded-2xl shadow-popover border border-slate-200/90 w-full max-w-lg overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-200/80 flex items-center justify-between bg-slate-50/50">
               <div className="flex items-center gap-2.5">
@@ -494,10 +496,10 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label htmlFor="customersview-field-1" className="block text-xs font-semibold text-slate-700 mb-1">
                   Customer / Business Name <span className="text-rose-500">*</span>
                 </label>
-                <input
+                <input id="customersview-field-1"
                   type="text"
                   required
                   value={name}
@@ -509,7 +511,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label htmlFor="customersview-field-2" className="block text-xs font-semibold text-slate-700 mb-1">
                     Phone Number (10 Digits) {!email.trim() && <span className="text-rose-500">*</span>}
                   </label>
                   <div className="relative">
@@ -521,7 +523,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
                       value={phone}
                       onChange={(e) => {
                         const digits = e.target.value.replace(/\D/g, '');
-                        let clean = digits;
+                        let clean: string;
                         if (digits.length > 10 && digits.startsWith('91')) {
                           clean = digits.slice(-10);
                         } else if (digits.length === 11 && digits.startsWith('0')) {
@@ -542,7 +544,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
                     Email Address (Gmail) {!phone.trim() && <span className="text-rose-500">*</span>}
                   </label>
-                  <input
+                  <input id="customersview-field-2"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -554,10 +556,10 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label htmlFor="customersview-field-3" className="block text-xs font-semibold text-slate-700 mb-1">
                   Billing Address <span className="text-rose-500">*</span>
                 </label>
-                <textarea
+                <textarea id="customersview-field-3"
                   required
                   rows={2}
                   value={billingAddress}
@@ -569,10 +571,10 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label htmlFor="customersview-field-4" className="block text-xs font-semibold text-slate-700 mb-1">
                     GSTIN (Tax Identifier, optional)
                   </label>
-                  <input
+                  <input id="customersview-field-4"
                     type="text"
                     value={gstin}
                     onChange={(e) => setGstin(e.target.value.toUpperCase())}

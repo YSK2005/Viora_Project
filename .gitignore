@@ -43,3 +43,11 @@ server/src/generated/
 .temp/
 tmp/
 .db_data/
+
+# Private backups and test artifacts
+*_database_dump.sql
+*.dump
+playwright-report/
+test-results/
+
+.dependency-backup-*/
