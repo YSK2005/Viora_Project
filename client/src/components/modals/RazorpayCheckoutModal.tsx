@@ -11,7 +11,6 @@ import {
   Copy,
   Check,
   Zap,
-  Sparkles,
   Timer,
 } from 'lucide-react';
 import { verifySubscriptionPayment } from '../../services/api';
@@ -227,7 +226,7 @@ export const RazorpayCheckoutModal: React.FC<RazorpayCheckoutModalProps> = ({
             },
           },
         },
-        handler: async function (response: any) {
+        handler: async function (_response: any) {
           await executePaymentFlow(true);
         },
         prefill: {

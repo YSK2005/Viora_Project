@@ -6,7 +6,6 @@ import {
   ShieldCheck,
   HelpCircle,
   Loader2,
-  CreditCard,
   QrCode,
   ArrowRight,
 } from 'lucide-react';

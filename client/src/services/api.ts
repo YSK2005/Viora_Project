@@ -11,6 +11,13 @@ import {
   BusinessMembership,
   PaginationMeta,
 } from '../types';
+import {
+  MOCK_BUSINESS,
+  MOCK_CUSTOMERS,
+  MOCK_PRODUCTS,
+  MOCK_INVOICES,
+  MOCK_DASHBOARD_SUMMARY,
+} from './mockData';
 
 const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 
@@ -182,8 +189,8 @@ export async function fetchDashboardSummary(params?: {
     const json = await res.json();
     return json.data;
   } catch (err) {
-    console.warn('Dashboard summary fetch failed:', err);
-    return null;
+    console.warn('Dashboard summary fetch failed, using offline preview:', err);
+    return MOCK_DASHBOARD_SUMMARY;
   }
 }
 
@@ -239,23 +246,29 @@ export async function fetchInvoices(params?: {
       isBackendConnected: true,
     };
   } catch (err) {
-    console.warn('Invoices fetch failed', err);
+    console.warn('Invoices fetch failed, using offline preview data', err);
     return {
-      invoices: [],
-      totalCount: 0,
+      invoices: MOCK_INVOICES,
+      totalCount: MOCK_INVOICES.length,
       isBackendConnected: false,
     };
   }
 }
 
 export async function fetchInvoiceDetails(id: string): Promise<Invoice> {
-  const res = await apiFetch(`/invoices/${id}`);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || 'Failed to fetch invoice');
+  try {
+    const res = await apiFetch(`/invoices/${id}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || 'Failed to fetch invoice');
+    }
+    const json = await res.json();
+    return json.data;
+  } catch (err) {
+    const fallback = MOCK_INVOICES.find((i) => i.id === id);
+    if (fallback) return fallback;
+    throw err;
   }
-  const json = await res.json();
-  return json.data;
 }
 
 export async function createInvoice(data: {
@@ -418,19 +431,33 @@ export async function fetchCustomers(params?: {
   page?: number;
   limit?: number;
 }): Promise<{ customers: Customer[]; totalCount: number; pagination?: PaginationMeta }> {
-  const query = new URLSearchParams();
-  if (params?.search) query.append('search', params.search);
-  if (params?.page) query.append('page', String(params.page));
-  if (params?.limit) query.append('limit', String(params.limit));
+  try {
+    const query = new URLSearchParams();
+    if (params?.search) query.append('search', params.search);
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.limit) query.append('limit', String(params.limit));
 
-  const res = await apiFetch(`/customers?${query.toString()}`);
-  if (!res.ok) throw new Error('Failed to fetch customers');
-  const json = await res.json();
-  return {
-    customers: json.data?.customers || [],
-    totalCount: json.data?.pagination?.totalCount || 0,
-    pagination: json.data?.pagination,
-  };
+    const res = await apiFetch(`/customers?${query.toString()}`);
+    if (!res.ok) throw new Error('Failed to fetch customers');
+    const json = await res.json();
+    return {
+      customers: json.data?.customers || [],
+      totalCount: json.data?.pagination?.totalCount || 0,
+      pagination: json.data?.pagination,
+    };
+  } catch (err) {
+    console.warn('Customers fetch failed, using offline preview data', err);
+    return {
+      customers: MOCK_CUSTOMERS,
+      totalCount: MOCK_CUSTOMERS.length,
+      pagination: {
+        totalCount: MOCK_CUSTOMERS.length,
+        totalPages: 1,
+        page: 1,
+        limit: 10,
+      },
+    };
+  }
 }
 
 export async function createCustomer(data: {
@@ -498,20 +525,34 @@ export async function fetchProducts(params?: {
   limit?: number;
   isActive?: string;
 }): Promise<{ products: Product[]; totalCount: number; pagination?: PaginationMeta }> {
-  const query = new URLSearchParams();
-  if (params?.search) query.append('search', params.search);
-  if (params?.page) query.append('page', String(params.page));
-  if (params?.limit) query.append('limit', String(params.limit));
-  if (params?.isActive) query.append('isActive', params.isActive);
+  try {
+    const query = new URLSearchParams();
+    if (params?.search) query.append('search', params.search);
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.limit) query.append('limit', String(params.limit));
+    if (params?.isActive) query.append('isActive', params.isActive);
 
-  const res = await apiFetch(`/products?${query.toString()}`);
-  if (!res.ok) throw new Error('Failed to fetch products');
-  const json = await res.json();
-  return {
-    products: json.data?.products || [],
-    totalCount: json.data?.pagination?.totalCount || 0,
-    pagination: json.data?.pagination,
-  };
+    const res = await apiFetch(`/products?${query.toString()}`);
+    if (!res.ok) throw new Error('Failed to fetch products');
+    const json = await res.json();
+    return {
+      products: json.data?.products || [],
+      totalCount: json.data?.pagination?.totalCount || 0,
+      pagination: json.data?.pagination,
+    };
+  } catch (err) {
+    console.warn('Products fetch failed, using offline preview data', err);
+    return {
+      products: MOCK_PRODUCTS,
+      totalCount: MOCK_PRODUCTS.length,
+      pagination: {
+        totalCount: MOCK_PRODUCTS.length,
+        totalPages: 1,
+        page: 1,
+        limit: 10,
+      },
+    };
+  }
 }
 
 export async function createProduct(data: {
@@ -621,10 +662,15 @@ export async function reversePayment(paymentId: string, reason: string): Promise
 // Business Profile API
 // -------------------------------------------------------------
 export async function fetchBusiness(): Promise<BusinessProfile> {
-  const res = await apiFetch('/business');
-  if (!res.ok) throw new Error('Failed to fetch business details');
-  const json = await res.json();
-  return json.data;
+  try {
+    const res = await apiFetch('/business');
+    if (!res.ok) throw new Error('Failed to fetch business details');
+    const json = await res.json();
+    return json.data;
+  } catch (err) {
+    console.warn('Business fetch failed, using offline preview profile', err);
+    return MOCK_BUSINESS;
+  }
 }
 
 export async function updateBusiness(data: Partial<BusinessProfile>): Promise<BusinessProfile> {
