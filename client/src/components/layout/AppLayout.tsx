@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { Navbar } from './Navbar';
 import { MockDataBanner } from '../common/MockDataBanner';
-import { NavigationKey, SystemHealth, User, UserRole } from '../../types';
+import { NavigationKey, SystemHealth, User, UserRole, BusinessProfile } from '../../types';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -11,6 +11,7 @@ interface AppLayoutProps {
   systemHealth: SystemHealth;
   user?: User | null;
   userRole?: UserRole | null;
+  businessProfile?: BusinessProfile | null;
   onLogout?: () => void;
   onOpenGlobalSearch?: () => void;
 }
@@ -22,6 +23,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   systemHealth,
   user,
   userRole,
+  businessProfile,
   onLogout,
   onOpenGlobalSearch,
 }) => {
@@ -31,7 +33,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   const isDbConnected = systemHealth.database?.status === 'connected';
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#F0F5FB] dark:bg-navy-950 flex flex-col font-sans">
       <a href="#main-content" className="skip-link">Skip to main content</a>
       {/* MockDataBanner returns null — kept for code compatibility */}
       <MockDataBanner isDbConnected={isDbConnected} />
@@ -61,6 +63,10 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             currentNav={currentNav}
             onOpenMobile={() => setIsMobileOpen(true)}
             systemHealth={systemHealth}
+            user={user}
+            userRole={userRole}
+            businessProfile={businessProfile}
+            onLogout={onLogout}
             onOpenGlobalSearch={onOpenGlobalSearch}
           />
 

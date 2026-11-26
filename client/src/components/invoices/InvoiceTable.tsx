@@ -131,17 +131,17 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200/80 shadow-card overflow-hidden">
+    <div className="bg-white dark:bg-[#0D1A33] rounded-2xl border border-[#D5E4F5]/80 dark:border-[#17274B] shadow-card overflow-hidden">
       {/* Header toolbar */}
-      <div className="p-4 sm:p-5 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="p-4 sm:p-5 border-b border-[#D5E4F5]/80 dark:border-[#17274B] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-base font-semibold text-slate-900">Invoices & Receivables</h2>
-            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+            <h2 className="text-base font-bold text-[#0D1A33] dark:text-white">Invoices & Receivables</h2>
+            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-[#F4F8FD] dark:bg-navy-900 text-[#4E77BD] border border-[#D5E4F5] dark:border-navy-800">
               {totalCount} {totalCount === 1 ? 'record' : 'records'}
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             PostgreSQL billing registry: drafts, issued invoices, and payment statuses
           </p>
         </div>
@@ -150,17 +150,17 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
           {onNewInvoice && (
             <button
               onClick={onNewInvoice}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-sm transition-all hover:shadow"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-[#FF6A2B] hover:bg-[#E85215] text-white shadow-orange transition-all hover:shadow-md"
             >
               <FilePlus className="w-3.5 h-3.5" />
-              <span>New Invoice</span>
+              <span>+ New Invoice</span>
             </button>
           )}
         </div>
       </div>
 
       {/* Filter and search bar */}
-      <div className="p-3 sm:p-4 bg-slate-50/70 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-3">
+      <div className="p-3 sm:p-4 bg-[#F4F8FD]/60 dark:bg-navy-950/60 border-b border-[#D5E4F5]/80 dark:border-[#17274B] flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[280px]">
           {/* Search box */}
           <div className="relative flex-1 min-w-[200px] max-w-xs">
@@ -170,7 +170,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
               placeholder="Search by invoice # or customer..."
               value={searchQuery}
               onChange={(e) => handleSearchChange(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 placeholder:text-slate-400 transition-all"
+              className="w-full pl-9 pr-3 py-1.5 text-xs bg-white dark:bg-[#0D1A33] border border-[#D5E4F5] dark:border-navy-800 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-[#FF6A2B]/20 focus:border-[#FF6A2B] placeholder:text-slate-400 transition-all"
             />
           </div>
 
@@ -235,7 +235,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                   setEndDate('');
                   setPage(1);
                 }}
-                className="text-[10px] text-purple-600 hover:text-purple-800 ml-1 font-semibold"
+                className="text-[10px] text-[#FF6A2B] hover:text-[#E85215] ml-1 font-bold"
               >
                 Clear
               </button>
@@ -244,16 +244,16 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
         </div>
 
         {/* Status Filter Tabs */}
-        <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-200 text-xs font-medium">
+        <div className="flex items-center gap-1 bg-white dark:bg-[#0D1A33] p-1 rounded-xl border border-[#D5E4F5] dark:border-navy-800 text-xs font-medium">
           <Filter className="w-3.5 h-3.5 text-slate-400 ml-1.5 mr-0.5" />
           {(['ALL', 'DRAFT', 'ISSUED', 'PAID', 'UNPAID', 'CANCELLED'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => handleStatusChange(tab)}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
                 statusFilter === tab
-                  ? 'bg-purple-700 text-white font-semibold'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                  ? 'bg-[#FF6A2B] text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-[#0D1A33] dark:hover:text-white hover:bg-[#F4F8FD] dark:hover:bg-navy-900'
               }`}
             >
               {tab === 'ALL'
@@ -295,19 +295,19 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
               <div
                 key={inv.id}
                 onClick={() => onSelectInvoice?.(inv)}
-                className="p-4 hover:bg-purple-50/20 transition-colors cursor-pointer"
+                className="p-4 hover:bg-[#F4F8FD] transition-colors cursor-pointer"
               >
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div>
-                    <div className="font-mono font-bold text-sm text-purple-700">
+                    <div className="font-mono font-bold text-sm text-[#0D1A33] hover:text-[#FF6A2B]">
                       {inv.invoiceNumber}
                     </div>
-                    <div className="font-medium text-xs text-slate-800 mt-0.5">
+                    <div className="font-medium text-xs text-slate-700 mt-0.5">
                       {inv.customerName || '—'}
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-mono font-bold text-sm text-slate-900">
+                    <div className="font-mono font-bold text-sm text-navy-950">
                       {formatAmount(Number(inv.grandTotal))}
                     </div>
                     <div className="flex items-center gap-1 justify-end mt-1">
@@ -335,9 +335,9 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                   <button
                     type="button"
                     onClick={() => onSelectInvoice?.(inv)}
-                    className="px-2.5 py-1 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-md flex items-center gap-1"
+                    className="px-2.5 py-1 text-xs font-semibold text-navy-900 bg-slate-100 hover:bg-[#8FB4E3]/20 rounded-lg flex items-center gap-1 transition-colors"
                   >
-                    <Eye className="w-3.5 h-3.5" />
+                    <Eye className="w-3.5 h-3.5 text-navy-700" />
                     <span>View</span>
                   </button>
 
@@ -345,7 +345,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                     <button
                       type="button"
                       onClick={() => onDuplicateInvoice(inv)}
-                      className="px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-md flex items-center gap-1"
+                      className="px-2.5 py-1 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center gap-1 transition-colors"
                       title="Duplicate invoice"
                     >
                       <Copy className="w-3.5 h-3.5" />
@@ -362,7 +362,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                         alert(`Download error: ${err.message}`);
                       }
                     }}
-                    className="px-2.5 py-1 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md flex items-center gap-1"
+                    className="px-2.5 py-1 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center gap-1 transition-colors"
                   >
                     <Download className="w-3.5 h-3.5" />
                     <span>PDF</span>
@@ -372,7 +372,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                     <button
                       type="button"
                       onClick={() => onEditDraft(inv)}
-                      className="px-2.5 py-1 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md flex items-center gap-1"
+                      className="px-2.5 py-1 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center gap-1 transition-colors"
                     >
                       <FileEdit className="w-3.5 h-3.5" />
                       <span>Edit</span>
@@ -383,7 +383,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                     <button
                       type="button"
                       onClick={() => onIssueInvoice(inv)}
-                      className="px-2.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-md flex items-center gap-1"
+                      className="px-2.5 py-1 text-xs font-semibold text-white bg-[#FF6A2B] hover:bg-[#e85b1f] shadow-sm rounded-lg flex items-center gap-1 transition-colors"
                     >
                       <SendHorizontal className="w-3.5 h-3.5" />
                       <span>Issue</span>
@@ -394,7 +394,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                     <button
                       type="button"
                       onClick={() => onDeleteDraft(inv)}
-                      className="px-2.5 py-1 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-md flex items-center gap-1"
+                      className="px-2.5 py-1 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg flex items-center gap-1 transition-colors"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>Delete</span>
@@ -405,7 +405,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                     <button
                       type="button"
                       onClick={() => onRecordPayment(inv)}
-                      className="px-2.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-md flex items-center gap-1"
+                      className="px-2.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg flex items-center gap-1 transition-colors"
                     >
                       <CreditCard className="w-3.5 h-3.5" />
                       <span>Pay</span>
@@ -420,7 +420,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
           <div className="hidden lg:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-200/80 bg-slate-50/50 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                <tr className="border-b border-[#D5E4F5] bg-[#F0F5FB] text-[11px] font-bold text-navy-800 uppercase tracking-wider">
                   <th className="py-3 px-4 sm:px-6">Invoice #</th>
                   <th className="py-3 px-4">Customer</th>
                   <th className="py-3 px-4">Invoice Date</th>
@@ -436,12 +436,12 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                   <tr
                     key={inv.id}
                     onClick={() => onSelectInvoice?.(inv)}
-                    className="hover:bg-purple-50/30 transition-colors cursor-pointer group"
+                    className="hover:bg-[#F4F8FD] transition-colors cursor-pointer group"
                   >
-                    <td className="py-3.5 px-4 sm:px-6 font-mono font-medium text-slate-900 group-hover:text-purple-700">
+                    <td className="py-3.5 px-4 sm:px-6 font-mono font-bold text-navy-900 group-hover:text-[#FF6A2B] transition-colors">
                       {inv.invoiceNumber}
                     </td>
-                    <td className="py-3.5 px-4 font-medium text-slate-800">
+                    <td className="py-3.5 px-4 font-semibold text-slate-800">
                       {inv.customerName || '—'}
                     </td>
                     <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">
@@ -450,7 +450,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                     <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">
                       {inv.dueDate}
                     </td>
-                    <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-900">
+                    <td className="py-3.5 px-4 text-right font-mono font-bold text-navy-950">
                       {formatAmount(Number(inv.grandTotal))}
                     </td>
                     <td className="py-3.5 px-4 text-center">
@@ -473,7 +473,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                           onClick={() => onSelectInvoice?.(inv)}
                           title="Preview & Print"
                           aria-label={`Preview invoice ${inv.invoiceNumber}`}
-                          className="p-1.5 text-slate-400 hover:text-purple-700 hover:bg-purple-50 rounded-md transition-colors"
+                          className="p-1.5 text-slate-400 hover:text-[#FF6A2B] hover:bg-[#FFF2EC] rounded-lg transition-colors"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
@@ -485,7 +485,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                             onClick={() => onDuplicateInvoice(inv)}
                             title="Duplicate invoice as fresh draft"
                             aria-label={`Duplicate invoice ${inv.invoiceNumber}`}
-                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
+                            className="p-1.5 text-slate-400 hover:text-navy-900 hover:bg-slate-100 rounded-lg transition-colors"
                           >
                             <Copy className="w-4 h-4" />
                           </button>
@@ -502,7 +502,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                           }}
                           title="Download A4 PDF"
                           aria-label={`Download PDF for invoice ${inv.invoiceNumber}`}
-                          className="p-1.5 text-slate-400 hover:text-purple-700 hover:bg-purple-50 rounded-md transition-colors"
+                          className="p-1.5 text-slate-400 hover:text-[#FF6A2B] hover:bg-[#FFF2EC] rounded-lg transition-colors"
                         >
                           <Download className="w-4 h-4" />
                         </button>
@@ -514,7 +514,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                             onClick={() => onEditDraft(inv)}
                             title="Edit Draft Invoice"
                             aria-label={`Edit draft invoice ${inv.invoiceNumber}`}
-                            className="px-2 py-1 text-[11px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-md flex items-center gap-1 transition-colors"
+                            className="px-2 py-1 text-[11px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg flex items-center gap-1 transition-colors"
                           >
                             <FileEdit className="w-3.5 h-3.5 text-slate-600" />
                             <span>Edit</span>
@@ -527,7 +527,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                             onClick={() => onDeleteDraft(inv)}
                             title="Delete Draft Invoice"
                             aria-label={`Delete draft invoice ${inv.invoiceNumber}`}
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -539,10 +539,10 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                             onClick={() => onIssueInvoice(inv)}
                             title="Issue Official Invoice"
                             aria-label={`Issue official invoice ${inv.invoiceNumber}`}
-                            className="px-2 py-1 text-[11px] font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-md flex items-center gap-1"
+                            className="px-2.5 py-1 text-[11px] font-semibold text-white bg-[#FF6A2B] hover:bg-[#e85b1f] shadow-sm rounded-lg flex items-center gap-1 transition-colors"
                           >
-                            <SendHorizontal className="w-3 h-3 text-purple-600" />
-                            Issue
+                            <SendHorizontal className="w-3 h-3 text-white" />
+                            <span>Issue</span>
                           </button>
                         )}
 
@@ -554,7 +554,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                               onClick={() => openWhatsAppDispatch(inv)}
                               title="Open WhatsApp message draft"
                               aria-label={`Share invoice ${inv.invoiceNumber} via WhatsApp`}
-                              className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
+                              className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
                             >
                               <MessageCircle className="w-4 h-4" />
                             </button>
@@ -563,7 +563,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                               onClick={() => openGmailDispatch(inv)}
                               title="Compose Gmail draft"
                               aria-label={`Share invoice ${inv.invoiceNumber} via Gmail`}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                             >
                               <Mail className="w-4 h-4" />
                             </button>
@@ -579,7 +579,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                               onClick={() => onCancelInvoice(inv)}
                               title="Cancel Invoice"
                               aria-label={`Cancel invoice ${inv.invoiceNumber}`}
-                              className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-md transition-colors"
+                              className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
                             >
                               <Ban className="w-4 h-4" />
                             </button>
@@ -593,9 +593,9 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                               onClick={() => onRecordPayment(inv)}
                               title="Record Payment"
                               aria-label={`Record payment for invoice ${inv.invoiceNumber}`}
-                              className="px-2 py-1 text-[11px] font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-md flex items-center gap-1"
+                              className="px-2.5 py-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg flex items-center gap-1 transition-colors"
                             >
-                              <CreditCard className="w-3 h-3 text-purple-600" />
+                              <CreditCard className="w-3 h-3 text-emerald-600" />
                               Pay
                             </button>
                           )}
@@ -609,11 +609,45 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
         </>
       )}
 
-      <div className="p-4 border-t flex flex-wrap gap-3 no-print">
-        <label className="flex items-center gap-2"><input type="checkbox" checked={selected.length===remoteInvoices.length&&selected.length>0} onChange={e=>setSelected(e.target.checked?remoteInvoices.map(i=>i.id):[])}/> Select current page</label>
-        {remoteInvoices.map(i=><label key={i.id} className="flex items-center gap-1 text-xs"><input type="checkbox" checked={selected.includes(i.id)} onChange={e=>setSelected(ids=>e.target.checked?[...ids,i.id]:ids.filter(id=>id!==i.id))}/>{i.invoiceNumber}</label>)}
-        <button disabled={!selected.length} onClick={exportSelected} className="btn-secondary">Export selected CSV</button>
-        <button disabled={!selected.length||selected.some(id=>remoteInvoices.find(i=>i.id===id)?.status!=='DRAFT')} onClick={deleteSelected} className="btn-secondary">Delete selected drafts</button>
+      <div className="p-4 border-t border-slate-200/80 bg-[#F0F5FB]/40 flex flex-wrap items-center gap-3 no-print">
+        <label className="flex items-center gap-2 text-xs font-semibold text-navy-900 cursor-pointer">
+          <input
+            type="checkbox"
+            className="rounded border-slate-300 text-[#FF6A2B] focus:ring-[#FF6A2B]"
+            checked={selected.length === remoteInvoices.length && selected.length > 0}
+            onChange={(e) => setSelected(e.target.checked ? remoteInvoices.map((i) => i.id) : [])}
+          />
+          Select current page
+        </label>
+        {remoteInvoices.map((i) => (
+          <label key={i.id} className="flex items-center gap-1 text-xs font-mono text-slate-600 cursor-pointer">
+            <input
+              type="checkbox"
+              className="rounded border-slate-300 text-[#FF6A2B] focus:ring-[#FF6A2B]"
+              checked={selected.includes(i.id)}
+              onChange={(e) =>
+                setSelected((ids) => (e.target.checked ? [...ids, i.id] : ids.filter((id) => id !== i.id)))
+              }
+            />
+            {i.invoiceNumber}
+          </label>
+        ))}
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            disabled={!selected.length}
+            onClick={exportSelected}
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-navy-900 disabled:opacity-40 transition-colors shadow-sm"
+          >
+            Export selected CSV
+          </button>
+          <button
+            disabled={!selected.length || selected.some((id) => remoteInvoices.find((i) => i.id === id)?.status !== 'DRAFT')}
+            onClick={deleteSelected}
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 disabled:opacity-40 transition-colors shadow-sm"
+          >
+            Delete selected drafts
+          </button>
+        </div>
       </div>
       {/* Pagination Toolbar */}
       <PaginationToolbar

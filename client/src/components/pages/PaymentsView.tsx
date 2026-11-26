@@ -145,7 +145,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-bold text-navy-900 tracking-tight">Payment Receipts & Inflows</h2>
-            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-800 border border-teal-200">
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-dusk-100/80 text-navy-900 border border-dusk-200">
               Live Database
             </span>
           </div>
@@ -172,7 +172,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
           {onOpenRecordPayment && (
             <button
               onClick={onOpenRecordPayment}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-sm transition-all focus:ring-2 focus:ring-purple-400 focus:outline-none"
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold bg-[#FF6A2B] hover:bg-[#e85b1f] text-white shadow-sm transition-all focus:ring-2 focus:ring-[#FF6A2B]/40 focus:outline-none"
             >
               <PlusCircle className="w-4 h-4" />
               <span>Record Payment</span>
@@ -195,7 +195,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
             }}
             placeholder="Search invoice #, customer name, reference..."
             aria-label="Search payment records"
-            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#FF6A2B]/20 focus:border-[#FF6A2B]"
           />
         </div>
 
@@ -209,7 +209,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
               setMethod(e.target.value);
               setPage(1);
             }}
-            className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+            className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#FF6A2B]/20 focus:border-[#FF6A2B]"
           >
             <option value="ALL">All Methods</option>
             <option value="BANK_TRANSFER">Bank Transfer</option>
@@ -234,7 +234,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
               setStartDate(e.target.value);
               setPage(1);
             }}
-            className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+            className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#FF6A2B]/20 focus:border-[#FF6A2B]"
           />
           <span className="text-slate-400">to</span>
           <input
@@ -245,14 +245,14 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
               setEndDate(e.target.value);
               setPage(1);
             }}
-            className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+            className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#FF6A2B]/20 focus:border-[#FF6A2B]"
           />
         </div>
 
         {hasActiveFilters && (
           <button
             onClick={handleClearFilters}
-            className="text-xs text-purple-700 hover:underline font-medium ml-auto"
+            className="text-xs text-[#FF6A2B] hover:underline font-semibold ml-auto"
           >
             Clear Filters
           </button>
@@ -262,7 +262,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
       {/* Content Area */}
       {isLoading ? (
         <div className="p-16 flex flex-col items-center justify-center bg-white rounded-xl border border-slate-200/80">
-          <Loader2 className="w-8 h-8 text-purple-600 animate-spin mb-3" />
+          <Loader2 className="w-8 h-8 text-[#FF6A2B] animate-spin mb-3" />
           <p className="text-xs text-slate-500 font-medium">Loading payments ledger...</p>
         </div>
       ) : error ? (
@@ -279,7 +279,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
         </div>
       ) : payments.length === 0 ? (
         <div className="p-12 text-center bg-white rounded-xl border border-slate-200/80 shadow-card">
-          <div className="w-14 h-14 rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-700 mx-auto mb-3">
+          <div className="w-14 h-14 rounded-2xl bg-[#8FB4E3]/20 border border-[#8FB4E3]/40 flex items-center justify-center text-navy-900 mx-auto mb-3">
             <CreditCard className="w-7 h-7" />
           </div>
           <h3 className="text-base font-semibold text-slate-900 mb-1">
@@ -293,7 +293,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
           {hasActiveFilters && (
             <button
               onClick={handleClearFilters}
-              className="px-3.5 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg border border-purple-200"
+              className="px-3.5 py-1.5 text-xs font-semibold text-[#FF6A2B] bg-[#FFF2EC] hover:bg-[#FFE5D8] rounded-xl border border-[#FF6A2B]/30"
             >
               Reset Filters
             </button>
@@ -307,7 +307,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
               <div
                 key={p.id}
                 className={`p-4 transition-colors ${
-                  p.isReversed ? 'bg-rose-50/30' : 'hover:bg-slate-50/80'
+                  p.isReversed ? 'bg-rose-50/30' : 'hover:bg-[#F4F8FD]'
                 }`}
               >
                 <div className="flex items-start justify-between gap-2 mb-2">
@@ -315,15 +315,15 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                     {onSelectInvoice ? (
                       <button
                         onClick={() => onSelectInvoice(p.invoiceId)}
-                        className="inline-flex items-center gap-1 font-semibold text-purple-700 text-sm hover:underline"
+                        className="inline-flex items-center gap-1 font-mono font-bold text-navy-900 hover:text-[#FF6A2B] text-sm hover:underline"
                       >
                         <span>{p.invoiceNumber || 'INV'}</span>
-                        <ExternalLink className="w-3 h-3 text-purple-500" />
+                        <ExternalLink className="w-3 h-3 text-[#FF6A2B]" />
                       </button>
                     ) : (
-                      <span className="font-semibold text-purple-700 text-sm">{p.invoiceNumber || 'INV'}</span>
+                      <span className="font-mono font-bold text-navy-900 text-sm">{p.invoiceNumber || 'INV'}</span>
                     )}
-                    <div className="font-medium text-navy-900 text-xs mt-0.5">{p.customerName || 'Customer'}</div>
+                    <div className="font-medium text-slate-800 text-xs mt-0.5">{p.customerName || 'Customer'}</div>
                   </div>
                   <div className="text-right">
                     <div className={`font-bold text-sm ${p.isReversed ? 'text-slate-400 line-through' : 'text-emerald-700'}`}>
@@ -374,7 +374,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-200/80 bg-slate-50/60 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                <tr className="border-b border-[#D5E4F5] bg-[#F0F5FB] text-[11px] font-bold text-navy-800 uppercase tracking-wider">
                   <th className="py-3 px-4 sm:px-6">Invoice #</th>
                   <th className="py-3 px-4">Customer</th>
                   <th className="py-3 px-4">Date</th>
@@ -390,23 +390,23 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                   <tr
                     key={p.id}
                     className={`transition-colors ${
-                      p.isReversed ? 'bg-rose-50/30 text-slate-400' : 'hover:bg-slate-50/80'
+                      p.isReversed ? 'bg-rose-50/30 text-slate-400' : 'hover:bg-[#F4F8FD]'
                     }`}
                   >
                     <td className="py-3.5 px-4 sm:px-6">
                       {onSelectInvoice ? (
                         <button
                           onClick={() => onSelectInvoice(p.invoiceId)}
-                          className="inline-flex items-center gap-1 font-semibold text-purple-700 hover:text-purple-900 hover:underline"
+                          className="inline-flex items-center gap-1 font-mono font-bold text-navy-900 hover:text-[#FF6A2B] hover:underline"
                         >
                           <span>{p.invoiceNumber || 'INV'}</span>
-                          <ExternalLink className="w-3 h-3 text-purple-500" />
+                          <ExternalLink className="w-3 h-3 text-[#FF6A2B]" />
                         </button>
                       ) : (
-                        <span className="font-semibold text-purple-700">{p.invoiceNumber || 'INV'}</span>
+                        <span className="font-mono font-bold text-navy-900">{p.invoiceNumber || 'INV'}</span>
                       )}
                     </td>
-                    <td className="py-3.5 px-4 font-medium text-navy-900">
+                    <td className="py-3.5 px-4 font-semibold text-slate-800">
                       {p.customerName || 'Customer'}
                     </td>
                     <td className="py-3.5 px-4 text-slate-500">

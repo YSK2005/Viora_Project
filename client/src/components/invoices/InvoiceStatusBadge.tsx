@@ -20,8 +20,8 @@ export const InvoiceStatusBadge: React.FC<Props> = ({ status, paymentStatus }) =
         );
       case 'PARTIALLY_PAID':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-teal-50 text-teal-800 border border-teal-200">
-            <Clock className="w-3.5 h-3.5" />
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-dusk-100 text-navy-900 border border-dusk-200">
+            <Clock className="w-3.5 h-3.5 text-navy-700" />
             Partial
           </span>
         );

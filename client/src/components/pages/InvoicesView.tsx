@@ -1,7 +1,7 @@
 import React from 'react';
 import { Invoice, DashboardSummary } from '../../types';
 import { InvoiceTable } from '../invoices/InvoiceTable';
-import { FileText, CheckCircle2, Clock, FileEdit, AlertCircle, RefreshCw, AlertTriangle } from 'lucide-react';
+import { FileText, CheckCircle2, Clock, FileEdit, AlertCircle, RefreshCw, AlertTriangle, FilePlus } from 'lucide-react';
 
 interface InvoicesViewProps {
   summary?: DashboardSummary | null;
@@ -41,13 +41,34 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
   const issuedCount = summary?.metrics.totalInvoices.count ?? invoices.filter((i) => i.status === 'ISSUED').length;
   const draftCount = summary?.metrics.totalInvoices.draftCount ?? invoices.filter((i) => i.status === 'DRAFT').length;
   const paidCount = summary?.metrics.totalInvoices.paidCount ?? invoices.filter((i) => i.paymentStatus === 'PAID').length;
-  const pendingCount = summary ? summary.metrics.totalInvoices.partialCount + summary.metrics.totalInvoices.unpaidCount : invoices.filter(
-    (i) => i.status === 'ISSUED' && (i.paymentStatus === 'UNPAID' || i.paymentStatus === 'PARTIALLY_PAID')
-  ).length;
+  const pendingCount = summary
+    ? summary.metrics.totalInvoices.partialCount + summary.metrics.totalInvoices.unpaidCount
+    : invoices.filter((i) => i.status === 'ISSUED' && (i.paymentStatus === 'UNPAID' || i.paymentStatus === 'PARTIALLY_PAID')).length;
 
   return (
     <div className="space-y-6">
-      {/* B18: Clear Error & Stale Data Banner */}
+      {/* Top Header with Title and Prominent Orange Create Invoice Button */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-[#0D1A33] p-5 sm:p-6 rounded-2xl border border-[#D5E4F5] dark:border-[#17274B] shadow-card">
+        <div>
+          <h2 className="text-xl font-extrabold text-[#0D1A33] dark:text-white tracking-tight">
+            Invoice Registry & Billing
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+            Generate, issue, dispatch, and track Indian GST invoices with automated numbering and calculations
+          </p>
+        </div>
+
+        <button
+          onClick={onNewInvoice}
+          type="button"
+          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold bg-[#FF6A2B] hover:bg-[#E85215] text-white shadow-orange hover:shadow-lg transition-all transform hover:-translate-y-0.5 flex-shrink-0"
+        >
+          <FilePlus className="w-4 h-4" />
+          <span>+ Create Invoice</span>
+        </button>
+      </div>
+
+      {/* Error & Stale Data Banner */}
       {error && (
         <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 flex items-center justify-between shadow-xs">
           <div className="flex items-center gap-3">
@@ -73,7 +94,7 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
         </div>
       )}
 
-      {/* Stale Data Indicator if no error banner active */}
+      {/* Stale Data Indicator */}
       {!error && isStale && (
         <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 flex items-center justify-between text-xs">
           <div className="flex items-center gap-2">
@@ -92,44 +113,48 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
       )}
 
       {/* Quick Summary Pill Bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-white rounded-xl border border-slate-200/80 p-3.5 shadow-card flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-purple-50 text-purple-700">
-            <FileText className="w-4 h-4" />
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+        {/* Issued */}
+        <div className="bg-white dark:bg-[#0D1A33] rounded-xl border border-[#D5E4F5]/80 dark:border-[#17274B] p-4 shadow-card flex items-center gap-3.5">
+          <div className="p-2.5 rounded-xl bg-[#F4F8FD] dark:bg-navy-900 border border-[#D5E4F5] text-[#4E77BD]">
+            <FileText className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-[11px] text-slate-500 font-medium">Issued Invoices</div>
-            <div className="text-base font-bold text-slate-900">{issuedCount}</div>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider">Issued Invoices</div>
+            <div className="text-xl font-extrabold text-[#0D1A33] dark:text-white mt-0.5">{issuedCount}</div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-slate-200/80 p-3.5 shadow-card flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-slate-100 text-slate-700">
-            <FileEdit className="w-4 h-4" />
+        {/* Draft */}
+        <div className="bg-white dark:bg-[#0D1A33] rounded-xl border border-[#D5E4F5]/80 dark:border-[#17274B] p-4 shadow-card flex items-center gap-3.5">
+          <div className="p-2.5 rounded-xl bg-[#F0F4FA] dark:bg-navy-900 border border-[#C4D3EC] text-[#0D1A33] dark:text-slate-300">
+            <FileEdit className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-[11px] text-slate-500 font-medium">Draft Invoices</div>
-            <div className="text-base font-bold text-slate-900">{draftCount}</div>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider">Draft Invoices</div>
+            <div className="text-xl font-extrabold text-[#0D1A33] dark:text-white mt-0.5">{draftCount}</div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-slate-200/80 p-3.5 shadow-card flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-emerald-50 text-emerald-700">
-            <CheckCircle2 className="w-4 h-4" />
+        {/* Paid */}
+        <div className="bg-white dark:bg-[#0D1A33] rounded-xl border border-[#D5E4F5]/80 dark:border-[#17274B] p-4 shadow-card flex items-center gap-3.5">
+          <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 text-emerald-700">
+            <CheckCircle2 className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-[11px] text-slate-500 font-medium">Settled (Paid)</div>
-            <div className="text-base font-bold text-emerald-700">{paidCount}</div>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider">Settled (Paid)</div>
+            <div className="text-xl font-extrabold text-emerald-700 dark:text-emerald-400 mt-0.5">{paidCount}</div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-slate-200/80 p-3.5 shadow-card flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-amber-50 text-amber-700">
-            <Clock className="w-4 h-4" />
+        {/* Pending */}
+        <div className="bg-white dark:bg-[#0D1A33] rounded-xl border border-[#D5E4F5]/80 dark:border-[#17274B] p-4 shadow-card flex items-center gap-3.5">
+          <div className="p-2.5 rounded-xl bg-[#FFF5F0] dark:bg-sunset-950/30 border border-[#FFD0BC] text-[#FF6A2B]">
+            <Clock className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-[11px] text-slate-500 font-medium">Awaiting Payment</div>
-            <div className="text-base font-bold text-amber-700">{pendingCount}</div>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider">Awaiting Payment</div>
+            <div className="text-xl font-extrabold text-[#FF6A2B] mt-0.5">{pendingCount}</div>
           </div>
         </div>
       </div>

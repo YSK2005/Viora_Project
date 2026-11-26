@@ -1,6 +1,6 @@
 import React from 'react';
 import { StatCard } from './StatCard';
-import { IndianRupee, FileText, CheckCircle2, AlertCircle } from 'lucide-react';
+import { IndianRupee, FileText, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
 import { DashboardSummary } from '../../types';
 
 interface MetricsGridProps {
@@ -12,24 +12,28 @@ export const MetricsGrid: React.FC<MetricsGridProps> = ({ summary }) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
-      minimumFractionDigits: 2,
+      minimumFractionDigits: 0,
       maximumFractionDigits: 2,
     }).format(val || 0);
   };
 
   const totalSalesVal = summary ? summary.metrics.totalSales.amount : 0;
   const invoiceCountVal = summary ? summary.metrics.totalInvoices.count : 0;
-  const collectedVal = summary ? summary.metrics.amountCollected.amount : 0;
+  const paidCountVal = summary ? summary.metrics.totalInvoices.paidCount : 0;
+  const pendingCountVal = summary
+    ? summary.metrics.totalInvoices.partialCount + summary.metrics.totalInvoices.unpaidCount
+    : 0;
   const outstandingVal = summary ? summary.metrics.outstandingBalance.amount : 0;
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-      {/* 1. Total Sales */}
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      {/* 1. Total Revenue */}
       <StatCard
-        title="Total Sales"
+        title="Total Revenue"
         value={formatCurrency(totalSalesVal)}
         icon={IndianRupee}
-        accent="purple"
+        variant="sunset"
+        subtext="Cumulative gross billing"
       />
 
       {/* 2. Total Invoices */}
@@ -37,23 +41,35 @@ export const MetricsGrid: React.FC<MetricsGridProps> = ({ summary }) => {
         title="Total Invoices"
         value={String(invoiceCountVal)}
         icon={FileText}
-        accent="purple"
+        variant="dusk"
+        subtext={`${summary?.metrics.totalInvoices.draftCount || 0} drafts in progress`}
       />
 
-      {/* 3. Amount Collected */}
+      {/* 3. Paid Invoices */}
       <StatCard
-        title="Amount Collected"
-        value={formatCurrency(collectedVal)}
+        title="Paid Invoices"
+        value={String(paidCountVal)}
         icon={CheckCircle2}
-        accent="purple"
+        variant="emerald"
+        subtext="Fully settled invoices"
       />
 
-      {/* 4. Outstanding Payments */}
+      {/* 4. Pending Invoices */}
       <StatCard
-        title="Outstanding Receivables"
+        title="Pending Invoices"
+        value={String(pendingCountVal)}
+        icon={Clock}
+        variant="amber"
+        subtext="Awaiting client payment"
+      />
+
+      {/* 5. Overdue / Outstanding */}
+      <StatCard
+        title="Overdue Balance"
         value={formatCurrency(outstandingVal)}
-        icon={AlertCircle}
-        accent="purple"
+        icon={AlertTriangle}
+        variant="rose"
+        subtext="Unpaid receivables"
       />
     </div>
   );

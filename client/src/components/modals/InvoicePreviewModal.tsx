@@ -183,16 +183,16 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
       <div className="bg-white rounded-2xl shadow-popover border border-slate-200/90 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden my-auto print:border-none print:shadow-none print:max-w-none print:max-h-none print:overflow-visible print:w-full print:m-0 print:rounded-none">
         {invoice && Number(invoice.creditedTotal)>0 && <div className="p-4 border-b bg-amber-50 text-amber-950">Credit notes: {formatCurrency(Number(invoice.creditedTotal))}. {Number(invoice.refundDue)>0 && <span>Customer credit owed: {formatCurrency(Number(invoice.refundDue))}. No cash refund recorded.</span>}</div>}
         {/* Top Action Toolbar (Hidden in print) */}
-        <div className="no-print p-4 sm:px-6 bg-slate-50 border-b border-slate-200/90 flex flex-wrap items-center justify-between gap-3">
+        <div className="no-print p-4 sm:px-6 bg-[#F0F5FB]/70 border-b border-[#D5E4F5] flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-brand-400/10 text-brand-600 flex items-center justify-center border border-brand-200">
-              <Receipt className="w-4 h-4" />
+            <div className="w-8 h-8 rounded-lg bg-dusk-100 text-navy-900 flex items-center justify-center border border-dusk-200">
+              <Receipt className="w-4 h-4 text-navy-800" />
             </div>
             <div>
-              <div className="text-[10px] font-bold tracking-wider text-brand-600 uppercase">
+              <div className="text-[10px] font-bold tracking-wider text-[#FF6A2B] uppercase">
                 Invoice Preview
               </div>
-              <h2 className="text-base font-bold text-slate-900 leading-tight">
+              <h2 className="text-base font-bold text-navy-900 leading-tight">
                 {invoice ? invoice.invoiceNumber : 'Loading Invoice...'}
               </h2>
             </div>
@@ -205,16 +205,16 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
                   type="button"
                   onClick={handleDownloadPdf}
                   disabled={isDownloadingPdf}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg shadow-xs transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl shadow-xs transition-colors"
                 >
-                  <Download className="w-3.5 h-3.5 text-purple-600" />
+                  <Download className="w-3.5 h-3.5 text-navy-700" />
                   <span>{isDownloadingPdf ? 'Generating...' : 'Download PDF'}</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={handlePrint}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-lg shadow-xs transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-navy-900 hover:bg-navy-800 rounded-xl shadow-xs transition-colors"
                 >
                   <Printer className="w-3.5 h-3.5 text-white" />
                   <span>Print Invoice (1 Page)</span>
@@ -227,7 +227,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
                       onClose();
                       onEditDraft(invoice);
                     }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg shadow-xs transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl shadow-xs transition-colors"
                   >
                     <FileEdit className="w-3.5 h-3.5 text-slate-600" />
                     <span>Edit Draft</span>
@@ -239,7 +239,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
                     type="button"
                     onClick={handleIssue}
                     disabled={isIssuing}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-black bg-brand-400 hover:bg-brand-500 rounded-lg shadow-sm transition-colors"
+                    className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-white bg-[#FF6A2B] hover:bg-[#e85b1f] rounded-xl shadow-sm transition-colors"
                   >
                     <SendHorizontal className="w-3.5 h-3.5" />
                     <span>{isIssuing ? 'Issuing...' : 'Issue Invoice'}</span>
@@ -251,7 +251,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
                     <button
                       type="button"
                       onClick={() => openWhatsAppDispatch(invoice)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg shadow-xs transition-colors"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-xl shadow-xs transition-colors"
                       title="Send on WhatsApp to customer"
                     >
                       <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
@@ -261,7 +261,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
                     <button
                       type="button"
                       onClick={() => openGmailDispatch(invoice)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-300 rounded-lg shadow-xs transition-colors"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-300 rounded-xl shadow-xs transition-colors"
                       title="Send via Gmail to customer"
                     >
                       <Mail className="w-3.5 h-3.5 text-rose-600" />
@@ -277,7 +277,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
                       onClose();
                       onOpenPayment(invoice);
                     }}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-lg shadow-sm transition-colors"
+                    className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-colors"
                   >
                     <CreditCard className="w-3.5 h-3.5" />
                     <span>Record Payment</span>
@@ -301,7 +301,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
         <div className="flex-1 overflow-y-auto p-6 sm:p-10 bg-slate-100/60 print:bg-white print:p-0">
           {isLoading && (
             <div className="py-20 text-center">
-              <div className="w-8 h-8 border-3 border-brand-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              <div className="w-8 h-8 border-3 border-[#FF6A2B] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
               <p className="text-xs text-slate-500 font-medium">Fetching invoice and tax details from PostgreSQL...</p>
             </div>
           )}
@@ -315,7 +315,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
           {invoice && (
             <div className="print-only-container bg-white rounded-xl shadow-xs border border-slate-200/80 p-6 sm:p-8 max-w-3xl mx-auto space-y-6 print:border-none print:shadow-none print:max-w-none print:p-0 print:m-0 print:rounded-none">
               {/* Top Accent Strip (hidden in print) */}
-              <div className="h-1 bg-gradient-to-r from-brand-400 to-accent-600 rounded-t -mt-6 sm:-mt-8 -mx-6 sm:-mx-8 mb-6 print:hidden" />
+              <div className="h-1 bg-gradient-to-r from-[#FF6A2B] via-[#8FB4E3] to-[#0D1A33] rounded-t -mt-6 sm:-mt-8 -mx-6 sm:-mx-8 mb-6 print:hidden" />
 
               {/* Header: Company & Invoice Info */}
               <div className="flex flex-col sm:flex-row justify-between items-start gap-4 pb-6 border-b border-slate-200">
@@ -328,7 +328,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
                         className="h-12 w-auto max-w-[120px] object-contain flex-shrink-0"
                       />
                     ) : (
-                      <Building2 className="w-6 h-6 text-brand-500 flex-shrink-0" />
+                      <Building2 className="w-6 h-6 text-[#FF6A2B] flex-shrink-0" />
                     )}
                     <h1 className="text-xl font-extrabold text-navy-950 tracking-tight">
                       {invoice.businessNameSnapshot || 'Your Business Name'}
@@ -355,7 +355,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
 
                 <div className="sm:text-right space-y-1 w-full sm:w-auto">
                   <div className="inline-flex items-center gap-2 mb-1">
-                    <span className="text-sm font-extrabold tracking-wider text-brand-600 uppercase">
+                    <span className="text-sm font-extrabold tracking-wider text-[#0D1A33] uppercase">
                       TAX INVOICE
                     </span>
                     <InvoiceStatusBadge status={invoice.status} />
@@ -534,7 +534,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
                   {/* Grand Total Highlight */}
                   <div className="pt-2 border-t border-slate-300 flex justify-between items-center text-sm font-extrabold text-navy-950">
                     <span>Grand Total:</span>
-                    <span className="font-mono text-base text-brand-700">
+                    <span className="font-mono text-base font-bold text-[#FF6A2B]">
                       {formatCurrency(invoice.grandTotal)}
                     </span>
                   </div>

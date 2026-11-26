@@ -55,14 +55,19 @@ export const ReportsView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {reportData?.summary && <div className="bg-white border rounded-xl p-4 flex flex-wrap gap-6"><span>Issued credits: {formatCurrency(reportData.summary.totalCredits||0)}</span><span>Net sales after credits: {formatCurrency(reportData.summary.netSales??reportData.summary.totalSales)}</span></div>}
+      {reportData?.summary && (
+        <div className="bg-[#F0F5FB] border border-[#D5E4F5] rounded-xl p-4 flex flex-wrap items-center gap-6 text-xs text-navy-900 font-medium">
+          <div><span className="text-slate-500">Issued credits:</span> <span className="font-bold text-navy-950">{formatCurrency(reportData.summary.totalCredits||0)}</span></div>
+          <div><span className="text-slate-500">Net sales after credits:</span> <span className="font-bold text-[#FF6A2B]">{formatCurrency(reportData.summary.netSales??reportData.summary.totalSales)}</span></div>
+        </div>
+      )}
       {reportData && <PaginationToolbar currentPage={timelinePage} totalPages={Math.max(1,Math.ceil(Math.max(reportData.salesTimeline?.length||0,reportData.collectionsTimeline?.length||0)/20))} totalCount={Math.max(reportData.salesTimeline?.length||0,reportData.collectionsTimeline?.length||0)} pageSize={20} onPageChange={setTimelinePage} itemLabel="report periods"/>}
       {/* Header bar */}
       <div className="bg-white rounded-xl border border-slate-200/80 p-5 shadow-card flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-bold text-navy-900 tracking-tight">Sales & Revenue Reports</h2>
-            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-800 border border-teal-200">
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-dusk-100/80 text-navy-900 border border-dusk-200">
               Live Database
             </span>
           </div>
@@ -72,12 +77,12 @@ export const ReportsView: React.FC = () => {
         </div>
 
         {/* Aggregation Toggle */}
-        <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg">
+        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
           <button
             onClick={() => setGroupBy('day')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
               groupBy === 'day'
-                ? 'bg-white text-navy-900 shadow-xs'
+                ? 'bg-[#FF6A2B] text-white shadow-xs'
                 : 'text-slate-600 hover:text-navy-900'
             }`}
           >
@@ -85,9 +90,9 @@ export const ReportsView: React.FC = () => {
           </button>
           <button
             onClick={() => setGroupBy('month')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
               groupBy === 'month'
-                ? 'bg-white text-navy-900 shadow-xs'
+                ? 'bg-[#FF6A2B] text-white shadow-xs'
                 : 'text-slate-600 hover:text-navy-900'
             }`}
           >
@@ -108,14 +113,14 @@ export const ReportsView: React.FC = () => {
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+            className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#FF6A2B]/20 focus:border-[#FF6A2B]"
           />
           <span className="text-slate-400">to</span>
           <input
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+            className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#FF6A2B]/20 focus:border-[#FF6A2B]"
           />
         </div>
 
@@ -125,7 +130,7 @@ export const ReportsView: React.FC = () => {
               setStartDate('');
               setEndDate('');
             }}
-            className="text-xs text-purple-700 hover:underline font-medium ml-auto"
+            className="text-xs text-[#FF6A2B] hover:underline font-semibold ml-auto"
           >
             Clear Date Filters
           </button>
@@ -135,7 +140,7 @@ export const ReportsView: React.FC = () => {
       {/* Loading & Error States */}
       {isLoading ? (
         <div className="p-16 flex flex-col items-center justify-center bg-white rounded-xl border border-slate-200/80">
-          <Loader2 className="w-8 h-8 text-teal-600 animate-spin mb-3" />
+          <Loader2 className="w-8 h-8 text-[#FF6A2B] animate-spin mb-3" />
           <p className="text-xs text-slate-500 font-medium">Computing sales & collections aggregates...</p>
         </div>
       ) : error ? (
@@ -153,7 +158,7 @@ export const ReportsView: React.FC = () => {
                 <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                   Total Issued Sales
                 </span>
-                <div className="p-2 rounded-lg bg-teal-50 text-teal-700">
+                <div className="p-2 rounded-lg bg-[#8FB4E3]/20 text-navy-900 border border-[#8FB4E3]/40">
                   <Receipt className="w-4 h-4" />
                 </div>
               </div>
@@ -170,7 +175,7 @@ export const ReportsView: React.FC = () => {
                 <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                   Collections Received
                 </span>
-                <div className="p-2 rounded-lg bg-emerald-50 text-emerald-700">
+                <div className="p-2 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
                   <CreditCard className="w-4 h-4" />
                 </div>
               </div>
@@ -187,7 +192,7 @@ export const ReportsView: React.FC = () => {
                 <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                   Net Outstanding
                 </span>
-                <div className="p-2 rounded-lg bg-amber-50 text-amber-700">
+                <div className="p-2 rounded-lg bg-amber-50 text-amber-700 border border-amber-200">
                   <IndianRupee className="w-4 h-4" />
                 </div>
               </div>
@@ -204,7 +209,7 @@ export const ReportsView: React.FC = () => {
                 <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                   Output Tax (GST)
                 </span>
-                <div className="p-2 rounded-lg bg-slate-100 text-slate-700">
+                <div className="p-2 rounded-lg bg-[#0D1A33]/10 text-navy-900 border border-[#0D1A33]/20">
                   <Percent className="w-4 h-4" />
                 </div>
               </div>
@@ -230,14 +235,14 @@ export const ReportsView: React.FC = () => {
               </div>
 
               {/* Legend */}
-              <div className="flex items-center gap-4 text-xs font-medium">
+              <div className="flex items-center gap-4 text-xs font-semibold">
                 <div className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded-xs bg-teal-600 inline-block" />
-                  <span className="text-slate-700">Issued Sales (Invoice Date)</span>
+                  <span className="w-3 h-3 rounded-xs bg-[#8FB4E3] inline-block" />
+                  <span className="text-navy-900">Issued Sales (Invoice Date)</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <span className="w-3 h-3 rounded-xs bg-emerald-500 inline-block" />
-                  <span className="text-slate-700">Payments Collected (Payment Date)</span>
+                  <span className="text-navy-900">Payments Collected (Payment Date)</span>
                 </div>
               </div>
             </div>
@@ -285,9 +290,9 @@ export const ReportsView: React.FC = () => {
                               {/* Sales Bar */}
                               <div
                                 style={{ height: `${salesHeight}px` }}
-                                className="w-3 sm:w-5 bg-teal-600 rounded-t hover:bg-teal-700 transition-all cursor-pointer relative"
+                                className="w-3 sm:w-5 bg-[#8FB4E3] rounded-t hover:bg-[#729cd2] transition-all cursor-pointer relative"
                               >
-                                <div className="hidden group-hover:block absolute bottom-full mb-1 left-1/2 -translate-x-1/2 z-20 bg-slate-900 text-white text-[10px] px-2 py-1 rounded shadow whitespace-nowrap">
+                                <div className="hidden group-hover:block absolute bottom-full mb-1 left-1/2 -translate-x-1/2 z-20 bg-navy-950 text-white text-[10px] px-2 py-1 rounded shadow whitespace-nowrap font-medium">
                                   Sales: {formatCurrency(item.sales)}
                                 </div>
                               </div>
@@ -297,7 +302,7 @@ export const ReportsView: React.FC = () => {
                                 style={{ height: `${collHeight}px` }}
                                 className="w-3 sm:w-5 bg-emerald-500 rounded-t hover:bg-emerald-600 transition-all cursor-pointer relative"
                               >
-                                <div className="hidden group-hover:block absolute bottom-full mb-1 left-1/2 -translate-x-1/2 z-20 bg-slate-900 text-white text-[10px] px-2 py-1 rounded shadow whitespace-nowrap">
+                                <div className="hidden group-hover:block absolute bottom-full mb-1 left-1/2 -translate-x-1/2 z-20 bg-navy-950 text-white text-[10px] px-2 py-1 rounded shadow whitespace-nowrap font-medium">
                                   Collected: {formatCurrency(item.collections)}
                                 </div>
                               </div>
@@ -321,10 +326,10 @@ export const ReportsView: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Sales by Invoice Date */}
             <div className="bg-white rounded-xl border border-slate-200/80 shadow-card overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-200/80 flex items-center justify-between bg-slate-50/50">
+              <div className="px-5 py-4 border-b border-[#D5E4F5] flex items-center justify-between bg-[#F0F5FB]/70">
                 <div className="flex items-center gap-2">
-                  <Receipt className="w-4 h-4 text-teal-600" />
-                  <h3 className="text-sm font-semibold text-slate-900">Sales Timeline (By Invoice Date)</h3>
+                  <Receipt className="w-4 h-4 text-navy-900" />
+                  <h3 className="text-sm font-bold text-navy-900">Sales Timeline (By Invoice Date)</h3>
                 </div>
                 <span className="text-[11px] text-slate-500">
                   {reportData?.salesTimeline?.length || 0} periods
@@ -339,7 +344,7 @@ export const ReportsView: React.FC = () => {
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead>
-                      <tr className="border-b border-slate-100 bg-slate-50/30 text-[10px] font-semibold text-slate-500 uppercase">
+                      <tr className="border-b border-[#D5E4F5] bg-[#F0F5FB] text-[10px] font-bold text-navy-800 uppercase">
                         <th className="py-2.5 px-4">Period</th>
                         <th className="py-2.5 px-3 text-center">Invoices</th>
                         <th className="py-2.5 px-3 text-right">Tax (GST)</th>
@@ -348,7 +353,7 @@ export const ReportsView: React.FC = () => {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {reportData?.salesTimeline?.slice((timelinePage-1)*20,timelinePage*20).map((item: any) => (
-                        <tr key={item.period} className="hover:bg-slate-50">
+                        <tr key={item.period} className="hover:bg-[#F4F8FD] transition-colors">
                           <td className="py-2.5 px-4 font-mono font-medium text-slate-800">
                             {item.period}
                           </td>
@@ -358,7 +363,7 @@ export const ReportsView: React.FC = () => {
                           <td className="py-2.5 px-3 text-right text-slate-500">
                             {formatCurrency(item.taxTotal)}
                           </td>
-                          <td className="py-2.5 px-4 text-right font-semibold text-navy-900">
+                          <td className="py-2.5 px-4 text-right font-bold text-navy-900">
                             {formatCurrency(item.grandTotal)}
                           </td>
                         </tr>
@@ -371,10 +376,10 @@ export const ReportsView: React.FC = () => {
 
             {/* Collections by Payment Date */}
             <div className="bg-white rounded-xl border border-slate-200/80 shadow-card overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-200/80 flex items-center justify-between bg-slate-50/50">
+              <div className="px-5 py-4 border-b border-[#D5E4F5] flex items-center justify-between bg-[#F0F5FB]/70">
                 <div className="flex items-center gap-2">
                   <CreditCard className="w-4 h-4 text-emerald-600" />
-                  <h3 className="text-sm font-semibold text-slate-900">Collections (By Payment Date)</h3>
+                  <h3 className="text-sm font-bold text-navy-900">Collections (By Payment Date)</h3>
                 </div>
                 <span className="text-[11px] text-slate-500">
                   {reportData?.collectionsTimeline?.length || 0} periods
@@ -389,7 +394,7 @@ export const ReportsView: React.FC = () => {
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead>
-                      <tr className="border-b border-slate-100 bg-slate-50/30 text-[10px] font-semibold text-slate-500 uppercase">
+                      <tr className="border-b border-[#D5E4F5] bg-[#F0F5FB] text-[10px] font-bold text-navy-800 uppercase">
                         <th className="py-2.5 px-4">Period</th>
                         <th className="py-2.5 px-3 text-center">Payments</th>
                         <th className="py-2.5 px-4 text-right">Total Collected</th>
@@ -397,7 +402,7 @@ export const ReportsView: React.FC = () => {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {reportData?.collectionsTimeline?.slice((timelinePage-1)*20,timelinePage*20).map((item: any) => (
-                        <tr key={item.period} className="hover:bg-slate-50">
+                        <tr key={item.period} className="hover:bg-[#F4F8FD] transition-colors">
                           <td className="py-2.5 px-4 font-mono font-medium text-slate-800">
                             {item.period}
                           </td>

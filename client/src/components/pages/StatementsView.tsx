@@ -81,7 +81,7 @@ export function StatementsView() {
   }, [customerId, page, revision]);
   return (
     <section className="space-y-4">
-      <h1 className="text-2xl font-bold">Customer statement</h1>
+      <h1 className="text-xl font-bold text-navy-900 tracking-tight">Customer Statements</h1>
       <div className="bg-white p-4 rounded-xl space-y-3 no-print">
         <label className="block">
           Find customer

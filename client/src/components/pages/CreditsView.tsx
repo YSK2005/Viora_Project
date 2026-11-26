@@ -176,7 +176,7 @@ export function CreditsView({
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap justify-between gap-3">
-        <h1 className="text-2xl font-bold">Credit notes</h1>
+        <h1 className="text-xl font-bold text-navy-900 tracking-tight">Credit Notes</h1>
         {canIssue && (
           <button className="btn-primary" onClick={begin}>
             Issue credit note

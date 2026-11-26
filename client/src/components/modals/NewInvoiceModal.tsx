@@ -475,13 +475,13 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
     <div {...dialogProps} className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-navy-950/50 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto">
       <div className="bg-white rounded-2xl shadow-popover border border-slate-200/90 w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden my-auto">
         {/* Modal Header */}
-        <div className="p-4 sm:px-6 bg-slate-50 border-b border-slate-200/90 flex items-center justify-between">
+        <div className="p-4 sm:px-6 bg-[#F0F5FB]/70 border-b border-[#D5E4F5] flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center border border-teal-200 shadow-xs">
-              <FilePlus className="w-5 h-5" />
+            <div className="w-9 h-9 rounded-xl bg-dusk-100 text-navy-900 flex items-center justify-center border border-dusk-200 shadow-xs">
+              <FilePlus className="w-5 h-5 text-navy-800" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900 leading-tight">
+              <h2 className="text-base font-bold text-navy-900 leading-tight">
                 {editingInvoice ? `Edit Draft Invoice (${editingInvoice.invoiceNumber})` : 'Create New Invoice'}
               </h2>
               <p className="text-xs text-slate-500">
@@ -502,23 +502,23 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
           {/* B19: Unsaved Draft Recovery Notice */}
           {hasUnsavedDraft && !editingInvoice && (
-            <div className="p-3.5 bg-purple-50 border border-purple-200 text-purple-900 rounded-xl text-xs flex items-center justify-between shadow-xs">
+            <div className="p-3.5 bg-[#F0F5FB] border border-[#D5E4F5] text-navy-900 rounded-xl text-xs flex items-center justify-between shadow-xs">
               <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-purple-600 flex-shrink-0" />
+                <FileText className="w-4 h-4 text-[#FF6A2B] flex-shrink-0" />
                 <span>An unsaved invoice draft from your previous session was detected.</span>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={handleRestoreDraft}
-                  className="px-2.5 py-1 bg-purple-700 text-white font-semibold rounded-md hover:bg-purple-800 transition-colors"
+                  className="px-2.5 py-1 bg-[#FF6A2B] text-white font-semibold rounded-md hover:bg-[#e85b1f] transition-colors"
                 >
                   Restore Draft
                 </button>
                 <button
                   type="button"
                   onClick={handleDiscardDraft}
-                  className="px-2.5 py-1 border border-purple-300 text-purple-700 font-semibold rounded-md hover:bg-purple-100 transition-colors"
+                  className="px-2.5 py-1 border border-slate-300 text-slate-700 font-semibold rounded-md hover:bg-slate-100 transition-colors"
                 >
                   Discard
                 </button>
@@ -538,7 +538,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
             {/* Customer Picker */}
             <div className="space-y-1.5">
               <label htmlFor="newinvoicemodal-field-1" className="font-semibold text-slate-700 flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5 text-teal-600" />
+                <User className="w-3.5 h-3.5 text-[#FF6A2B]" />
                 Select Customer *
               </label>
               <CustomerSearchSelect
@@ -556,7 +556,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
                     {selectedCustomer.email && <span>Email: {selectedCustomer.email}</span>}
                     {selectedCustomer.gstin && <span className="font-mono">GSTIN: {selectedCustomer.gstin}</span>}
                   </div>
-                  <div className="text-[10px] text-purple-700 font-medium pt-0.5">
+                  <div className="text-[10px] text-navy-800 font-semibold pt-0.5">
                     ✓ Invoice will be directly dispatched via WhatsApp & Gmail upon issuance
                   </div>
                 </div>
@@ -571,7 +571,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
                   type="date"
                   value={invoiceDate}
                   onChange={(e) => setInvoiceDate(e.target.value)}
-                  className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600"
+                  className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#FF6A2B]/20 focus:border-[#FF6A2B]"
                 />
               </div>
 
@@ -581,7 +581,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
                   type="date"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
-                  className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600"
+                  className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#FF6A2B]/20 focus:border-[#FF6A2B]"
                 />
               </div>
             </div>
@@ -606,7 +606,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
                     onClick={() => setIsInterState(false)}
                     className={`flex-1 py-1.5 px-2 text-xs font-semibold rounded-lg border transition-colors ${
                       !isInterState
-                        ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
+                        ? 'bg-[#FF6A2B] text-white border-[#FF6A2B] shadow-xs'
                         : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
                     }`}
                   >
@@ -617,7 +617,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
                     onClick={() => setIsInterState(true)}
                     className={`flex-1 py-1.5 px-2 text-xs font-semibold rounded-lg border transition-colors ${
                       isInterState
-                        ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
+                        ? 'bg-[#FF6A2B] text-white border-[#FF6A2B] shadow-xs'
                         : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
                     }`}
                   >
@@ -632,15 +632,15 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5 text-teal-600" />
+                <FileText className="w-3.5 h-3.5 text-[#FF6A2B]" />
                 Line Items ({items.length})
               </h3>
               <button
                 type="button"
                 onClick={addItemRow}
-                className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors"
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-[#FF6A2B] hover:bg-[#e85b1f] rounded-lg transition-colors shadow-xs"
               >
-                <Plus className="w-3.5 h-3.5 text-purple-600" />
+                <Plus className="w-3.5 h-3.5" />
                 Add Item
               </button>
             </div>
@@ -790,12 +790,12 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Payment instructions, bank account details or terms..."
-                className="w-full p-3 bg-white border border-slate-300 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                className="w-full p-3 bg-white border border-slate-300 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#FF6A2B]/20 focus:border-[#FF6A2B]"
               />
             </div>
 
             {/* Calculations Summary Panel */}
-            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200/90 text-xs space-y-2">
+            <div className="bg-[#F0F5FB] rounded-xl p-4 border border-[#D5E4F5] text-xs space-y-2">
               <div className="flex justify-between text-slate-600 py-0.5">
                 <span>Subtotal (Before Discount):</span>
                 <span className="font-mono font-semibold">{formatCurrency(clientTotals.subtotal)}</span>
@@ -814,7 +814,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
               </div>
 
               {/* GST Tax Breakdown */}
-              <div className="py-1 border-t border-slate-200 space-y-1">
+              <div className="py-1 border-t border-[#D5E4F5] space-y-1">
                 {isInterState ? (
                   <div className="flex justify-between text-slate-600">
                     <span>IGST (Integrated GST):</span>
@@ -839,9 +839,9 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
               </div>
 
               {/* Grand Total */}
-              <div className="pt-2 border-t border-slate-300 flex justify-between items-center text-sm font-extrabold text-navy-950">
+              <div className="pt-2 border-t border-[#D5E4F5] flex justify-between items-center text-sm font-extrabold text-navy-950">
                 <span>Grand Total:</span>
-                <span className="font-mono text-base text-teal-800">
+                <span className="font-mono text-base font-bold text-[#FF6A2B]">
                   {formatCurrency(clientTotals.grandTotal)}
                 </span>
               </div>
@@ -860,7 +860,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition-colors"
             >
               Cancel
             </button>
@@ -869,7 +869,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
               type="button"
               onClick={() => handleSubmit(false)}
               disabled={isSubmitting}
-              className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg shadow-xs transition-colors"
+              className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl shadow-xs transition-colors"
             >
               {isSubmitting && !isIssueImmediate ? 'Saving Draft...' : 'Save Draft'}
             </button>
@@ -878,7 +878,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
               type="button"
               onClick={() => handleSubmit(true)}
               disabled={isSubmitting}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-lg shadow-sm transition-all hover:shadow"
+              className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-semibold text-white bg-[#FF6A2B] hover:bg-[#e85b1f] rounded-xl shadow-sm transition-all hover:shadow"
             >
               <SendHorizontal className="w-3.5 h-3.5" />
               <span>{isSubmitting && isIssueImmediate ? 'Issuing...' : 'Save & Issue Invoice'}</span>

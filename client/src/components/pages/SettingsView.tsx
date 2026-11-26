@@ -205,10 +205,10 @@ export const SettingsView: React.FC = () => {
 
           {/* Section 0: Company Branding & Logo */}
           <div className="bg-white rounded-xl border border-slate-200/80 p-6 shadow-card space-y-4">
-            <div className="border-b border-slate-100 pb-3 flex items-center gap-2">
-              <ImagePlus className="w-4 h-4 text-brand-500" />
-              <h3 className="text-sm font-semibold text-slate-900">Company Branding & Logo</h3>
-              <span className="ml-auto text-[10px] font-medium text-accent-700 bg-accent-50 border border-accent-200 px-2 py-0.5 rounded">
+            <div className="border-b border-[#D5E4F5] pb-3 flex items-center gap-2">
+              <ImagePlus className="w-4 h-4 text-[#FF6A2B]" />
+              <h3 className="text-sm font-bold text-navy-900">Company Branding & Logo</h3>
+              <span className="ml-auto text-[10px] font-bold text-navy-900 bg-dusk-100 border border-dusk-200 px-2.5 py-0.5 rounded-md">
                 Used in Invoices & PDF
               </span>
             </div>
@@ -220,7 +220,7 @@ export const SettingsView: React.FC = () => {
             <div className="flex flex-col sm:flex-row gap-6 items-start">
               {/* Logo Preview */}
               <div className="flex-shrink-0">
-                <div className="w-32 h-32 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden relative group">
+                <div className="w-32 h-32 rounded-xl border-2 border-dashed border-[#D5E4F5] bg-[#F0F5FB]/50 flex items-center justify-center overflow-hidden relative group">
                   {logoDataUrl ? (
                     <>
                       <img
@@ -257,7 +257,7 @@ export const SettingsView: React.FC = () => {
                     type="file"
                     accept="image/png,image/jpeg,image/svg+xml,image/webp"
                     onChange={handleLogoUpload}
-                    className="block w-full text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-brand-400 file:text-black hover:file:bg-brand-500 file:cursor-pointer cursor-pointer"
+                    className="block w-full text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-[#FF6A2B] file:text-white hover:file:bg-[#e85b1f] file:cursor-pointer cursor-pointer shadow-xs"
                   />
                   <p className="text-[11px] text-slate-400 mt-1">
                     PNG, JPG, SVG or WebP · Recommended: 400×400px or wider · Max 2MB
@@ -276,9 +276,9 @@ export const SettingsView: React.FC = () => {
 
           {/* Section 1: Business Identification */}
           <div className="bg-white rounded-xl border border-slate-200/80 p-6 shadow-card space-y-4">
-            <div className="border-b border-slate-100 pb-3 flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-brand-500" />
-              <h3 className="text-sm font-semibold text-slate-900">Legal Business Information</h3>
+            <div className="border-b border-[#D5E4F5] pb-3 flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-[#FF6A2B]" />
+              <h3 className="text-sm font-bold text-navy-900">Legal Business Information</h3>
             </div>
 
             <div>
@@ -291,7 +291,7 @@ export const SettingsView: React.FC = () => {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Acme Enterprises Pvt Ltd"
-                className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400/30 focus:border-brand-400"
+                className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF6A2B]/20 focus:border-[#FF6A2B]"
               />
             </div>
 
@@ -299,17 +299,17 @@ export const SettingsView: React.FC = () => {
               <div>
                 <label htmlFor="settingsview-field-3" className="block text-xs font-semibold text-slate-700 mb-1">
                   Company Gmail / Email <span className="text-rose-500">*</span>
-                  <span className="ml-1 text-[10px] text-purple-700 font-normal">(Mandatory for sending invoices)</span>
+                  <span className="ml-1 text-[10px] text-[#FF6A2B] font-semibold">(Mandatory for sending invoices)</span>
                 </label>
                 <div className="relative">
-                  <Mail className="w-4 h-4 text-purple-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="email"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="billing@company.com or yourbusiness@gmail.com"
-                    className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600"
+                    className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF6A2B]/20 focus:border-[#FF6A2B]"
                   />
                 </div>
                 <p className="text-[10px] text-slate-400 mt-1">Sender address for invoice emails</p>
@@ -318,17 +318,17 @@ export const SettingsView: React.FC = () => {
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Company WhatsApp Number <span className="text-rose-500">*</span>
-                  <span className="ml-1 text-[10px] text-purple-700 font-normal">(Mandatory for sending invoices)</span>
+                  <span className="ml-1 text-[10px] text-[#FF6A2B] font-semibold">(Mandatory for sending invoices)</span>
                 </label>
                 <div className="relative">
-                  <Phone className="w-4 h-4 text-purple-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     required
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="+91 98765 43210"
-                    className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 font-mono"
+                    className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF6A2B]/20 focus:border-[#FF6A2B] font-mono"
                   />
                 </div>
                 <p className="text-[10px] text-slate-400 mt-1">Official WhatsApp contact on invoices</p>
@@ -347,7 +347,7 @@ export const SettingsView: React.FC = () => {
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
                   placeholder="Street address, City, State, PIN code"
-                  className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400/30 focus:border-brand-400"
+                  className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF6A2B]/20 focus:border-[#FF6A2B]"
                 />
               </div>
             </div>
@@ -362,7 +362,7 @@ export const SettingsView: React.FC = () => {
                   value={gstin}
                   onChange={(e) => setGstin(e.target.value.toUpperCase())}
                   placeholder="29ABCDE1234F1Z5"
-                  className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-brand-400/30 focus:border-brand-400"
+                  className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-[#FF6A2B]/20 focus:border-[#FF6A2B]"
                 />
               </div>
 
@@ -377,9 +377,9 @@ export const SettingsView: React.FC = () => {
 
           {/* Section 2: Invoice Numbering Configuration */}
           <div className="bg-white rounded-xl border border-slate-200/80 p-6 shadow-card space-y-4">
-            <div className="border-b border-slate-100 pb-3 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-brand-500" />
-              <h3 className="text-sm font-semibold text-slate-900">Invoice Numbering Sequence</h3>
+            <div className="border-b border-[#D5E4F5] pb-3 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-[#FF6A2B]" />
+              <h3 className="text-sm font-bold text-navy-900">Invoice Numbering Sequence</h3>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -393,10 +393,10 @@ export const SettingsView: React.FC = () => {
                   value={invoicePrefix}
                   onChange={(e) => setInvoicePrefix(e.target.value.toUpperCase())}
                   placeholder="INV"
-                  className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-brand-400/30 focus:border-brand-400"
+                  className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-[#FF6A2B]/20 focus:border-[#FF6A2B]"
                 />
                 <span className="text-[11px] text-slate-400 mt-1 block">
-                  Example: <code className="text-brand-600 font-bold">{invoicePrefix || 'INV'}-{new Date().getFullYear()}-000001</code>
+                  Example: <code className="text-[#FF6A2B] font-bold">{invoicePrefix || 'INV'}-{new Date().getFullYear()}-000001</code>
                 </span>
               </div>
 
@@ -425,7 +425,7 @@ export const SettingsView: React.FC = () => {
             <button
               type="submit"
               disabled={isSaving}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold bg-brand-400 hover:bg-brand-500 text-black shadow-sm transition-all hover:shadow disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold bg-[#FF6A2B] hover:bg-[#e85b1f] text-white shadow-sm transition-all hover:shadow disabled:opacity-50"
             >
               <Save className="w-4 h-4" />
               <span>{isSaving ? 'Saving Changes...' : 'Save Settings'}</span>

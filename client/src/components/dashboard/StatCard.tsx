@@ -10,7 +10,7 @@ interface StatCardProps {
     isPositive: boolean;
   };
   icon: LucideIcon;
-  accent: 'teal' | 'navy' | 'emerald' | 'amber' | 'purple';
+  variant?: 'sunset' | 'dusk' | 'emerald' | 'amber' | 'rose' | 'navy';
 }
 
 export const StatCard: React.FC<StatCardProps> = React.memo(({
@@ -19,50 +19,58 @@ export const StatCard: React.FC<StatCardProps> = React.memo(({
   subtext,
   trend,
   icon: Icon,
-  accent,
+  variant = 'dusk',
 }) => {
-  const accentStyles = {
-    teal: {
-      bgIcon: 'bg-teal-50 text-teal-700 border-teal-200/60',
-      badge: 'bg-teal-50 text-teal-700',
+  const variantStyles = {
+    sunset: {
+      bgIcon: 'bg-[#FFF5F0] text-[#FF6A2B] border-[#FFD0BC]',
+      badge: 'bg-[#FFF5F0] text-[#FF6A2B]',
     },
-    purple: {
-      bgIcon: 'bg-purple-50 text-purple-700 border-purple-200/60',
-      badge: 'bg-purple-50 text-purple-700',
+    dusk: {
+      bgIcon: 'bg-[#F4F8FD] text-[#4E77BD] border-[#D5E4F5]',
+      badge: 'bg-[#F4F8FD] text-[#4E77BD]',
     },
     navy: {
-      bgIcon: 'bg-navy-100 text-navy-800 border-navy-200/60',
-      badge: 'bg-slate-100 text-slate-700',
+      bgIcon: 'bg-[#F0F4FA] text-[#0D1A33] border-[#C4D3EC]',
+      badge: 'bg-[#F0F4FA] text-[#0D1A33]',
     },
     emerald: {
-      bgIcon: 'bg-emerald-50 text-emerald-700 border-emerald-200/60',
+      bgIcon: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
       badge: 'bg-emerald-50 text-emerald-700',
     },
     amber: {
-      bgIcon: 'bg-amber-50 text-amber-700 border-amber-200/60',
+      bgIcon: 'bg-amber-50 text-amber-700 border-amber-200/80',
       badge: 'bg-amber-50 text-amber-700',
     },
-  }[accent];
+    rose: {
+      bgIcon: 'bg-rose-50 text-rose-700 border-rose-200/80',
+      badge: 'bg-rose-50 text-rose-700',
+    },
+  }[variant];
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200/80 p-5 shadow-card hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">{title}</p>
-          <h3 className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">{value}</h3>
+    <div className="bg-white dark:bg-[#0D1A33] rounded-xl border border-[#D5E4F5]/80 dark:border-[#17274B] p-5 shadow-card hover:shadow-card-hover transition-all">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">
+            {title}
+          </p>
+          <h3 className="text-2xl font-extrabold text-[#0D1A33] dark:text-white mt-1.5 tracking-tight truncate">
+            {value}
+          </h3>
         </div>
-        <div className={`p-2.5 rounded-xl border ${accentStyles.bgIcon}`}>
+        <div className={`p-3 rounded-xl border ${variantStyles.bgIcon} flex-shrink-0 shadow-2xs`}>
           <Icon className="w-5 h-5" />
         </div>
       </div>
 
       {(subtext || trend) && (
-        <div className="mt-4 flex items-center justify-between text-xs pt-3 border-t border-slate-100">
-          {subtext && <span className="text-slate-500">{subtext}</span>}
+        <div className="mt-3.5 flex items-center justify-between text-xs pt-3 border-t border-[#F0F4FA] dark:border-navy-800">
+          {subtext && <span className="text-slate-500 dark:text-slate-400 truncate">{subtext}</span>}
           {trend && (
             <span
               className={`inline-flex items-center gap-1 font-semibold ${
-                trend.isPositive ? 'text-emerald-600' : 'text-amber-600'
+                trend.isPositive ? 'text-emerald-600' : 'text-rose-600'
               }`}
             >
               {trend.isPositive ? (

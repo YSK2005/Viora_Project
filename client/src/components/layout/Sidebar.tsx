@@ -1,4 +1,4 @@
-import {useDialog} from '../../hooks/useDialog';
+import { useDialog } from '../../hooks/useDialog';
 import React from 'react';
 import {
   LayoutDashboard,
@@ -11,10 +11,13 @@ import {
   ChevronLeft,
   ChevronRight,
   Repeat,
+  FileMinus,
+  FileSpreadsheet,
   Sliders,
   Sparkles,
   ShieldCheck,
   LogOut,
+  X,
 } from 'lucide-react';
 import { NavigationKey, User, UserRole } from '../../types';
 import { BillyWordmark } from '../common/BillyWordmark';
@@ -49,7 +52,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   userRole,
   onLogout,
 }) => {
-  const dialogProps=useDialog(isMobileOpen,onCloseMobile,'Main navigation');
+  const dialogProps = useDialog(isMobileOpen, onCloseMobile, 'Main navigation');
 
   const navItems: NavItem[] = React.useMemo(() => {
     if (userRole === 'SUPER_ADMIN') {
@@ -79,53 +82,67 @@ export const Sidebar: React.FC<SidebarProps> = ({
       { key: 'customers', label: 'Customers', icon: Users },
       { key: 'products', label: 'Products & Services', icon: Package },
       { key: 'payments', label: 'Payments', icon: CreditCard },
-      { key: 'reports', label: 'Sales Reports', icon: BarChart3 },
-      { key: 'credits', label: 'Credit Notes', icon: Receipt },
-      { key: 'statements', label: 'Customer Statements', icon: Users },
-      { key: 'recurring', label: 'Recurring', icon: Repeat },
+      { key: 'reports', label: 'Reports & Analytics', icon: BarChart3 },
+      { key: 'credits', label: 'Credit Notes', icon: FileMinus },
+      { key: 'statements', label: 'Customer Statements', icon: FileSpreadsheet },
+      { key: 'recurring', label: 'Recurring Invoices', icon: Repeat },
       { key: 'pricing', label: 'Software License', icon: Sparkles, badge: 'INR ₹' },
       { key: 'settings', label: 'Business Settings', icon: Settings },
     ];
   }, [userRole]);
+
   return (
     <>
       {/* Mobile backdrop overlay */}
       {isMobileOpen && (
         <div
-          className="fixed inset-0 z-40 bg-navy-950/40 backdrop-blur-xs lg:hidden transition-opacity"
+          className="fixed inset-0 z-40 bg-[#0D1A33]/70 backdrop-blur-sm lg:hidden transition-opacity"
           onClick={onCloseMobile}
         />
       )}
 
-      {/* Sidebar container */}
-      <div {...(isMobileOpen ? dialogProps : {})} ref={dialogProps.ref} data-sidebar
-        className={`fixed top-0 bottom-0 left-0 z-50 flex flex-col bg-navy-950 border-r border-navy-800 transition-all duration-300 ease-in-out ${
+      {/* Sidebar container - Midnight Navy */}
+      <aside
+        {...(isMobileOpen ? dialogProps : {})}
+        ref={dialogProps.ref}
+        data-sidebar
+        className={`fixed top-0 bottom-0 left-0 z-50 flex flex-col bg-[#0D1A33] border-r border-[#17274B] text-white transition-all duration-300 ease-in-out shadow-xl ${
           isCollapsed ? 'w-20' : 'w-64'
         } ${
           isMobileOpen ? 'translate-x-0 visible' : '-translate-x-full invisible lg:visible lg:translate-x-0'
         }`}
       >
         {/* Brand Header */}
-        <div className="h-16 flex items-center justify-between px-4 border-b border-navy-800">
+        <div className="h-20 flex items-center justify-between px-4 border-b border-[#17274B]/80 bg-[#0D1A33]">
           <div className="flex items-center gap-3 overflow-hidden">
             {/* Logo Icon */}
-            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-md flex-shrink-0 bg-white flex items-center justify-center p-0.5">
-              <img src="/logo.png" alt="Logo" className="w-full h-full object-contain rounded-lg" />
+            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-md flex-shrink-0 bg-white flex items-center justify-center p-1 border border-white/20">
+              <img src="/logo.png" alt="Viora Bills" className="w-full h-full object-contain rounded-lg" />
             </div>
 
-            {/* Brand Title */}
+            {/* Brand Title & Tagline */}
             {!isCollapsed && (
               <div className="flex items-center min-w-0 pl-1">
-                <BillyWordmark className="h-9 w-auto select-none" />
+                <BillyWordmark className="h-10 w-auto select-none" />
               </div>
             )}
           </div>
 
-          {/* Collapse toggle (desktop only) */}
+          {/* Mobile close button */}
+          <button
+            onClick={onCloseMobile}
+            type="button"
+            className="lg:hidden p-1.5 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+            aria-label="Close navigation"
+          >
+            <X className="w-5 h-5" />
+          </button>
+
+          {/* Desktop collapse toggle */}
           <button
             onClick={onToggleCollapse}
             type="button"
-            className="hidden lg:flex p-1.5 rounded-lg text-navy-400 hover:text-white hover:bg-navy-800 transition-colors"
+            className="hidden lg:flex p-1.5 rounded-lg text-[#8FB4E3] hover:text-white hover:bg-white/10 transition-colors"
             title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
@@ -137,12 +154,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         </div>
 
-        <button className="lg:hidden p-3 text-white" onClick={onCloseMobile} aria-label="Close navigation">Close menu</button>
         {/* Navigation list */}
-        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+        <nav className="flex-1 py-4 px-3 space-y-1.5 overflow-y-auto">
           {!isCollapsed && (
-            <div className="px-3 pb-2 text-[11px] font-semibold text-navy-500 uppercase tracking-wider">
-              Main Menu
+            <div className="px-3 pb-2 text-[10.5px] font-bold text-[#8FB4E3]/70 uppercase tracking-widest">
+              Navigation
             </div>
           )}
 
@@ -160,42 +176,39 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   onCloseMobile();
                 }}
                 title={isCollapsed ? item.label : undefined}
-                className={`w-full flex items-center rounded-lg text-sm font-medium transition-all group relative ${
+                className={`w-full flex items-center rounded-xl text-sm font-medium transition-all group relative ${
                   isCollapsed
                     ? 'justify-center px-2 py-3'
                     : 'justify-between px-3.5 py-2.5'
                 } ${
                   isActive
-                    ? 'bg-brand-400/10 text-brand-400 font-semibold'
-                    : 'text-navy-400 hover:bg-navy-800 hover:text-white'
+                    ? 'bg-[#FF6A2B] text-white font-semibold shadow-md'
+                    : 'text-slate-200 hover:bg-white/10 hover:text-white'
                 }`}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 min-w-0">
                   <Icon
                     className={`w-5 h-5 flex-shrink-0 transition-colors ${
                       isActive
-                        ? 'text-brand-400'
-                        : 'text-navy-500 group-hover:text-white'
+                        ? 'text-white'
+                        : 'text-[#8FB4E3] group-hover:text-white'
                     }`}
                   />
-                  {!isCollapsed && <span className="truncate">{item.label}</span>}
+                  {!isCollapsed && (
+                    <span className="truncate tracking-tight">{item.label}</span>
+                  )}
                 </div>
 
                 {!isCollapsed && item.badge && (
                   <span
-                    className={`px-2 py-0.5 text-[11px] font-semibold rounded-full ${
+                    className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${
                       isActive
-                        ? 'bg-brand-400/20 text-brand-300'
-                        : 'bg-navy-800 text-navy-400 group-hover:bg-navy-700'
+                        ? 'bg-white/20 text-white'
+                        : 'bg-[#17274B] text-[#8FB4E3] group-hover:bg-[#233B69]'
                     }`}
                   >
                     {item.badge}
                   </span>
-                )}
-
-                {/* Left active accent bar */}
-                {isActive && (
-                  <span className="absolute left-0 top-1.5 bottom-1.5 w-1 bg-brand-400 rounded-r-full" />
                 )}
               </button>
             );
@@ -204,25 +217,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* User Card & Logout at Bottom */}
         {user && (
-          <div className="p-3 border-t border-navy-800 bg-navy-900/60">
+          <div className="p-3 border-t border-[#17274B] bg-[#070E1E]/80">
             {!isCollapsed ? (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="min-w-0 pr-2">
-                    <p className="text-xs font-semibold text-white truncate">{user.name}</p>
-                    <p className="text-[11px] text-navy-400 truncate">{user.email}</p>
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-full bg-[#FF6A2B] text-white flex items-center justify-center text-xs font-bold shadow-xs flex-shrink-0">
+                      {user.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 pr-1">
+                      <p className="text-xs font-semibold text-white truncate">{user.name}</p>
+                      <p className="text-[10px] text-[#8FB4E3] truncate">{user.email}</p>
+                    </div>
                   </div>
                   <span
-                    className={`px-1.5 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider ${
+                    className={`px-1.5 py-0.5 text-[9.5px] font-bold rounded-md uppercase tracking-wider flex-shrink-0 ${
                       userRole === 'SUPER_ADMIN'
-                        ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                        ? 'bg-[#FF6A2B]/20 text-[#FF8A58] border border-[#FF6A2B]/40'
                         : userRole === 'CUSTOMER'
                         ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                         : userRole === 'OWNER'
-                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                        ? 'bg-[#FF6A2B]/20 text-[#FF8A58] border border-[#FF6A2B]/40'
                         : userRole === 'ACCOUNTANT'
-                        ? 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
-                        : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                        ? 'bg-[#8FB4E3]/20 text-[#8FB4E3] border border-[#8FB4E3]/40'
+                        : 'bg-white/10 text-slate-300 border border-white/20'
                     }`}
                   >
                     {userRole || 'USER'}
@@ -231,7 +249,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {onLogout && (
                   <button
                     onClick={onLogout}
-                    className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs text-rose-300 hover:text-white hover:bg-rose-500/20 rounded-lg transition-colors border border-rose-500/20"
+                    className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-rose-300 hover:text-white hover:bg-rose-500/20 rounded-lg transition-colors border border-rose-500/20"
                   >
                     <LogOut className="w-3.5 h-3.5" />
                     <span>Sign Out</span>
@@ -239,10 +257,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 )}
               </div>
             ) : (
-              <div className="flex flex-col items-center gap-2">
+              <div className="flex flex-col items-center gap-2.5">
                 <div
                   title={`${user.name} (${userRole || 'USER'})`}
-                  className="w-8 h-8 rounded-full bg-teal-600/30 text-teal-300 flex items-center justify-center text-xs font-bold border border-teal-500/30"
+                  className="w-9 h-9 rounded-full bg-[#FF6A2B] text-white flex items-center justify-center text-xs font-bold border border-white/20 shadow-xs"
                 >
                   {user.name.charAt(0).toUpperCase()}
                 </div>
@@ -251,7 +269,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     onClick={onLogout}
                     title="Sign Out"
                     aria-label="Sign Out"
-                    className="p-1.5 text-rose-400 hover:text-white hover:bg-rose-500/20 rounded-lg transition-colors"
+                    className="p-2 text-rose-300 hover:text-white hover:bg-rose-500/20 rounded-lg transition-colors"
                   >
                     <LogOut className="w-4 h-4" />
                   </button>
@@ -260,7 +278,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           </div>
         )}
-      </div>
+      </aside>
     </>
   );
 };

@@ -386,6 +386,7 @@ export const App: React.FC = () => {
         systemHealth={systemHealth}
         user={currentUser}
         userRole={userRole}
+        businessProfile={businessProfile}
         onLogout={handleLogout}
         onOpenGlobalSearch={() => setIsGlobalSearchOpen(true)}
       >
@@ -395,6 +396,8 @@ export const App: React.FC = () => {
           <DashboardView
             summary={dashboardSummary}
             invoices={invoices}
+            userName={currentUser?.name}
+            businessName={businessProfile?.name}
             onSelectInvoice={(inv) => setPreviewInvoiceId(inv.id)}
             onNewInvoice={handleOpenNewInvoice}
             onIssueInvoice={handleIssueInvoice}
@@ -402,8 +405,11 @@ export const App: React.FC = () => {
             onEditDraft={handleEditDraft}
             onDeleteDraft={handleDeleteDraft}
             onCancelInvoice={handleCancelInvoice}
+            onDuplicateInvoice={handleDuplicateInvoice}
             onNavigateToCustomers={() => setCurrentNav('customers')}
             onNavigateToProducts={() => setCurrentNav('products')}
+            onNavigateToPayments={() => setCurrentNav('payments')}
+            onNavigateToInvoices={() => setCurrentNav('invoices')}
             onDateRangeChange={handleDashboardDateRangeChange}
           />
         )}
