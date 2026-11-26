@@ -6,6 +6,7 @@ import {
   Moon,
 } from 'lucide-react';
 import { NavigationKey, SystemHealth } from '../../types';
+import { getActivePortal } from '../../utils/portal';
 
 interface NavbarProps {
   currentNav: NavigationKey;
@@ -47,12 +48,12 @@ const PAGE_TITLES: Record<NavigationKey, { title: string; subtitle: string }> = 
     subtitle: 'Company profile, branding logo, GSTIN, and sequential numbering',
   },
   superadmin: {
-    title: 'Super Admin Control Center',
-    subtitle: 'Global system settings, Razorpay gateway keys, multi-tenant businesses & subscription plans',
+    title: 'Super Admin Control Desk',
+    subtitle: 'Manage product catalog, generate Admin Access Codes, and authorize billing terminals',
   },
   customer_portal: {
-    title: 'Customer License & Subscription',
-    subtitle: 'Active software subscription, billing cycles, and official tax payment receipts',
+    title: 'Customer License & 12-Digit Key',
+    subtitle: 'Active software subscription, INR receipts, and your 12-digit Super Admin Access Code',
   },
   pricing: {
     title: 'Software Subscription Plans',
@@ -74,6 +75,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenGlobalSearch,
 }) => {
   const currentPage = PAGE_TITLES[currentNav];
+  const activePortal = getActivePortal();
 
   const [isDark, setIsDark] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -83,6 +85,17 @@ export const Navbar: React.FC<NavbarProps> = ({
     }
     return false;
   });
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (activePortal === 'CUSTOMER') {
+      document.title = 'Viora Bills — Customer License Portal (5174)';
+    } else if (activePortal === 'SUPER_ADMIN') {
+      document.title = 'Viora Bills — Super Admin Control (5175)';
+    } else {
+      document.title = 'Viora Bills — Billing Admin Desk (5173)';
+    }
+  }, [activePortal]);
 
   useEffect(() => {
     if (isDark) {
@@ -110,10 +123,25 @@ export const Navbar: React.FC<NavbarProps> = ({
         </button>
 
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <h1 className="text-base sm:text-lg font-bold text-navy-900 truncate tracking-tight">
               {currentPage.title}
             </h1>
+            <span
+              className={`hidden md:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border whitespace-nowrap ${
+                activePortal === 'CUSTOMER'
+                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                  : activePortal === 'SUPER_ADMIN'
+                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                  : 'bg-teal-50 text-teal-700 border-teal-200'
+              }`}
+            >
+              {activePortal === 'CUSTOMER'
+                ? 'Port 5174 • Customer'
+                : activePortal === 'SUPER_ADMIN'
+                ? 'Port 5175 • Super Admin'
+                : 'Port 5173 • Billing Desk'}
+            </span>
           </div>
           {currentPage.subtitle ? (
             <p className="text-xs text-slate-400 hidden sm:block truncate">
@@ -140,32 +168,36 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
         </button>
 
-        {/* Mobile Search Button */}
-        <button
-          onClick={onOpenGlobalSearch}
-          type="button"
-          className="xl:hidden p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-          aria-label="Open search dialog"
-          title="Search (Ctrl + K)"
-        >
-          <Search className="w-5 h-5" />
-        </button>
+        {/* Mobile Search Button (Billing & Super Admin portals only) */}
+        {getActivePortal() !== 'CUSTOMER' && (
+          <button
+            onClick={onOpenGlobalSearch}
+            type="button"
+            className="xl:hidden p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+            aria-label="Open search dialog"
+            title="Search (Ctrl + K)"
+          >
+            <Search className="w-5 h-5" />
+          </button>
+        )}
 
-        {/* Desktop Search Button */}
-        <button
-          onClick={onOpenGlobalSearch}
-          type="button"
-          aria-label="Search records and invoices (Ctrl + K)"
-          className="hidden xl:flex items-center justify-between w-72 pl-3 pr-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-400 hover:border-slate-300 hover:bg-slate-100/80 transition-all text-left shadow-sm group"
-        >
-          <div className="flex items-center gap-2">
-            <Search className="w-4 h-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
-            <span className="text-slate-500 font-medium">Search records, invoices...</span>
-          </div>
-          <kbd className="px-1.5 py-0.5 text-[10px] font-semibold bg-white border border-slate-200 rounded text-slate-500 shadow-2xs">
-            Ctrl K
-          </kbd>
-        </button>
+        {/* Desktop Search Button (Billing & Super Admin portals only) */}
+        {getActivePortal() !== 'CUSTOMER' && (
+          <button
+            onClick={onOpenGlobalSearch}
+            type="button"
+            aria-label="Search records and invoices (Ctrl + K)"
+            className="hidden xl:flex items-center justify-between w-72 pl-3 pr-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-400 hover:border-slate-300 hover:bg-slate-100/80 transition-all text-left shadow-sm group"
+          >
+            <div className="flex items-center gap-2">
+              <Search className="w-4 h-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
+              <span className="text-slate-500 font-medium">Search records, invoices...</span>
+            </div>
+            <kbd className="px-1.5 py-0.5 text-[10px] font-semibold bg-white border border-slate-200 rounded text-slate-500 shadow-2xs">
+              Ctrl K
+            </kbd>
+          </button>
+        )}
       </div>
     </header>
   );

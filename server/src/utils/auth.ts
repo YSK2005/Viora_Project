@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { Response } from 'express';
+import { PortalScope } from '../generated/prisma-client';
 import { prisma } from '../config/prisma';
 
 export function hashPassword(password: string): string {
@@ -36,16 +37,50 @@ export function parseCookies(cookieHeader?: string): Record<string, string> {
   cookieHeader.split(';').forEach((part) => {
     const [k, ...v] = part.trim().split('=');
     if (k) {
-      try { cookies[k] = decodeURIComponent(v.join('=')); } catch { /* Ignore malformed cookies. */ }
+      try {
+        cookies[k] = decodeURIComponent(v.join('='));
+      } catch {
+        /* Ignore malformed cookies. */
+      }
     }
   });
   return cookies;
 }
 
-export function setSessionCookie(res: Response, token: string, expiresAt: Date) {
+export function normalizePortalScope(raw?: string | null): PortalScope | null {
+  if (!raw || typeof raw !== 'string') return null;
+  const upper = raw.trim().toUpperCase();
+  if (upper === 'CUSTOMER') return 'CUSTOMER';
+  if (upper === 'SUPER_ADMIN' || upper === 'SUPERADMIN') return 'SUPER_ADMIN';
+  if (upper === 'ADMIN') return 'ADMIN';
+  if (upper === 'API_LEGACY') return 'API_LEGACY';
+  return null;
+}
+
+export function getCookieNameForPortal(portal?: PortalScope | string | null): string {
+  const scope = typeof portal === 'string' ? normalizePortalScope(portal) : portal;
+  switch (scope) {
+    case 'CUSTOMER':
+      return 'viora_session_customer';
+    case 'SUPER_ADMIN':
+      return 'viora_session_superadmin';
+    case 'ADMIN':
+      return 'viora_session_admin';
+    default:
+      return 'viora_session';
+  }
+}
+
+export function setSessionCookie(
+  res: Response,
+  token: string,
+  expiresAt: Date,
+  portal?: PortalScope | null
+) {
   const isProd = process.env.NODE_ENV === 'production';
+  const cookieName = getCookieNameForPortal(portal);
   const cookieOptions = [
-    `viora_session=${token}`,
+    `${cookieName}=${token}`,
     `Path=/`,
     `HttpOnly`,
     `SameSite=Lax`,
@@ -57,10 +92,11 @@ export function setSessionCookie(res: Response, token: string, expiresAt: Date) 
   res.setHeader('Set-Cookie', cookieOptions.join('; '));
 }
 
-export function clearSessionCookie(res: Response) {
+export function clearSessionCookie(res: Response, portal?: PortalScope | null) {
+  const cookieName = getCookieNameForPortal(portal);
   res.setHeader(
     'Set-Cookie',
-    'viora_session=; Path=/; HttpOnly; SameSite=Lax; Expires=Thu, 01 Jan 1970 00:00:00 GMT'
+    `${cookieName}=; Path=/; HttpOnly; SameSite=Lax; Expires=Thu, 01 Jan 1970 00:00:00 GMT`
   );
 }
 
@@ -70,7 +106,12 @@ export async function createSessionRecord(
   userId: string,
   activeBusinessId?: string,
   ipAddress?: string,
-  userAgent?: string
+  userAgent?: string,
+  options?: {
+    portal?: PortalScope;
+    adminAccessCodeId?: string;
+    superAdminSubscriptionId?: string;
+  }
 ) {
   const rawToken = generateSessionToken();
   const tokenHash = hashToken(rawToken);
@@ -81,6 +122,9 @@ export async function createSessionRecord(
       tokenHash,
       userId,
       activeBusinessId: activeBusinessId || null,
+      portal: options?.portal || 'API_LEGACY',
+      adminAccessCodeId: options?.adminAccessCodeId || null,
+      superAdminSubscriptionId: options?.superAdminSubscriptionId || null,
       expiresAt,
       ipAddress: ipAddress || null,
       userAgent: userAgent || null,
@@ -97,6 +141,7 @@ export async function validateSessionToken(rawToken: string) {
   const session = await prisma.session.findUnique({
     where: { tokenHash },
     include: {
+      adminAccessCode: true,
       user: {
         include: {
           memberships: {
@@ -111,7 +156,6 @@ export async function validateSessionToken(rawToken: string) {
 
   if (!session) return null;
   if (session.expiresAt.getTime() < Date.now()) {
-    // Session expired, delete it
     await prisma.session.delete({ where: { id: session.id } }).catch(() => {});
     return null;
   }

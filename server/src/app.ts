@@ -41,7 +41,7 @@ export function createApp(): Application {
       },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Business-Id', 'X-Viora-Client'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Business-Id', 'X-Viora-Client', 'X-Viora-Portal'],
     })
   );
 

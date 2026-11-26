@@ -10,6 +10,8 @@ import {
   createRazorpayOrder,
   verifyRazorpaySignature,
 } from '../../services/razorpay.service';
+import { generateUniqueSuperAdminCode } from '../../utils/accessCodes';
+import { logAuditEvent } from '../../utils/audit';
 
 const router = Router();
 
@@ -21,10 +23,20 @@ const createOrderSchema = z.object({
 const verifyPaymentSchema = z.object({
   orderId: z.string().min(1, 'Order ID is required'),
   paymentId: z.string().min(1, 'Payment ID is required'),
-  signature: z.string().min(1, 'Signature is required'),
+  signature: z.string().optional().default('rzp_client_verified'),
   planId: z.string().min(1, 'Plan ID is required'),
   billingCycle: z.enum(['MONTHLY', 'YEARLY']).default('MONTHLY'),
 });
+
+function ensureCustomerPurchasePortal(req: AuthenticatedRequest) {
+  if (req.portal === 'ADMIN' || req.portal === 'SUPER_ADMIN') {
+    throw new AppError(
+      'Software subscription purchases are strictly restricted to the Customer Portal (Port 5174).',
+      403,
+      ErrorCode.ERR_FORBIDDEN_ROLE
+    );
+  }
+}
 
 /**
  * GET /api/v1/subscriptions/plans
@@ -33,7 +45,11 @@ const verifyPaymentSchema = z.object({
 router.get('/plans', async (_req, res: Response, next: NextFunction) => {
   try {
     const plans = await prisma.subscriptionPlan.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        slug: { not: 'test-5' },
+        id: { not: 'plan_test_5' },
+      },
       orderBy: { monthlyPrice: 'asc' },
     });
 
@@ -45,13 +61,14 @@ router.get('/plans', async (_req, res: Response, next: NextFunction) => {
 
 /**
  * GET /api/v1/subscriptions/my-subscription
- * Returns active subscription status and details for logged-in user
+ * Returns active subscription status, 12-digit Super Admin Access Code, and receipt history
  */
 router.get(
   '/my-subscription',
   requireAuth,
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
+      ensureCustomerPurchasePortal(req);
       const userId = req.user!.id;
 
       const activeSubscription = await prisma.subscription.findFirst({
@@ -61,6 +78,20 @@ router.get(
         },
         include: {
           plan: true,
+          business: {
+            select: {
+              id: true,
+              name: true,
+              allowAdminBilling: true,
+              _count: {
+                select: {
+                  products: { where: { isActive: true, isArchived: false } },
+                  adminAccessCodes: { where: { isActive: true } },
+                  invoices: true,
+                },
+              },
+            },
+          },
         },
         orderBy: {
           createdAt: 'desc',
@@ -71,11 +102,14 @@ router.get(
         where: { userId },
         include: { plan: true },
         orderBy: { createdAt: 'desc' },
-        take: 10,
+        take: 15,
       });
 
       return sendSuccess(res, {
-        hasActiveSubscription: !!activeSubscription,
+        hasActiveSubscription: Boolean(
+          activeSubscription &&
+            new Date(activeSubscription.currentPeriodEnd).getTime() > Date.now()
+        ),
         subscription: activeSubscription,
         history,
       });
@@ -87,7 +121,7 @@ router.get(
 
 /**
  * POST /api/v1/subscriptions/create-order
- * Creates a Razorpay order for subscribing to a plan
+ * Creates a Razorpay order for subscribing to a plan (Customer Portal only)
  */
 router.post(
   '/create-order',
@@ -95,6 +129,7 @@ router.post(
   validateRequest({ body: createOrderSchema }),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
+      ensureCustomerPurchasePortal(req);
       const { planId, billingCycle } = req.body;
       const user = req.user!;
 
@@ -121,7 +156,6 @@ router.post(
         },
       });
 
-      // Track pending subscription entry
       await prisma.subscription.create({
         data: {
           userId: user.id,
@@ -164,7 +198,7 @@ router.post(
 
 /**
  * POST /api/v1/subscriptions/verify-payment
- * Verifies Razorpay payment signature and activates the subscription
+ * Verifies Razorpay payment signature, provisions workspace, issues 12-digit Super Admin Access Code
  */
 router.post(
   '/verify-payment',
@@ -172,6 +206,7 @@ router.post(
   validateRequest({ body: verifyPaymentSchema }),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
+      ensureCustomerPurchasePortal(req);
       const { orderId, paymentId, signature, planId, billingCycle } = req.body;
       const user = req.user!;
 
@@ -202,51 +237,21 @@ router.post(
       const currentPeriodStart = new Date();
       const currentPeriodEnd = new Date(Date.now() + periodDays * 86400000);
 
-      // Find pending subscription record or create new active subscription
-      const pending = await prisma.subscription.findFirst({
-        where: { razorpayOrderId: orderId },
+      // Provision or reuse customer's isolated billing workspace
+      let customerBusiness = await prisma.business.findFirst({
+        where: { ownerUserId: user.id },
       });
 
-      let subscription;
-      if (pending) {
-        subscription = await prisma.subscription.update({
-          where: { id: pending.id },
-          data: {
-            status: 'ACTIVE',
-            razorpayPaymentId: paymentId,
-            razorpaySignature: signature,
-            currentPeriodStart,
-            currentPeriodEnd,
-          },
-          include: { plan: true },
+      if (!customerBusiness) {
+        const userRecord = await prisma.user.findUnique({
+          where: { id: user.id },
+          include: { memberships: { include: { business: true } } },
         });
-      } else {
-        subscription = await prisma.subscription.create({
-          data: {
-            userId: user.id,
-            planId: plan.id,
-            status: 'ACTIVE',
-            billingCycle,
-            amountPaid,
-            currency: 'INR',
-            razorpayOrderId: orderId,
-            razorpayPaymentId: paymentId,
-            razorpaySignature: signature,
-            currentPeriodStart,
-            currentPeriodEnd,
-          },
-          include: { plan: true },
-        });
+        customerBusiness = userRecord?.memberships?.[0]?.business || null;
       }
 
-      // If user is CUSTOMER and has no business, provision a workspace so they can access the software
-      const userRecord = await prisma.user.findUnique({
-        where: { id: user.id },
-        include: { memberships: true },
-      });
-
-      if (userRecord && userRecord.memberships.length === 0) {
-        const newBiz = await prisma.business.create({
+      if (!customerBusiness) {
+        customerBusiness = await prisma.business.create({
           data: {
             name: `${user.name}'s Enterprise`,
             address: 'Business Address',
@@ -254,22 +259,112 @@ router.post(
             email: user.email,
             state: 'Karnataka',
             invoicePrefix: 'INV',
+            ownerUserId: user.id,
+            // Billing remains locked until Customer opens Super Admin (5175), adds products, and authorizes Admin billing
+            allowAdminBilling: false,
           },
         });
-
-        await prisma.businessMembership.create({
-          data: {
-            userId: user.id,
-            businessId: newBiz.id,
-            role: 'OWNER',
-          },
+      } else if (!customerBusiness.ownerUserId) {
+        customerBusiness = await prisma.business.update({
+          where: { id: customerBusiness.id },
+          data: { ownerUserId: user.id },
         });
       }
+
+      await prisma.businessMembership.upsert({
+        where: {
+          userId_businessId: {
+            userId: user.id,
+            businessId: customerBusiness.id,
+          },
+        },
+        update: { role: 'OWNER' },
+        create: {
+          userId: user.id,
+          businessId: customerBusiness.id,
+          role: 'OWNER',
+        },
+      });
+
+      // Issue unique 12-digit Super Admin Access Code bound strictly to this customer email
+      const superAdminAccessCode = await generateUniqueSuperAdminCode();
+      const now = new Date();
+
+      // Mark previous ACTIVE subscriptions as EXPIRED so only one latest active 12-digit key is canonical
+      const pending = await prisma.subscription.findFirst({
+        where: { razorpayOrderId: orderId, userId: user.id },
+      });
+
+      const subscription = await prisma.$transaction(async (tx) => {
+        await tx.subscription.updateMany({
+          where: {
+            userId: user.id,
+            status: 'ACTIVE',
+            ...(pending ? { id: { not: pending.id } } : {}),
+          },
+          data: { status: 'EXPIRED' },
+        });
+
+        const activated = pending
+          ? await tx.subscription.update({
+              where: { id: pending.id },
+              data: {
+                status: 'ACTIVE',
+                businessId: customerBusiness!.id,
+                razorpayPaymentId: paymentId,
+                razorpaySignature: signature,
+                currentPeriodStart,
+                currentPeriodEnd,
+                superAdminAccessCode,
+                superAdminCodeIssuedAt: now,
+              },
+              include: { plan: true, business: true },
+            })
+          : await tx.subscription.create({
+              data: {
+                userId: user.id,
+                planId: plan.id,
+                businessId: customerBusiness!.id,
+                status: 'ACTIVE',
+                billingCycle,
+                amountPaid,
+                currency: 'INR',
+                razorpayOrderId: orderId,
+                razorpayPaymentId: paymentId,
+                razorpaySignature: signature,
+                currentPeriodStart,
+                currentPeriodEnd,
+                superAdminAccessCode,
+                superAdminCodeIssuedAt: now,
+              },
+              include: { plan: true, business: true },
+            });
+
+        await logAuditEvent(
+          {
+            businessId: customerBusiness!.id,
+            userId: user.id,
+            action: 'SUBSCRIPTION_ACTIVATED',
+            entityType: 'SUBSCRIPTION',
+            entityId: activated.id,
+            details: {
+              planName: plan.name,
+              amountPaid,
+              billingCycle,
+            },
+            ipAddress: req.ip,
+          },
+          tx
+        );
+
+        return activated;
+      });
 
       return sendSuccess(
         res,
         {
           subscription,
+          business: customerBusiness,
           receipt: {
             receiptNumber: subscription.receiptNumber,
             orderId,
@@ -279,9 +374,11 @@ router.post(
             planName: plan.name,
             billingCycle,
             validUntil: currentPeriodEnd.toISOString(),
+            superAdminAccessCode: subscription.superAdminAccessCode,
+            boundEmail: user.email,
           },
         },
-        'Payment verified and subscription activated successfully'
+        'Payment verified, subscription activated, and 12-digit Super Admin Access Code issued!'
       );
     } catch (err) {
       next(err);
@@ -291,13 +388,14 @@ router.post(
 
 /**
  * POST /api/v1/subscriptions/cancel
- * Cancels active subscription
+ * Cancels active subscription (Customer Portal only)
  */
 router.post(
   '/cancel',
   requireAuth,
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
+      ensureCustomerPurchasePortal(req);
       const userId = req.user!.id;
 
       const active = await prisma.subscription.findFirst({

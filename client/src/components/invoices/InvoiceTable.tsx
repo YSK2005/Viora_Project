@@ -273,9 +273,11 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
       </div>
 
       {/* Table content */}
-      {loading && <p role="status" className="p-4">Loading invoices…</p>}
-      {listError && <p role="alert" className="p-4 text-red-700">{listError} <button className="underline" onClick={()=>setRevision(n=>n+1)}>Retry</button></p>}
-      {totalCount === 0 ? (
+      {loading ? (
+        <p role="status" className="p-6 text-xs text-slate-500">Loading invoices…</p>
+      ) : listError ? (
+        <p role="alert" className="p-4 text-xs text-red-700">{listError} <button className="underline font-semibold" onClick={()=>setRevision(n=>n+1)}>Retry</button></p>
+      ) : totalCount === 0 ? (
         <EmptyState
           onNewInvoice={onNewInvoice}
           onResetFilters={() => {

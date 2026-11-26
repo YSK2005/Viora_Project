@@ -14,6 +14,7 @@ import { Customer, Product, Invoice, BusinessProfile } from '../../types';
 import {
   fetchCustomers,
   fetchBusiness,
+  fetchProducts,
   createInvoice,
   updateDraftInvoice,
   issueInvoice,
@@ -26,6 +27,7 @@ interface NewInvoiceModalProps {
   onClose: () => void;
   onSuccess: (issuedInvoice?: Invoice) => void;
   editingInvoice?: Invoice | null;
+  enforceCatalogOnly?: boolean;
 }
 
 interface ItemRow {
@@ -46,9 +48,11 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
   onClose,
   onSuccess,
   editingInvoice,
+  enforceCatalogOnly = false,
 }) => {
   const dialogProps = useDialog(isOpen, () => {if(!isSubmitting) onClose();}, 'New invoice');
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [catalogEmpty, setCatalogEmpty] = useState(false);
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
   const [businessState, setBusinessState] = useState('Karnataka');
   const [customerId, setCustomerId] = useState('');
@@ -167,9 +171,18 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
     if (!isOpen) return;
     setError(null);
 
-    Promise.all([fetchCustomers(), fetchBusiness()]).then(([cRes, bRes]) => {
+    Promise.all([
+      fetchCustomers(),
+      fetchBusiness(),
+      enforceCatalogOnly ? fetchProducts({ isActive: 'true', limit: 10 }) : Promise.resolve(null),
+    ]).then(([cRes, bRes, prodRes]) => {
       setCustomers(cRes.customers);
       setBusinessProfile(bRes);
+      if (enforceCatalogOnly && prodRes) {
+        setCatalogEmpty((prodRes.products?.length || 0) === 0);
+      } else {
+        setCatalogEmpty(false);
+      }
       const bState = bRes.state || 'Karnataka';
       setBusinessState(bState);
 
@@ -404,6 +417,10 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
 
       for (let i = 0; i < items.length; i++) {
         const it = items[i];
+        if (enforceCatalogOnly && !it.productId) {
+          setError(`Item #${i + 1} must be selected from your Super Admin Product Catalog.`);
+          return;
+        }
         if (!it.description.trim()) {
           setError(`Item #${i + 1} description is required.`);
           return;
@@ -523,6 +540,23 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
                   Discard
                 </button>
               </div>
+            </div>
+          )}
+
+          {catalogEmpty && (
+            <div className="p-3.5 bg-amber-50 border border-amber-300 text-amber-900 rounded-xl text-xs flex items-center justify-between">
+              <span>
+                No active products found in your catalog yet. Open{' '}
+                <strong>Super Admin Panel (Port 5175)</strong> to add products before generating bills.
+              </span>
+              <a
+                href="http://localhost:5175"
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-1 bg-amber-800 text-white rounded-lg font-bold flex-shrink-0 ml-2"
+              >
+                Open Port 5175
+              </a>
             </div>
           )}
 
@@ -675,19 +709,23 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
                         <td className="py-2 px-2">
                           <input
                             type="text"
+                            readOnly={enforceCatalogOnly}
                             value={row.description}
                             onChange={(e) => updateItemField(idx, 'description', e.target.value)}
-                            placeholder="Description..."
-                            className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-slate-900 font-medium"
+                            placeholder={enforceCatalogOnly ? 'Pick product on left...' : 'Description...'}
+                            className={`w-full p-1.5 border border-slate-200 rounded text-xs text-slate-900 font-medium ${
+                              enforceCatalogOnly ? 'bg-slate-50 text-slate-700 cursor-not-allowed' : 'bg-white'
+                            }`}
                           />
                         </td>
 
                         {/* Unit */}
                         <td className="py-2 px-1">
                           <select
+                            disabled={enforceCatalogOnly}
                             value={row.unit}
                             onChange={(e) => updateItemField(idx, 'unit', e.target.value)}
-                            className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-center font-mono"
+                            className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-center font-mono disabled:bg-slate-50"
                           >
                             {COMMON_UNITS.map((u) => (
                               <option key={u} value={u}>
@@ -715,9 +753,12 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
                             type="number"
                             min="0"
                             step="any"
+                            readOnly={enforceCatalogOnly}
                             value={row.unitPrice || ''}
                             onChange={(e) => updateItemField(idx, 'unitPrice', parseFloat(e.target.value) || 0)}
-                            className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-right font-mono font-medium"
+                            className={`w-full p-1.5 border border-slate-200 rounded text-xs text-right font-mono font-medium ${
+                              enforceCatalogOnly ? 'bg-slate-50 text-slate-700 cursor-not-allowed' : 'bg-white'
+                            }`}
                           />
                         </td>
 
@@ -737,9 +778,10 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
                         {/* Tax Rate */}
                         <td className="py-2 px-1">
                           <select
+                            disabled={enforceCatalogOnly}
                             value={row.taxRate}
                             onChange={(e) => updateItemField(idx, 'taxRate', parseFloat(e.target.value) || 0)}
-                            className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-right font-mono font-medium"
+                            className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-right font-mono font-medium disabled:bg-slate-50"
                           >
                             {GST_RATES.map((r) => (
                               <option key={r} value={r}>

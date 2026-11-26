@@ -24,9 +24,9 @@ if "%PG_STATUS%"=="True" (
 
 echo.
 echo [2/3] Launching Dedicated Role Portals:
-echo   - Port 5173 : Billing Admin Suite (Invoices, Clients, Payments)
-echo   - Port 5174 : SaaS Customer Portal (Subscriptions, Plans, Receipts)
-echo   - Port 5175 : Super Admin Control (Platform Settings, Razorpay Keys)
+echo   - Port 5173 : Billing Admin Desk (Generate Bills, Clients, Collections)
+echo   - Port 5174 : Customer Purchase Portal (Subscriptions, Plans, 12-Digit Super Admin Key)
+echo   - Port 5175 : Super Admin Control Desk (Product Catalog, Admin Codes, Billing Authorization)
 echo   - Port 5000 : Unified Backend API Engine
 echo.
 echo ===================================================

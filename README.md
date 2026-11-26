@@ -210,15 +210,13 @@ erDiagram
 
 ---
 
-## 🔒 Security & Data Integrity Audit
+## 🔒 Security & Data Integrity Controls
 
-### 1. Prototype Scope & Access Limitations
-> [!WARNING]
-> **Authentication & Authorization Scope Disclosure**:
-> The current system is an engineering prototype designed for single-business operations. It deliberately does not include multi-user login, role-based access control (RBAC), or session tokens.
-> 
-> **Deployment Recommendation**:
-> Until user authentication (e.g., OAuth 2.0 / JWT / NextAuth) is integrated, **do not expose this service to the public Internet without perimeter protection**. In production staging, restrict access via a VPN, IP allowlist, or reverse-proxy basic authentication.
+### 1. Multi-Portal Access & Key Binding
+> [!NOTE]
+> **Strict 3-Portal Isolation**:
+> - **Portal-Scoped Auth**: `customer` (`5174`), `superadmin` (`5175`), and `admin` (`5173`) use isolated `HttpOnly` session cookies and portal header checks (`X-Viora-Portal`).
+> - **12-Digit Access Codes**: Super Admin login verifies an exact match between the purchaser email and subscription owner; Admin login verifies an active Super Admin-issued 12-digit code plus `allowAdminBilling` authorization.
 
 ### 2. Implemented Security Controls
 1. **Secrets & Git Sanitization**:
@@ -347,29 +345,40 @@ npm run test:backend --workspace=server -- test-stabilization.ts
 
 ---
 
+## 🚀 3-Portal SaaS Architecture & Access Flow
+
+Viora Bills runs across **3 dedicated role portals** backed by a single Express + PostgreSQL engine (`http://localhost:5000`):
+
+1. **Customer Purchase Portal (`http://localhost:5174`)**:
+   - Exclusively for business buyers signing up and purchasing INR software subscriptions via Razorpay (UPI QR, UPI ID, Cards, NetBanking).
+   - Generates a unique **12-digit Super Admin Access Code** bound strictly to the purchaser's email and provisions an isolated business workspace.
+2. **Super Admin Control Panel (`http://localhost:5175`)**:
+   - Login strictly requires **Purchasing Email + Password + 12-Digit Super Admin Code**.
+   - Manages the master **Product & Service Catalog**, **Company & GST Settings**, generates/revokes **12-digit Admin Access Codes**, and toggles **Admin Billing Authorization** (`allowAdminBilling`).
+3. **Billing Admin Desk (`http://localhost:5173`)**:
+   - Staff login strictly requires **Email + Password + 12-Digit Admin Access Code**.
+   - Views synced products in read-only mode and generates GST invoices, client statements, credit notes, recurring bills, and payment collections once authorized by the Super Admin.
+
+---
+
 ## 💻 Local Installation & Setup Guide
 
 ### 1. Prerequisites
-- **Node.js**: `v18.0.0` or higher
+- **Node.js**: `v22.12.0` or higher (works with v20+)
 - **npm**: `v9.0.0` or higher
-- **PostgreSQL**: `v14.0` or higher (tested with PostgreSQL 18)
+- **PostgreSQL**: `v14.0` or higher (tested with PostgreSQL 18 on port `5433` or `5432`)
 
-### 2. Clone or Extract & Install Dependencies
+### 2. Clone & Install Dependencies
 ```bash
-# Option A: Clone with Git
 git clone https://github.com/YSK2005/Viora_Project.git
 cd Viora_Project
 
-# Option B: If downloaded as a ZIP from GitHub
-# Extract the ZIP, open PowerShell/Terminal in the extracted root folder:
-# cd Viora_Project-main/Viora_Project-main
-
-# Install dependencies across all workspaces (also auto-generates Prisma client)
+# Install dependencies across root, server, and client workspaces (generates Prisma client)
 npm install
 ```
 
 ### 3. Environment Setup
-Configure your environment files from the safe templates:
+Configure your environment files from the tracked templates:
 ```bash
 # Server configuration
 cp server/.env.example server/.env
@@ -378,44 +387,45 @@ cp server/.env.example server/.env
 cp client/.env.example client/.env
 ```
 
-Ensure `server/.env` contains your PostgreSQL connection string:
+Update `server/.env` with your local PostgreSQL connection string and multi-portal CORS origins:
 ```ini
 PORT=5000
 NODE_ENV=development
-CLIENT_URL=http://localhost:5173
-DATABASE_URL="postgresql://postgres:password@localhost:5432/viora_bills?schema=public"
+CLIENT_URL=http://localhost:5173,http://localhost:5174,http://localhost:5175
+DATABASE_URL="postgresql://postgres:your_password@127.0.0.1:5433/viora_bills?schema=public"
 ```
 
-### 4. Database Initialization & Migrations
+### 4. Database Initialization & Seeding
 ```bash
-# Run migrations using Prisma
+# Push Prisma schema to PostgreSQL and generate client
 cd server
-npx prisma migrate dev --name init
-
-# (Optional) Seed the database with sample business, customers, and products
-npx prisma db seed
+npx prisma db push
+npx prisma generate
 cd ..
+
+# Seed sample business data and SaaS INR plans + demo 12-digit access codes
+npx tsx server/prisma/seed-plans.ts
 ```
 
-### 5. Running the Application
+### 5. Running All Three Portals Concurrently
 ```bash
-# Start both Backend and Frontend concurrently
+# Starts API (5000), Admin Desk (5173), Customer Portal (5174), and Super Admin Panel (5175)
 npm run dev
-
-# Frontend: http://localhost:5173
-# Backend API: http://localhost:5000/api
-# Health Check: http://localhost:5000/api/health
 ```
+*(On Windows, you can also double-click `start-app.bat`.)*
 
-### 6. Validation Commands
+### 6. Seeded Demo Credentials
+| Portal | URL | Email | Password | 12-Digit Access Code |
+| :--- | :--- | :--- | :--- | :--- |
+| **Customer Portal** | `http://localhost:5174` | `customer@viora.test` | `Customer123!` | *Not required* |
+| **Super Admin Panel** | `http://localhost:5175` | `customer@viora.test` | `Customer123!` | `123456789012` |
+| **Billing Admin Desk** | `http://localhost:5173` | `admin@viora.test` | `AdminPassword123!` | `987654321098` |
+
+### 7. Verification Commands
 ```bash
-# Type check both frontend and backend
+npm run test:unit
 npm run type-check
-
-# Run 36-scenario backend verification suite
-npm run test:backend
-
-# Production build test
+npm run lint
 npm run build
 ```
 

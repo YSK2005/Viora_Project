@@ -17,6 +17,8 @@ export type NavigationKey =
 
 export type UserRole = 'SUPER_ADMIN' | 'OWNER' | 'ACCOUNTANT' | 'VIEWER' | 'CUSTOMER';
 
+export type PortalScope = 'CUSTOMER' | 'SUPER_ADMIN' | 'ADMIN' | 'API_LEGACY';
+
 export interface User {
   id: string;
   email: string;
@@ -51,6 +53,8 @@ export interface BusinessProfile {
   state?: string | null;
   invoicePrefix: string;
   nextInvoiceNumber: number;
+  allowAdminBilling?: boolean;
+  ownerUserId?: string | null;
 }
 
 export interface Customer {
@@ -233,6 +237,7 @@ export interface Subscription {
   id: string;
   userId: string;
   planId: string;
+  businessId?: string | null;
   plan: SubscriptionPlan;
   status: SubscriptionStatus;
   billingCycle: BillingCycle;
@@ -243,8 +248,76 @@ export interface Subscription {
   razorpayOrderId?: string;
   razorpayPaymentId?: string;
   receiptNumber: string;
+  superAdminAccessCode?: string | null;
+  superAdminCodeIssuedAt?: string | null;
   cancelledAt?: string;
   createdAt: string;
+  business?: {
+    id: string;
+    name: string;
+    allowAdminBilling: boolean;
+    _count?: {
+      products: number;
+      adminAccessCodes: number;
+      invoices: number;
+    };
+  };
+}
+
+export interface AdminAccessCode {
+  id: string;
+  businessId: string;
+  code: string;
+  label: string;
+  assignedEmail?: string | null;
+  role: UserRole;
+  canGenerateBills: boolean;
+  isActive: boolean;
+  lastUsedAt?: string | null;
+  createdAt: string;
+}
+
+export interface SuperAdminOverview {
+  business: BusinessProfile;
+  subscription: {
+    id: string;
+    planName: string;
+    invoiceLimit: number;
+    status: string;
+    billingCycle: string;
+    validUntil: string;
+  } | null;
+  stats: {
+    activeProductsCount: number;
+    totalProductsCount: number;
+    activeAdminCodesCount: number;
+    totalInvoicesCount: number;
+    issuedInvoicesCount: number;
+    totalBilledRevenue: number;
+  };
+  setupChecklist: {
+    hasActiveSubscription: boolean;
+    hasActiveProducts: boolean;
+    hasActiveAdminCode: boolean;
+    isAdminBillingAllowed: boolean;
+  };
+  recentInvoices: Array<{
+    id: string;
+    invoiceNumber: string;
+    customerName: string;
+    status: string;
+    grandTotal: number;
+    invoiceDate: string;
+  }>;
+  recentAuditLogs: Array<{
+    id: string;
+    action: string;
+    entityType: string;
+    entityId: string;
+    details?: any;
+    createdAt: string;
+    user?: { name: string; email: string } | null;
+  }>;
 }
 
 export interface SystemSetting {
@@ -309,5 +382,7 @@ export interface PaymentReceiptData {
   planName: string;
   billingCycle: string;
   validUntil: string;
+  superAdminAccessCode?: string | null;
+  boundEmail?: string | null;
 }
 

@@ -204,11 +204,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div>
               <div className="text-xs font-bold text-navy-900">Products & Services Catalog</div>
               <div className="text-[11px] text-slate-500">
-                {summary?.counts.products ?? 0} billing catalog items
+                {summary?.counts.products ?? 0} synced from Super Admin
               </div>
             </div>
           </div>
-          <span className="text-xs font-semibold text-brand-600 hover:underline">Manage →</span>
+          <span className="text-xs font-semibold text-brand-600 hover:underline">View Catalog →</span>
         </div>
       </section>
 

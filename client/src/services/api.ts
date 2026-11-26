@@ -10,7 +10,11 @@ import {
   UserRole,
   BusinessMembership,
   PaginationMeta,
+  PortalScope,
+  AdminAccessCode,
+  SuperAdminOverview,
 } from '../types';
+import { getActivePortal } from '../utils/portal';
 
 const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 
@@ -25,6 +29,7 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   const headers = new Headers(init.headers || {});
 
   headers.set('X-Viora-Client', 'web');
+  headers.set('X-Viora-Portal', getActivePortal());
 
   const controller = new AbortController();
   const cancel = () => controller.abort(init.signal?.reason);
@@ -46,8 +51,18 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
 
 export interface AuthResponse {
   user: User;
-  business: BusinessProfile;
+  business: BusinessProfile | null;
   role: UserRole;
+  portal?: PortalScope;
+  subscription?: any | null;
+  billingAuthorized?: boolean;
+  billingBlockReason?: string | null;
+  adminAccessCode?: {
+    id: string;
+    label: string;
+    canGenerateBills: boolean;
+    role: UserRole;
+  } | null;
   memberships: BusinessMembership[];
 }
 
@@ -75,16 +90,21 @@ export async function registerUser(data: {
 export async function loginUser(data: {
   email: string;
   password: string;
+  accessCode?: string;
+  portal?: string;
 }): Promise<AuthResponse> {
   const res = await apiFetch('/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: JSON.stringify({
+      ...data,
+      portal: data.portal || getActivePortal(),
+    }),
   });
 
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(json.error?.message || 'Invalid email or password');
+    throw new Error(json.error?.message || 'Invalid email, password, or access code');
   }
 
   return json.data;
@@ -95,12 +115,7 @@ export async function logoutUser(): Promise<void> {
   if (!res.ok) throw new Error('Sign out failed. Please try again.');
 }
 
-export async function fetchCurrentUser(): Promise<{
-  user: User;
-  business: BusinessProfile;
-  role: UserRole;
-  memberships: BusinessMembership[];
-} | null> {
+export async function fetchCurrentUser(): Promise<AuthResponse | null> {
   try {
     const res = await apiFetch('/auth/me');
     if (!res.ok) return null;
@@ -799,102 +814,94 @@ export async function cancelSubscription(): Promise<any> {
 }
 
 // -------------------------------------------------------------
-// Super Admin API
+// Super Admin API (Tenant Product Catalog & Admin Code Control)
 // -------------------------------------------------------------
-export async function fetchSuperAdminStats(): Promise<any> {
-  const res = await apiFetch('/superadmin/stats');
+export async function fetchSuperAdminOverview(): Promise<SuperAdminOverview> {
+  const res = await apiFetch('/superadmin/overview');
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || 'Failed to fetch super admin platform metrics');
+    throw new Error(err.error?.message || 'Failed to load Super Admin control overview');
   }
   const json = await res.json();
   return json.data;
 }
 
-export async function fetchSuperAdminTenants(params?: {
-  page?: number;
-  limit?: number;
-  search?: string;
-}): Promise<{ tenants: any[]; pagination: any }> {
-  const q = new URLSearchParams();
-  if (params?.page) q.append('page', String(params.page));
-  if (params?.limit) q.append('limit', String(params.limit));
-  if (params?.search) q.append('search', params.search);
-
-  const res = await apiFetch(`/superadmin/tenants?${q.toString()}`);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || 'Failed to fetch tenant list');
-  }
-  const json = await res.json();
-  return json.data;
-}
-
-export async function fetchSuperAdminUsers(params?: {
-  page?: number;
-  limit?: number;
-}): Promise<{ users: any[]; pagination: any }> {
-  const q = new URLSearchParams();
-  if (params?.page) q.append('page', String(params.page));
-  if (params?.limit) q.append('limit', String(params.limit));
-
-  const res = await apiFetch(`/superadmin/users?${q.toString()}`);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || 'Failed to fetch user list');
-  }
-  const json = await res.json();
-  return json.data;
-}
-
-export async function fetchSuperAdminSettings(): Promise<any[]> {
-  const res = await apiFetch('/superadmin/settings');
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || 'Failed to fetch system settings');
-  }
-  const json = await res.json();
-  return json.data?.settings || [];
-}
-
-export async function updateSuperAdminSettings(
-  settings: Array<{ key: string; value: string; category?: string; description?: string }>
-): Promise<any[]> {
-  const res = await apiFetch('/superadmin/settings', {
+export async function toggleAdminBilling(allowAdminBilling: boolean): Promise<{ business: BusinessProfile; message?: string }> {
+  const res = await apiFetch('/superadmin/billing-authorization', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ settings }),
+    body: JSON.stringify({ allowAdminBilling }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || 'Failed to update system settings');
+    throw new Error(err.error?.message || 'Failed to update Admin billing authorization');
   }
   const json = await res.json();
-  return json.data?.settings || [];
+  return { business: json.data?.business, message: json.message };
 }
 
-export async function fetchSuperAdminProducts(): Promise<any[]> {
-  const res = await apiFetch('/superadmin/products');
+export async function fetchAdminAccessCodes(): Promise<AdminAccessCode[]> {
+  const res = await apiFetch('/superadmin/admin-codes');
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || 'Failed to fetch global master products');
+    throw new Error(err.error?.message || 'Failed to fetch Admin access codes');
   }
   const json = await res.json();
-  return json.data?.products || [];
+  return json.data?.codes || [];
 }
 
-export async function updateSuperAdminPlan(id: string, data: any): Promise<any> {
-  const res = await apiFetch(`/superadmin/plans/${id}`, {
-    method: 'PUT',
+export async function createAdminAccessCode(payload: {
+  label: string;
+  assignedEmail?: string;
+  password?: string;
+  name?: string;
+  role: 'OWNER' | 'ACCOUNTANT' | 'VIEWER';
+  canGenerateBills?: boolean;
+  enableBusinessBilling?: boolean;
+}): Promise<{ adminCode: AdminAccessCode; business: BusinessProfile }> {
+  const res = await apiFetch('/superadmin/admin-codes', {
+    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || 'Failed to update subscription plan');
+    throw new Error(err.error?.message || 'Failed to generate 12-digit Admin access code');
   }
   const json = await res.json();
-  return json.data?.plan;
+  return json.data;
+}
+
+export async function updateAdminAccessCode(
+  id: string,
+  payload: {
+    label?: string;
+    canGenerateBills?: boolean;
+    isActive?: boolean;
+    rotateCode?: boolean;
+  }
+): Promise<AdminAccessCode> {
+  const res = await apiFetch(`/superadmin/admin-codes/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || 'Failed to update Admin access code');
+  }
+  const json = await res.json();
+  return json.data?.adminCode;
+}
+
+export async function deleteAdminAccessCode(id: string): Promise<void> {
+  const res = await apiFetch(`/superadmin/admin-codes/${id}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || 'Failed to delete Admin access code');
+  }
 }
 
 

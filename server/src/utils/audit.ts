@@ -4,7 +4,7 @@ export interface AuditLogOptions {
   businessId: string;
   userId?: string | null;
   action: string;
-  entityType: 'INVOICE' | 'PAYMENT' | 'CUSTOMER' | 'PRODUCT' | 'BUSINESS' | 'AUTH';
+  entityType: 'INVOICE' | 'PAYMENT' | 'CUSTOMER' | 'PRODUCT' | 'BUSINESS' | 'AUTH' | 'SUBSCRIPTION' | 'ADMIN_ACCESS_CODE';
   entityId: string;
   details?: any;
   ipAddress?: string | null;

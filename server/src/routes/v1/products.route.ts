@@ -7,8 +7,26 @@ import { validateRequest } from '../../middlewares/validate';
 import { AppError } from '../../middlewares/errorHandler';
 import { AuthenticatedRequest, requireRole } from '../../middlewares/auth';
 import { round2, toDecimal } from '../../utils/money';
+import { logAuditEvent } from '../../utils/audit';
 
 const router = Router();
+
+function ensureProductManagerPortal(req: AuthenticatedRequest) {
+  if (req.portal === 'ADMIN') {
+    throw new AppError(
+      'Product catalog management is strictly restricted to Super Admin Panel (Port 5175). Admins can select active catalog products to generate bills.',
+      403,
+      ErrorCode.ERR_FORBIDDEN_ROLE
+    );
+  }
+  if (req.portal === 'CUSTOMER') {
+    throw new AppError(
+      'Customer Portal is strictly for purchasing software licenses. Sign into Super Admin Control (Port 5175) with your 12-digit code to manage products.',
+      403,
+      ErrorCode.ERR_FORBIDDEN_ROLE
+    );
+  }
+}
 
 const createProductSchema = z.object({
   name: z.string().trim().min(2, 'Product name must be at least 2 characters').max(200),
@@ -118,10 +136,11 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response, next: NextFu
  */
 router.post(
   '/',
-  requireRole(['OWNER', 'ACCOUNTANT']),
+  requireRole(['OWNER', 'ACCOUNTANT', 'SUPER_ADMIN']),
   validateRequest({ body: createProductSchema }),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
+      ensureProductManagerPortal(req);
       const businessId = req.business.id;
       const product = await prisma.product.create({
         data: {
@@ -135,6 +154,16 @@ router.post(
         },
       });
 
+      await logAuditEvent({
+        businessId,
+        userId: req.user?.id,
+        action: 'PRODUCT_CREATE',
+        entityType: 'PRODUCT',
+        entityId: product.id,
+        details: { name: product.name, unitPrice: Number(product.unitPrice), taxRate: Number(product.taxRate) },
+        ipAddress: req.ip,
+      });
+
       return sendSuccess(res, product, 'Product created successfully', 201);
     } catch (error) {
       next(error);
@@ -144,14 +173,15 @@ router.post(
 
 /**
  * PUT /api/products/:id
- * Updates product details (OWNER or ACCOUNTANT)
+ * Updates product details (SUPER_ADMIN portal or API_LEGACY OWNER/ACCOUNTANT)
  */
 router.put(
   '/:id',
-  requireRole(['OWNER', 'ACCOUNTANT']),
+  requireRole(['OWNER', 'ACCOUNTANT', 'SUPER_ADMIN']),
   validateRequest({ body: updateProductSchema }),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
+      ensureProductManagerPortal(req);
       const { id } = req.params;
       const existing = await prisma.product.findFirst({
         where: { id, businessId: req.business.id },
@@ -172,6 +202,16 @@ router.put(
         },
       });
 
+      await logAuditEvent({
+        businessId: req.business.id,
+        userId: req.user?.id,
+        action: 'PRODUCT_UPDATE',
+        entityType: 'PRODUCT',
+        entityId: id,
+        details: { name: updated.name, isActive: updated.isActive, unitPrice: Number(updated.unitPrice) },
+        ipAddress: req.ip,
+      });
+
       return sendSuccess(res, updated, 'Product updated successfully');
     } catch (error) {
       next(error);
@@ -181,10 +221,11 @@ router.put(
 
 /**
  * DELETE /api/products/:id
- * Soft deletes/archives product if referenced in past invoices (OWNER or ACCOUNTANT)
+ * Soft deletes/archives product if referenced in past invoices (SUPER_ADMIN portal or API_LEGACY OWNER/ACCOUNTANT)
  */
-router.delete('/:id', requireRole(['OWNER', 'ACCOUNTANT']), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.delete('/:id', requireRole(['OWNER', 'ACCOUNTANT', 'SUPER_ADMIN']), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
+    ensureProductManagerPortal(req);
     const { id } = req.params;
     const existing = await prisma.product.findFirst({
       where: { id, businessId: req.business.id },

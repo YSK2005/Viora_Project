@@ -20,10 +20,20 @@ import {
   ToggleLeft,
   ToggleRight,
   FileEdit,
+  Lock,
+  ExternalLink,
 } from 'lucide-react';
 import { PaginationToolbar } from '../common/PaginationToolbar';
 
-export const ProductsView: React.FC = () => {
+interface ProductsViewProps {
+  readOnly?: boolean;
+  onCatalogChanged?: () => void;
+}
+
+export const ProductsView: React.FC<ProductsViewProps> = ({
+  readOnly = false,
+  onCatalogChanged,
+}) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -122,6 +132,7 @@ export const ProductsView: React.FC = () => {
       setUnitPrice('');
       setTaxRate('18');
       loadData();
+      onCatalogChanged?.();
     } catch (err: any) {
       alert(`Error saving product: ${err.message}`);
     } finally {
@@ -130,6 +141,7 @@ export const ProductsView: React.FC = () => {
   };
 
   const handleToggleStatus = async (product: Product) => {
+    if (readOnly) return;
     try {
       await updateProduct(product.id, { isActive: !product.isActive });
       setToastMessage(
@@ -137,12 +149,14 @@ export const ProductsView: React.FC = () => {
       );
       setTimeout(() => setToastMessage(null), 3000);
       loadData();
+      onCatalogChanged?.();
     } catch (err: any) {
       alert(`Error updating product: ${err.message}`);
     }
   };
 
   const handleDelete = async (product: Product) => {
+    if (readOnly) return;
     if (!window.confirm(`Are you sure you want to remove ${product.name}?`)) return;
 
     try {
@@ -150,6 +164,7 @@ export const ProductsView: React.FC = () => {
       setToastMessage('Product removed/archived');
       setTimeout(() => setToastMessage(null), 3000);
       loadData();
+      onCatalogChanged?.();
     } catch (err: any) {
       alert(`Error removing product: ${err.message}`);
     }
@@ -180,21 +195,36 @@ export const ProductsView: React.FC = () => {
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-bold text-navy-900 tracking-tight">Products & Services</h2>
             <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-800 border border-teal-200">
-              Live Database
+              {readOnly ? 'Synced from Super Admin' : 'Super Admin Catalog'}
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Manage your pricing catalog, billing units, and tax rates connected to PostgreSQL
+            {readOnly
+              ? 'View-only product catalog managed centrally inside Super Admin Control (Port 5175).'
+              : 'Add and manage master pricing catalog, billing units, and GST tax rates.'}
           </p>
         </div>
 
-        <button
-          onClick={handleOpenAddModal}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-sm transition-all hover:shadow"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add Product</span>
-        </button>
+        {readOnly ? (
+          <a
+            href="http://localhost:5175"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors"
+          >
+            <Lock className="w-3.5 h-3.5 text-slate-500" />
+            <span>Manage in Super Admin (5175)</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        ) : (
+          <button
+            onClick={handleOpenAddModal}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-sm transition-all hover:shadow"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Product</span>
+          </button>
+        )}
       </div>
 
       {/* Search and Toolbar */}
@@ -244,15 +274,19 @@ export const ProductsView: React.FC = () => {
           <p className="text-xs text-slate-500 max-w-xs mx-auto mb-5">
             {searchQuery
               ? 'No catalog items match your search filter.'
+              : readOnly
+              ? 'No products added yet. Open Super Admin Control (Port 5175) to add products.'
               : 'Add items or services to easily populate your invoices.'}
           </p>
-          <button
-            onClick={handleOpenAddModal}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-lg shadow-sm"
-          >
-            <Plus className="w-4 h-4" />
-            Add First Product
-          </button>
+          {!readOnly && (
+            <button
+              onClick={handleOpenAddModal}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-lg shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              Add First Product
+            </button>
+          )}
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-slate-200/80 shadow-card overflow-hidden">
@@ -299,22 +333,24 @@ export const ProductsView: React.FC = () => {
                     </button>
                   </div>
 
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => handleOpenEditModal(p)}
-                      className="p-1.5 text-slate-500 hover:text-purple-700 hover:bg-purple-50 rounded-lg"
-                      aria-label={`Edit ${p.name}`}
-                    >
-                      <FileEdit className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(p)}
-                      className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
-                      aria-label={`Delete ${p.name}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                  {!readOnly && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleOpenEditModal(p)}
+                        className="p-1.5 text-slate-500 hover:text-purple-700 hover:bg-purple-50 rounded-lg"
+                        aria-label={`Edit ${p.name}`}
+                      >
+                        <FileEdit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(p)}
+                        className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
+                        aria-label={`Delete ${p.name}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -330,7 +366,7 @@ export const ProductsView: React.FC = () => {
                   <th className="py-3 px-4 text-right">Unit Price</th>
                   <th className="py-3 px-4 text-center">Tax Rate</th>
                   <th className="py-3 px-4 text-center">Status</th>
-                  <th className="py-3 px-4 sm:px-6 text-right">Actions</th>
+                  {!readOnly && <th className="py-3 px-4 sm:px-6 text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
@@ -360,9 +396,10 @@ export const ProductsView: React.FC = () => {
                     </td>
                     <td className="py-3.5 px-4 text-center">
                       <button
+                        disabled={readOnly}
                         onClick={() => handleToggleStatus(p)}
-                        className="inline-flex items-center gap-1 text-xs font-medium"
-                        title={p.isActive ? 'Click to deactivate' : 'Click to activate'}
+                        className="inline-flex items-center gap-1 text-xs font-medium disabled:cursor-default"
+                        title={readOnly ? 'Managed by Super Admin' : p.isActive ? 'Click to deactivate' : 'Click to activate'}
                       >
                         {p.isActive ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -377,26 +414,28 @@ export const ProductsView: React.FC = () => {
                         )}
                       </button>
                     </td>
-                    <td className="py-3.5 px-4 sm:px-6 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => handleOpenEditModal(p)}
-                          title="Edit Product Details"
-                          aria-label={`Edit ${p.name}`}
-                          className="p-1.5 text-slate-400 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-colors"
-                        >
-                          <FileEdit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(p)}
-                          title="Delete or Archive Product"
-                          aria-label={`Delete ${p.name}`}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
+                    {!readOnly && (
+                      <td className="py-3.5 px-4 sm:px-6 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => handleOpenEditModal(p)}
+                            title="Edit Product Details"
+                            aria-label={`Edit ${p.name}`}
+                            className="p-1.5 text-slate-400 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-colors"
+                          >
+                            <FileEdit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(p)}
+                            title="Delete or Archive Product"
+                            aria-label={`Delete ${p.name}`}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

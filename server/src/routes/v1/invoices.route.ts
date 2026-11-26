@@ -8,7 +8,8 @@ import { prisma } from '../../config/prisma';
 import { sendSuccess } from '../../utils/response';
 import { validateRequest } from '../../middlewares/validate';
 import { AppError } from '../../middlewares/errorHandler';
-import { AuthenticatedRequest, requireRole } from '../../middlewares/auth';
+import { AuthenticatedRequest, requireRole, requireBillingAuthorized } from '../../middlewares/auth';
+import { PortalScope } from '../../generated/prisma-client';
 import {
   calculateInvoiceTotals,
   derivePaymentStatus,
@@ -18,6 +19,44 @@ import { createPaymentSchema, handleRecordPayment } from './payments.route';
 import { logAuditEvent } from '../../utils/audit';
 
 const router = Router();
+
+/**
+ * Ensures bills created from Admin Portal strictly use active catalog products managed by Super Admin.
+ */
+async function validateCatalogItemsForAdmin(
+  businessId: string,
+  items: Array<{ productId?: string | null; descriptionSnapshot: string }>,
+  portal?: PortalScope
+) {
+  if (portal !== 'ADMIN') return;
+  const missingIdx = items.findIndex((it) => !it.productId || !it.productId.trim());
+  if (missingIdx >= 0) {
+    throw new AppError(
+      `Line item #${missingIdx + 1} ("${items[missingIdx].descriptionSnapshot}") must be selected from your Super Admin Product Catalog.`,
+      400,
+      ErrorCode.ERR_VALIDATION
+    );
+  }
+  const uniqueIds = [...new Set(items.map((it) => it.productId!))];
+  const catalogProducts = await prisma.product.findMany({
+    where: {
+      id: { in: uniqueIds },
+      businessId,
+      isActive: true,
+      isArchived: false,
+    },
+    select: { id: true },
+  });
+  const activeSet = new Set(catalogProducts.map((p) => p.id));
+  const invalidItem = items.find((it) => !activeSet.has(it.productId!));
+  if (invalidItem) {
+    throw new AppError(
+      `Product "${invalidItem.descriptionSnapshot}" is inactive, archived, or not in your Super Admin Product Catalog.`,
+      400,
+      ErrorCode.ERR_PRODUCT_NOT_FOUND
+    );
+  }
+}
 
 const invoiceItemSchema = z.object({
   productId: z.string().optional().nullable(),
@@ -358,11 +397,14 @@ router.get('/:id/pdf', async (req: AuthenticatedRequest, res: Response, next: Ne
 router.post(
   '/',
   requireRole(['OWNER', 'ACCOUNTANT']),
+  requireBillingAuthorized,
   validateRequest({ body: createInvoiceSchema }),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const business = req.business;
       const { customerId, invoiceDate, dueDate, placeOfSupply, isInterState: explicitInterState, notes, items } = req.body;
+
+      await validateCatalogItemsForAdmin(business.id, items, req.portal);
 
       // Validate customer existence
       const customer = await prisma.customer.findFirst({
@@ -492,12 +534,15 @@ router.post(
 router.put(
   '/:id',
   requireRole(['OWNER', 'ACCOUNTANT']),
+  requireBillingAuthorized,
   validateRequest({ body: updateInvoiceSchema }),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
       const business = req.business;
       const { customerId, invoiceDate, dueDate, placeOfSupply, isInterState: explicitInterState, notes, items } = req.body;
+
+      await validateCatalogItemsForAdmin(business.id, items, req.portal);
 
       const existing = await prisma.invoice.findFirst({
         where: { id, businessId: business.id },
@@ -777,6 +822,7 @@ router.post(
 router.post(
   '/:id/issue',
   requireRole(['OWNER', 'ACCOUNTANT']),
+  requireBillingAuthorized,
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;

@@ -19,7 +19,6 @@ export const PaymentFailedView: React.FC<PaymentFailedViewProps> = ({
   const details = errorDetails || {
     message: 'The transaction was cancelled or declined by your financial institution.',
     code: 'TRANSACTION_DECLINED',
-    orderId: 'order_test_ref',
   };
 
   return (

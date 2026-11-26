@@ -1,22 +1,31 @@
-const CreditsView=lazy(()=>import('./components/pages/CreditsView').then(m=>({default:m.CreditsView})));
-const StatementsView=lazy(()=>import('./components/pages/StatementsView').then(m=>({default:m.StatementsView})));
-const RecurringView=lazy(()=>import('./components/pages/RecurringView').then(m=>({default:m.RecurringView})));
-const SuperAdminView = lazy(() => import('./components/pages/SuperAdminView').then(m => ({default: m.SuperAdminView})));
-const CustomerPortalView = lazy(() => import('./components/pages/CustomerPortalView').then(m => ({default: m.CustomerPortalView})));
-const PricingView = lazy(() => import('./components/pages/PricingView').then(m => ({default: m.PricingView})));
-const PaymentSuccessView = lazy(() => import('./components/pages/PaymentSuccessView').then(m => ({default: m.PaymentSuccessView})));
-const PaymentFailedView = lazy(() => import('./components/pages/PaymentFailedView').then(m => ({default: m.PaymentFailedView})));
-import {PageSkeleton} from './components/common/PageSkeleton';
+const CreditsView = lazy(() => import('./components/pages/CreditsView').then((m) => ({ default: m.CreditsView })));
+const StatementsView = lazy(() => import('./components/pages/StatementsView').then((m) => ({ default: m.StatementsView })));
+const RecurringView = lazy(() => import('./components/pages/RecurringView').then((m) => ({ default: m.RecurringView })));
+const SuperAdminView = lazy(() => import('./components/pages/SuperAdminView').then((m) => ({ default: m.SuperAdminView })));
+const CustomerPortalView = lazy(() => import('./components/pages/CustomerPortalView').then((m) => ({ default: m.CustomerPortalView })));
+const PricingView = lazy(() => import('./components/pages/PricingView').then((m) => ({ default: m.PricingView })));
+const PaymentSuccessView = lazy(() => import('./components/pages/PaymentSuccessView').then((m) => ({ default: m.PaymentSuccessView })));
+const PaymentFailedView = lazy(() => import('./components/pages/PaymentFailedView').then((m) => ({ default: m.PaymentFailedView })));
+import { PageSkeleton } from './components/common/PageSkeleton';
 import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
-import { NavigationKey, Invoice, DashboardSummary, BusinessProfile, SystemHealth, User, UserRole, PaymentReceiptData } from './types';
+import {
+  NavigationKey,
+  Invoice,
+  DashboardSummary,
+  BusinessProfile,
+  SystemHealth,
+  User,
+  UserRole,
+  PaymentReceiptData,
+} from './types';
 import { AppLayout } from './components/layout/AppLayout';
-const DashboardView = lazy(() => import('./components/pages/DashboardView').then(m => ({default:m.DashboardView})));
-const InvoicesView = lazy(() => import('./components/pages/InvoicesView').then(m => ({default:m.InvoicesView})));
-const CustomersView = lazy(() => import('./components/pages/CustomersView').then(m => ({default:m.CustomersView})));
-const ProductsView = lazy(() => import('./components/pages/ProductsView').then(m => ({default:m.ProductsView})));
-const PaymentsView = lazy(() => import('./components/pages/PaymentsView').then(m => ({default:m.PaymentsView})));
-const ReportsView = lazy(() => import('./components/pages/ReportsView').then(m => ({default:m.ReportsView})));
-const SettingsView = lazy(() => import('./components/pages/SettingsView').then(m => ({default:m.SettingsView})));
+const DashboardView = lazy(() => import('./components/pages/DashboardView').then((m) => ({ default: m.DashboardView })));
+const InvoicesView = lazy(() => import('./components/pages/InvoicesView').then((m) => ({ default: m.InvoicesView })));
+const CustomersView = lazy(() => import('./components/pages/CustomersView').then((m) => ({ default: m.CustomersView })));
+const ProductsView = lazy(() => import('./components/pages/ProductsView').then((m) => ({ default: m.ProductsView })));
+const PaymentsView = lazy(() => import('./components/pages/PaymentsView').then((m) => ({ default: m.PaymentsView })));
+const ReportsView = lazy(() => import('./components/pages/ReportsView').then((m) => ({ default: m.ReportsView })));
+const SettingsView = lazy(() => import('./components/pages/SettingsView').then((m) => ({ default: m.SettingsView })));
 import { NewInvoiceModal } from './components/modals/NewInvoiceModal';
 import { InvoicePreviewModal } from './components/modals/InvoicePreviewModal';
 import { RecordPaymentModal } from './components/modals/RecordPaymentModal';
@@ -36,22 +45,26 @@ import {
   cancelInvoice,
   AuthResponse,
 } from './services/api';
-import { getActivePortal } from './utils/portal';
-import {
-  FileCheck2,
-} from 'lucide-react';
+import { getActivePortal, PortalRole } from './utils/portal';
+import { FileCheck2, ShieldAlert, RefreshCw, ExternalLink } from 'lucide-react';
+
+function getDefaultNavForPortal(portal: PortalRole): NavigationKey {
+  if (portal === 'SUPER_ADMIN') return 'superadmin';
+  if (portal === 'CUSTOMER') return 'customer_portal';
+  return 'dashboard';
+}
 
 export const App: React.FC = () => {
+  const activePortal = getActivePortal();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
+  const [billingAuthorized, setBillingAuthorized] = useState<boolean>(true);
+  const [billingBlockReason, setBillingBlockReason] = useState<string | null>(null);
 
-  const [currentNav, setCurrentNav] = useState<NavigationKey>(() => {
-    const p = getActivePortal();
-    if (p === 'SUPER_ADMIN') return 'superadmin';
-    if (p === 'CUSTOMER') return 'customer_portal';
-    return 'dashboard';
-  });
+  const [currentNav, setCurrentNav] = useState<NavigationKey>(() =>
+    getDefaultNavForPortal(activePortal)
+  );
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [dashboardSummary, setDashboardSummary] = useState<DashboardSummary | null>(null);
   const [isNewInvoiceOpen, setIsNewInvoiceOpen] = useState(false);
@@ -74,6 +87,7 @@ export const App: React.FC = () => {
   } | null>(null);
 
   useEffect(() => {
+    if (activePortal === 'CUSTOMER') return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
@@ -82,19 +96,31 @@ export const App: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [activePortal]);
 
   const loadData = useCallback(async () => {
     try {
       setLoadError(null);
-      const [health, invData, summary, biz] = await Promise.all([
+      if (activePortal === 'CUSTOMER') {
+        const health = await fetchHealth();
+        setSystemHealth(health);
+        setIsStale(false);
+        return;
+      }
+
+      const [health, invData, summary, biz, me] = await Promise.all([
         fetchHealth(),
         fetchInvoices(),
         fetchDashboardSummary(),
         fetchBusiness().catch(() => null),
+        fetchCurrentUser().catch(() => null),
       ]);
 
       setSystemHealth(health);
+      if (me) {
+        setBillingAuthorized(Boolean(me.billingAuthorized));
+        setBillingBlockReason(me.billingBlockReason || null);
+      }
       if (health.status !== 'healthy' || !invData.isBackendConnected || !summary || !biz) {
         throw new Error('Billing data is unavailable. Previously loaded records have been retained.');
       }
@@ -107,7 +133,7 @@ export const App: React.FC = () => {
       setLoadError(err.message || 'Failed to connect to backend server');
       setIsStale(true);
     }
-  }, []);
+  }, [activePortal]);
 
   const checkAuth = useCallback(async () => {
     setIsAuthChecking(true);
@@ -117,15 +143,10 @@ export const App: React.FC = () => {
         setCurrentUser(data.user);
         setUserRole(data.role);
         setBusinessProfile(data.business);
+        setBillingAuthorized(Boolean(data.billingAuthorized));
+        setBillingBlockReason(data.billingBlockReason || null);
         setIsAuthChecking(false);
-        const p = getActivePortal();
-        if (p === 'SUPER_ADMIN' || data.role === 'SUPER_ADMIN') {
-          setCurrentNav('superadmin');
-        } else if (p === 'CUSTOMER' || data.role === 'CUSTOMER') {
-          setCurrentNav('customer_portal');
-        } else {
-          setCurrentNav('dashboard');
-        }
+        setCurrentNav(getDefaultNavForPortal(activePortal));
         return true;
       }
     } catch (err) {
@@ -135,7 +156,7 @@ export const App: React.FC = () => {
     setUserRole(null);
     setIsAuthChecking(false);
     return false;
-  }, []);
+  }, [activePortal]);
 
   useEffect(() => {
     checkAuth().then((authenticated) => {
@@ -144,7 +165,6 @@ export const App: React.FC = () => {
       }
     });
 
-    // Health poll every 20s
     const timer = setInterval(async () => {
       try {
         const health = await fetchHealth();
@@ -161,15 +181,10 @@ export const App: React.FC = () => {
     setCurrentUser(data.user);
     setUserRole(data.role);
     setBusinessProfile(data.business);
+    setBillingAuthorized(Boolean(data.billingAuthorized));
+    setBillingBlockReason(data.billingBlockReason || null);
     setIsAuthChecking(false);
-    const p = getActivePortal();
-    if (p === 'SUPER_ADMIN' || data.role === 'SUPER_ADMIN') {
-      setCurrentNav('superadmin');
-    } else if (p === 'CUSTOMER' || data.role === 'CUSTOMER') {
-      setCurrentNav('customer_portal');
-    } else {
-      setCurrentNav('dashboard');
-    }
+    setCurrentNav(getDefaultNavForPortal(activePortal));
     loadData();
   };
 
@@ -182,22 +197,46 @@ export const App: React.FC = () => {
     }
     setCurrentUser(null);
     setUserRole(null);
+    setBusinessProfile(null);
     setInvoices([]);
     setDashboardSummary(null);
-    const p = getActivePortal();
-    if (p === 'SUPER_ADMIN') setCurrentNav('superadmin');
-    else if (p === 'CUSTOMER') setCurrentNav('customer_portal');
-    else setCurrentNav('dashboard');
+    setBillingAuthorized(true);
+    setBillingBlockReason(null);
+    setCurrentNav(getDefaultNavForPortal(activePortal));
+  };
+
+  const handleNavigate = (nav: NavigationKey) => {
+    if (activePortal === 'CUSTOMER') {
+      if (['customer_portal', 'pricing', 'payment_success', 'payment_failed'].includes(nav)) {
+        setCurrentNav(nav);
+      }
+      return;
+    }
+    if (activePortal === 'SUPER_ADMIN') {
+      if (['superadmin', 'products', 'invoices', 'customers', 'reports', 'settings'].includes(nav)) {
+        setCurrentNav(nav);
+      }
+      return;
+    }
+    if (['dashboard', 'invoices', 'customers', 'products', 'payments', 'reports', 'credits', 'statements', 'recurring'].includes(nav)) {
+      setCurrentNav(nav);
+    }
   };
 
   const handleIssueInvoice = async (inv: Invoice) => {
+    if (activePortal === 'ADMIN' && !billingAuthorized) {
+      alert(
+        billingBlockReason ||
+          'Bill generation is currently disabled by your Super Admin. Please authorize Admin billing on Port 5175.'
+      );
+      return;
+    }
     try {
       inv = await fetchInvoiceDetails(inv.id);
     } catch {
       setLoadError('Unable to load invoice details. Please retry.');
       return;
     }
-    // Check company WhatsApp & Gmail before issuing
     const cleanBizPhone = (businessProfile?.phone || '').replace(/\D/g, '');
     const hasBizWhatsApp = cleanBizPhone.length >= 10;
     const hasBizEmail = Boolean(
@@ -207,13 +246,12 @@ export const App: React.FC = () => {
 
     if (!hasBizWhatsApp || !hasBizEmail) {
       alert(
-        'Company WhatsApp number (min 10 digits) and Gmail/Email are mandatory to issue and send invoices. Opening Settings to configure them.'
+        'Company WhatsApp number (min 10 digits) and official email are mandatory to issue and send invoices. Configure them inside Super Admin Company Settings (Port 5175).'
       );
-      setCurrentNav('settings');
+      if (activePortal === 'SUPER_ADMIN') setCurrentNav('settings');
       return;
     }
 
-    // Check customer contact
     const custDigits = (inv.customerPhoneSnapshot || '').replace(/\D/g, '').slice(-10);
     const hasCustPhone = custDigits.length === 10;
     const hasCustEmail = Boolean(
@@ -291,13 +329,19 @@ export const App: React.FC = () => {
   };
 
   const handleOpenNewInvoice = () => {
+    if (activePortal === 'ADMIN' && !billingAuthorized) {
+      alert(
+        billingBlockReason ||
+          'Bill generation is currently disabled by Super Admin. Please enable "Allow Admin Billing" inside Super Admin Panel (Port 5175).'
+      );
+      return;
+    }
     setEditingInvoice(null);
     setIsNewInvoiceOpen(true);
   };
 
   const handleEditDraft = async (inv: Invoice) => {
     try {
-      // If invoice doesn't have items array populated (e.g. from invoice list), fetch full details
       if (!inv.items || inv.items.length === 0) {
         const full = await fetchInvoiceDetails(inv.id);
         setEditingInvoice(full);
@@ -313,6 +357,10 @@ export const App: React.FC = () => {
   };
 
   const handleDuplicateInvoice = async (inv: Invoice) => {
+    if (activePortal === 'ADMIN' && !billingAuthorized) {
+      alert(billingBlockReason || 'Bill generation is currently disabled by Super Admin.');
+      return;
+    }
     try {
       let full = inv;
       if (!inv.items || inv.items.length === 0) {
@@ -320,7 +368,7 @@ export const App: React.FC = () => {
       }
       setEditingInvoice({
         ...full,
-        id: '', // Empty ID ensures createInvoice is called, not updateDraftInvoice
+        id: '',
         invoiceNumber: `COPY OF ${full.invoiceNumber}`,
         status: 'DRAFT',
         invoiceDate: new Date().toISOString().split('T')[0],
@@ -333,7 +381,15 @@ export const App: React.FC = () => {
   };
 
   if (window.location.pathname !== '/' && window.location.pathname !== '/index.html') {
-    return <main className="p-8 max-w-xl mx-auto"><h1 className="text-3xl font-bold">404 — Page not found</h1><p className="my-4">This page does not exist.</p><a className="underline" href="/">Go to dashboard</a></main>;
+    return (
+      <main className="p-8 max-w-xl mx-auto">
+        <h1 className="text-3xl font-bold">404 — Page not found</h1>
+        <p className="my-4">This page does not exist.</p>
+        <a className="underline" href="/">
+          Go to portal home
+        </a>
+      </main>
+    );
   }
 
   if (isAuthChecking) {
@@ -343,7 +399,7 @@ export const App: React.FC = () => {
           <FileCheck2 className="w-6 h-6" />
         </div>
         <div className="text-white font-bold text-lg tracking-tight">Viora Bills</div>
-        <div className="text-slate-400 text-xs mt-1">Verifying secure session...</div>
+        <div className="text-slate-400 text-xs mt-1">Verifying secure portal session...</div>
       </div>
     );
   }
@@ -352,240 +408,288 @@ export const App: React.FC = () => {
 
   return (
     <>
-      {/* Auth Modal for Unauthenticated Users */}
-      <AuthModal
-        isOpen={!currentUser}
-        onSuccess={handleAuthSuccess}
-      />
-
-      {/* Toast Alert Screen Reader Live Region */}
-      <div
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-        className="sr-only"
-      >
+      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
         {actionNotice || ''}
       </div>
 
-      {/* Visual Toast Alert */}
       {actionNotice && (
         <div
           role="status"
           aria-live="polite"
           className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white text-xs px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2 animate-in slide-in-from-bottom-2 no-print"
         >
-          <FileCheck2 className="w-4 h-4 text-purple-400" aria-hidden="true" />
+          <FileCheck2 className="w-4 h-4 text-emerald-400" aria-hidden="true" />
           <span>{actionNotice}</span>
         </div>
       )}
 
       <AppLayout
         currentNav={currentNav}
-        onNavigate={setCurrentNav}
+        onNavigate={handleNavigate}
         systemHealth={systemHealth}
         user={currentUser}
         userRole={userRole}
         onLogout={handleLogout}
         onOpenGlobalSearch={() => setIsGlobalSearchOpen(true)}
       >
-        {loadError && <div role="alert" className="mb-4 rounded-lg border border-red-300 bg-red-50 p-4 text-red-900">{loadError} <button onClick={loadData} className="underline font-semibold">Retry</button></div>}
+        {loadError && activePortal !== 'CUSTOMER' && (
+          <div role="alert" className="mb-4 rounded-lg border border-red-300 bg-red-50 p-4 text-red-900">
+            {loadError}{' '}
+            <button onClick={loadData} className="underline font-semibold">
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* Explicit Super Admin Billing Lock Banner inside Admin Desk (Port 5173) */}
+        {activePortal === 'ADMIN' && !billingAuthorized && (
+          <div
+            role="alert"
+            className="mb-6 rounded-2xl border-2 border-amber-300 bg-amber-50 p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+          >
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-xl bg-amber-100 text-amber-800 flex-shrink-0">
+                <ShieldAlert className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-amber-950">
+                  Billing Generation Locked by Super Admin
+                </h3>
+                <p className="text-xs text-amber-800 mt-0.5 leading-relaxed">
+                  {billingBlockReason ||
+                    'Your Super Admin must authorize bill generation before this terminal can create or issue invoices.'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                type="button"
+                onClick={loadData}
+                className="px-3.5 py-2 rounded-xl bg-amber-800 hover:bg-amber-900 text-white text-xs font-bold inline-flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Check Authorization</span>
+              </button>
+              <a
+                href="http://localhost:5175"
+                target="_blank"
+                rel="noreferrer"
+                className="px-3.5 py-2 rounded-xl bg-white border border-amber-300 hover:bg-amber-100 text-amber-900 text-xs font-bold inline-flex items-center gap-1.5"
+              >
+                <span>Open Super Admin (5175)</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+          </div>
+        )}
+
         <Suspense fallback={<PageSkeleton />}>
-        {currentNav === 'dashboard' && (
-          <DashboardView
-            summary={dashboardSummary}
-            invoices={invoices}
-            onSelectInvoice={(inv) => setPreviewInvoiceId(inv.id)}
-            onNewInvoice={handleOpenNewInvoice}
-            onIssueInvoice={handleIssueInvoice}
-            onRecordPayment={(inv) => setPaymentInvoice(inv)}
-            onEditDraft={handleEditDraft}
-            onDeleteDraft={handleDeleteDraft}
-            onCancelInvoice={handleCancelInvoice}
-            onNavigateToCustomers={() => setCurrentNav('customers')}
-            onNavigateToProducts={() => setCurrentNav('products')}
-            onDateRangeChange={handleDashboardDateRangeChange}
-          />
-        )}
+          {/* PORTAL 1: CUSTOMER PURCHASE PORTAL (Port 5174) */}
+          {activePortal === 'CUSTOMER' && currentNav === 'customer_portal' && (
+            <CustomerPortalView
+              userEmail={currentUser.email}
+              onUpgradePlan={() => setCurrentNav('pricing')}
+            />
+          )}
+          {activePortal === 'CUSTOMER' && currentNav === 'pricing' && (
+            <PricingView
+              isAuthenticated={Boolean(currentUser)}
+              userEmail={currentUser.email}
+              userName={currentUser.name}
+              onPaymentSuccess={(receipt: any) => {
+                setActiveReceiptData(receipt);
+                setCurrentNav('payment_success');
+              }}
+              onPaymentFailed={(failInfo: any) => {
+                setPaymentFailureData(failInfo);
+                setCurrentNav('payment_failed');
+              }}
+            />
+          )}
+          {activePortal === 'CUSTOMER' && currentNav === 'payment_success' && (
+            <PaymentSuccessView
+              receiptData={activeReceiptData}
+              userEmail={currentUser.email}
+              onGoToPortal={() => setCurrentNav('customer_portal')}
+            />
+          )}
+          {activePortal === 'CUSTOMER' && currentNav === 'payment_failed' && (
+            <PaymentFailedView
+              errorDetails={paymentFailureData}
+              onRetry={() => setCurrentNav('pricing')}
+              onViewPlans={() => setCurrentNav('pricing')}
+            />
+          )}
 
-        {currentNav === 'invoices' && (
-          <InvoicesView
-            summary={dashboardSummary}
-            invoices={invoices}
-            onSelectInvoice={(inv) => setPreviewInvoiceId(inv.id)}
-            onNewInvoice={handleOpenNewInvoice}
-            onIssueInvoice={handleIssueInvoice}
-            onRecordPayment={(inv) => setPaymentInvoice(inv)}
-            onEditDraft={handleEditDraft}
-            onDeleteDraft={handleDeleteDraft}
-            onCancelInvoice={handleCancelInvoice}
-            onDuplicateInvoice={handleDuplicateInvoice}
-            initialCustomerFilter={selectedCustomerFilter}
-            error={loadError}
-            isStale={isStale}
-            onRetry={loadData}
-          />
-        )}
+          {/* PORTAL 2: SUPER ADMIN CONTROL (Port 5175) */}
+          {activePortal === 'SUPER_ADMIN' && currentNav === 'superadmin' && (
+            <SuperAdminView
+              userEmail={currentUser.email}
+              onOpenProducts={() => setCurrentNav('products')}
+              onOpenSettings={() => setCurrentNav('settings')}
+              onRefreshParent={loadData}
+            />
+          )}
 
-        {currentNav === 'customers' && (
-          <CustomersView
-            onViewCustomerInvoices={(custName) => {
-              setSelectedCustomerFilter(custName);
-              setCurrentNav('invoices');
-            }}
-          />
-        )}
+          {/* PORTAL 3: ADMIN BILLING DESK (Port 5173) + Shared Authorized Management Views */}
+          {activePortal === 'ADMIN' && currentNav === 'dashboard' && (
+            <DashboardView
+              summary={dashboardSummary}
+              invoices={invoices}
+              onSelectInvoice={(inv) => setPreviewInvoiceId(inv.id)}
+              onNewInvoice={handleOpenNewInvoice}
+              onIssueInvoice={handleIssueInvoice}
+              onRecordPayment={(inv) => setPaymentInvoice(inv)}
+              onEditDraft={handleEditDraft}
+              onDeleteDraft={handleDeleteDraft}
+              onCancelInvoice={handleCancelInvoice}
+              onNavigateToCustomers={() => setCurrentNav('customers')}
+              onNavigateToProducts={() => setCurrentNav('products')}
+              onDateRangeChange={handleDashboardDateRangeChange}
+            />
+          )}
 
-        {currentNav === 'products' && <ProductsView />}
+          {activePortal !== 'CUSTOMER' && currentNav === 'invoices' && (
+            <InvoicesView
+              summary={dashboardSummary}
+              invoices={invoices}
+              onSelectInvoice={(inv) => setPreviewInvoiceId(inv.id)}
+              onNewInvoice={handleOpenNewInvoice}
+              onIssueInvoice={handleIssueInvoice}
+              onRecordPayment={(inv) => setPaymentInvoice(inv)}
+              onEditDraft={handleEditDraft}
+              onDeleteDraft={handleDeleteDraft}
+              onCancelInvoice={handleCancelInvoice}
+              onDuplicateInvoice={handleDuplicateInvoice}
+              initialCustomerFilter={selectedCustomerFilter}
+              error={loadError}
+              isStale={isStale}
+              onRetry={loadData}
+            />
+          )}
 
-        {currentNav === 'payments' && (
-          <PaymentsView
-            userRole={userRole}
-            onSelectInvoice={(invId) => setPreviewInvoiceId(invId)}
-            onOpenRecordPayment={() => {
-              const payable = invoices.find(
-                (inv) =>
-                  inv.status === 'ISSUED' &&
-                  (inv.balanceRemaining === undefined || inv.balanceRemaining > 0)
-              );
-              if (payable) {
-                setPaymentInvoice(payable);
-              } else {
-                alert(
-                  'No outstanding issued invoices available for payment. Please issue an invoice first.'
+          {activePortal !== 'CUSTOMER' && currentNav === 'customers' && (
+            <CustomersView
+              onViewCustomerInvoices={(custName) => {
+                setSelectedCustomerFilter(custName);
+                setCurrentNav('invoices');
+              }}
+            />
+          )}
+
+          {activePortal !== 'CUSTOMER' && currentNav === 'products' && (
+            <ProductsView readOnly={activePortal === 'ADMIN'} />
+          )}
+
+          {activePortal === 'ADMIN' && currentNav === 'payments' && (
+            <PaymentsView
+              userRole={userRole}
+              onSelectInvoice={(invId) => setPreviewInvoiceId(invId)}
+              onOpenRecordPayment={() => {
+                const payable = invoices.find(
+                  (inv) =>
+                    inv.status === 'ISSUED' &&
+                    (inv.balanceRemaining === undefined || inv.balanceRemaining > 0)
                 );
-              }
-            }}
-          />
-        )}
+                if (payable) {
+                  setPaymentInvoice(payable);
+                } else {
+                  alert(
+                    'No outstanding issued invoices available for payment. Please issue an invoice first.'
+                  );
+                }
+              }}
+            />
+          )}
 
-        {currentNav === 'reports' && <ReportsView />}
-
-        {currentNav === 'settings' && <SettingsView />}
-        {currentNav==='credits' && <CreditsView onChanged={loadData} canIssue={userRole==='OWNER'||userRole==='ACCOUNTANT'} />}
-        {currentNav==='statements' && <StatementsView />}
-        {currentNav === 'recurring' && <RecurringView onInvoiceCreated={loadData} />}
-
-        {/* Big Update: Dedicated Portals & Return Views */}
-        {currentNav === 'superadmin' && (
-          <SuperAdminView
-            onSwitchToWorkspace={(_bizId) => {
-              setCurrentNav('dashboard');
-              loadData();
-            }}
-          />
-        )}
-        {currentNav === 'customer_portal' && (
-          <CustomerPortalView
-            onUpgradePlan={() => setCurrentNav('pricing')}
-            onLaunchWorkspace={() => setCurrentNav('dashboard')}
-          />
-        )}
-        {currentNav === 'pricing' && (
-          <PricingView
-            isAuthenticated={Boolean(currentUser)}
-            onPaymentSuccess={(receipt: any) => {
-              setActiveReceiptData(receipt);
-              setCurrentNav('payment_success');
-            }}
-            onPaymentFailed={(failInfo: any) => {
-              setPaymentFailureData(failInfo);
-              setCurrentNav('payment_failed');
-            }}
-          />
-        )}
-        {currentNav === 'payment_success' && (
-          <PaymentSuccessView
-            receiptData={activeReceiptData}
-            onGoToPortal={() => setCurrentNav('customer_portal')}
-            onGoToBilling={() => setCurrentNav('dashboard')}
-          />
-        )}
-        {currentNav === 'payment_failed' && (
-          <PaymentFailedView
-            errorDetails={paymentFailureData}
-            onRetry={() => setCurrentNav('pricing')}
-            onViewPlans={() => setCurrentNav('pricing')}
-          />
-        )}
+          {activePortal !== 'CUSTOMER' && currentNav === 'reports' && <ReportsView />}
+          {activePortal === 'SUPER_ADMIN' && currentNav === 'settings' && <SettingsView />}
+          {activePortal === 'ADMIN' && currentNav === 'credits' && (
+            <CreditsView onChanged={loadData} canIssue={userRole === 'OWNER' || userRole === 'ACCOUNTANT'} />
+          )}
+          {activePortal === 'ADMIN' && currentNav === 'statements' && <StatementsView />}
+          {activePortal === 'ADMIN' && currentNav === 'recurring' && (
+            <RecurringView onInvoiceCreated={loadData} />
+          )}
         </Suspense>
       </AppLayout>
 
-      {/* New / Edit Invoice Modal */}
-      <NewInvoiceModal
-        isOpen={isNewInvoiceOpen}
-        editingInvoice={editingInvoice}
-        onClose={() => {
-          setIsNewInvoiceOpen(false);
-          setEditingInvoice(null);
-        }}
-        onSuccess={(saved) => {
-          loadData();
-          if (saved?.status === 'ISSUED') {
-            setActionNotice(`Invoice ${saved.invoiceNumber} issued officially!`);
-            setDispatchingInvoice(saved);
-          } else {
-            setActionNotice('Draft invoice saved successfully');
-          }
-          setTimeout(() => setActionNotice(null), 3000);
-        }}
-      />
+      {activePortal !== 'CUSTOMER' && (
+        <>
+          <NewInvoiceModal
+            isOpen={isNewInvoiceOpen}
+            editingInvoice={editingInvoice}
+            enforceCatalogOnly={activePortal === 'ADMIN'}
+            onClose={() => {
+              setIsNewInvoiceOpen(false);
+              setEditingInvoice(null);
+            }}
+            onSuccess={(saved) => {
+              loadData();
+              if (saved?.status === 'ISSUED') {
+                setActionNotice(`Invoice ${saved.invoiceNumber} issued officially!`);
+                setDispatchingInvoice(saved);
+              } else {
+                setActionNotice('Draft invoice saved successfully');
+              }
+              setTimeout(() => setActionNotice(null), 3000);
+            }}
+          />
 
-      {/* Record Payment Modal */}
-      {paymentInvoice && <RecordPaymentModal
-        key={paymentInvoice.id}
-        invoice={paymentInvoice}
-        isOpen={Boolean(paymentInvoice)}
-        onClose={() => setPaymentInvoice(null)}
-        onSuccess={() => {
-          loadData();
-          setActionNotice('Payment recorded successfully');
-          setTimeout(() => setActionNotice(null), 3000);
-        }}
-      />
+          {paymentInvoice && (
+            <RecordPaymentModal
+              key={paymentInvoice.id}
+              invoice={paymentInvoice}
+              isOpen={Boolean(paymentInvoice)}
+              onClose={() => setPaymentInvoice(null)}
+              onSuccess={() => {
+                loadData();
+                setActionNotice('Payment recorded successfully');
+                setTimeout(() => setActionNotice(null), 3000);
+              }}
+            />
+          )}
 
-      }
-      {/* Preview Invoice Modal */}
-      <InvoicePreviewModal
-        invoiceId={previewInvoiceId}
-        isOpen={Boolean(previewInvoiceId)}
-        onClose={() => setPreviewInvoiceId(null)}
-        onIssueSuccess={() => {
-          loadData();
-        }}
-        onOpenPayment={(inv) => {
-          setPreviewInvoiceId(null);
-          setPaymentInvoice(inv);
-        }}
-        onEditDraft={handleEditDraft}
-      />
+          <InvoicePreviewModal
+            invoiceId={previewInvoiceId}
+            isOpen={Boolean(previewInvoiceId)}
+            onClose={() => setPreviewInvoiceId(null)}
+            onIssueSuccess={() => {
+              loadData();
+            }}
+            onOpenPayment={(inv) => {
+              setPreviewInvoiceId(null);
+              setPaymentInvoice(inv);
+            }}
+            onEditDraft={handleEditDraft}
+          />
 
-      {/* Post-Issue Direct Dispatch Modal */}
-      <InvoiceDispatchModal
-        isOpen={Boolean(dispatchingInvoice)}
-        invoice={dispatchingInvoice}
-        business={businessProfile}
-        onClose={() => setDispatchingInvoice(null)}
-      />
+          <InvoiceDispatchModal
+            isOpen={Boolean(dispatchingInvoice)}
+            invoice={dispatchingInvoice}
+            business={businessProfile}
+            onClose={() => setDispatchingInvoice(null)}
+          />
 
-      {/* Omni-search Command Palette */}
-      <GlobalSearchModal
-        isOpen={isGlobalSearchOpen}
-        onClose={() => setIsGlobalSearchOpen(false)}
-        onSelectInvoice={(invoiceId) => {
-          setIsGlobalSearchOpen(false);
-          setPreviewInvoiceId(invoiceId);
-        }}
-        onSelectCustomer={(customerName) => {
-          setIsGlobalSearchOpen(false);
-          setSelectedCustomerFilter(customerName);
-          setCurrentNav('invoices');
-        }}
-        onSelectProduct={(_productName) => {
-          setIsGlobalSearchOpen(false);
-          setCurrentNav('products');
-        }}
-      />
+          <GlobalSearchModal
+            isOpen={isGlobalSearchOpen}
+            onClose={() => setIsGlobalSearchOpen(false)}
+            onSelectInvoice={(invoiceId) => {
+              setIsGlobalSearchOpen(false);
+              setPreviewInvoiceId(invoiceId);
+            }}
+            onSelectCustomer={(customerName) => {
+              setIsGlobalSearchOpen(false);
+              setSelectedCustomerFilter(customerName);
+              setCurrentNav('invoices');
+            }}
+            onSelectProduct={(_productName) => {
+              setIsGlobalSearchOpen(false);
+              setCurrentNav('products');
+            }}
+          />
+        </>
+      )}
     </>
   );
 };

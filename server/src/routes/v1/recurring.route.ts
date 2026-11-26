@@ -1,6 +1,6 @@
 import { Router, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { AuthenticatedRequest, requireRole } from '../../middlewares/auth';
+import { AuthenticatedRequest, requireRole, requireBillingAuthorized } from '../../middlewares/auth';
 import { validateRequest } from '../../middlewares/validate';
 import { sendSuccess } from '../../utils/response';
 import {
@@ -49,6 +49,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response, next: NextFunct
 router.post(
   '/',
   requireRole(['OWNER', 'ACCOUNTANT']),
+  requireBillingAuthorized,
   validateRequest({ body: createScheduleSchema }),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
@@ -75,6 +76,7 @@ router.post(
 router.post(
   '/:id/trigger',
   requireRole(['OWNER', 'ACCOUNTANT']),
+  requireBillingAuthorized,
   validateRequest({ body: triggerScheduleSchema.optional() }),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {

@@ -2,9 +2,9 @@ import { prisma } from '../src/config/prisma';
 import { hashPassword } from '../src/utils/auth';
 
 async function seedPlansAndRoles() {
-  console.log('🚀 Seeding Subscription Plans, Roles, and System Settings...');
+  console.log('🚀 Seeding Subscription Plans, Demo Accounts, and 12-Digit Access Codes...');
 
-  // 1. Seed System Settings
+  // 1. Seed System Settings (Razorpay Gateway config used strictly by Customer Purchase Portal)
   const defaultSettings = [
     {
       key: 'PLATFORM_NAME',
@@ -48,12 +48,6 @@ async function seedPlansAndRoles() {
       category: 'BILLING',
       description: 'Default GST tax rate percentage',
     },
-    {
-      key: 'MAINTENANCE_MODE',
-      value: 'OFF',
-      category: 'SECURITY',
-      description: 'Toggle platform maintenance banner',
-    },
   ];
 
   for (const s of defaultSettings) {
@@ -65,7 +59,28 @@ async function seedPlansAndRoles() {
   }
   console.log('✅ System Settings seeded');
 
-  // 2. Seed Subscription Plans in INR
+  // 2. Remove legacy ₹5 test plan if present (deactivate if historical subscriptions exist, otherwise delete)
+  const legacyTestPlans = await prisma.subscriptionPlan.findMany({
+    where: {
+      OR: [{ id: 'plan_test_5' }, { slug: 'test-5' }],
+    },
+    include: {
+      _count: { select: { subscriptions: true } },
+    },
+  });
+
+  for (const legacy of legacyTestPlans) {
+    if (legacy._count.subscriptions === 0) {
+      await prisma.subscriptionPlan.delete({ where: { id: legacy.id } }).catch(() => {});
+    } else {
+      await prisma.subscriptionPlan.update({
+        where: { id: legacy.id },
+        data: { isActive: false },
+      });
+    }
+  }
+
+  // 3. Seed Production Subscription Plans in INR
   const plans = [
     {
       name: 'Starter Plan',
@@ -77,9 +92,9 @@ async function seedPlansAndRoles() {
       businessLimit: 1,
       features: [
         'Up to 100 GST Invoices / month',
-        '1 Business Workspace',
+        '1 Business Workspace + Super Admin Product Catalog',
         'Customer Directory & Statements',
-        'Professional PDF Invoice Templates',
+        'Generate Admin Access Codes for Billing Staff',
         'Email & WhatsApp Invoice Dispatch',
         'Automatic CGST / SGST / IGST calculation',
       ],
@@ -91,16 +106,15 @@ async function seedPlansAndRoles() {
       description: 'Our most popular plan for expanding SMEs and high-volume billing teams.',
       monthlyPrice: 1499,
       yearlyPrice: 14390,
-      invoiceLimit: -1, // Unlimited
+      invoiceLimit: -1,
       businessLimit: 3,
       features: [
         'Unlimited GST Invoices & Bills',
         'Up to 3 Business Workspaces',
-        'Automated Recurring Invoices',
-        'Credit Notes & Balance Reversals',
-        'Multi-user Roles (Owner & Accountant)',
+        'Unlimited Admin Desk Access Codes',
+        'Automated Recurring Invoices & Credit Notes',
+        'Real-Time Super Admin Billing Authorization Controls',
         'Full Customer Activity Ledger Statements',
-        'Bulk Draft Actions & CSV Exports',
         'Priority WhatsApp & Email Support',
       ],
       isActive: true,
@@ -115,7 +129,7 @@ async function seedPlansAndRoles() {
       businessLimit: 10,
       features: [
         'Unlimited Invoices across 10 Businesses',
-        'Super Admin System Control Access',
+        'Granular Per-Terminal Admin Access Control',
         'Custom Invoice Branding & Watermarks',
         'Complete Audit Log & Security History',
         'High-speed Bulk PDF Generation',
@@ -144,103 +158,167 @@ async function seedPlansAndRoles() {
   }
   console.log('✅ Subscription Plans seeded in INR');
 
-  // 3. Seed Super Admin, Admin, and Customer Accounts
-  const seededAccounts = [
-    {
+  // 3. Seed Demo Customer (Software Buyer -> Super Admin) & Demo Billing Admin
+  const customerEmail = 'customer@viora.test';
+  const adminEmail = 'admin@viora.test';
+
+  let customerUser = await prisma.user.findUnique({ where: { email: customerEmail } });
+  if (!customerUser) {
+    customerUser = await prisma.user.create({
+      data: {
+        email: customerEmail,
+        name: 'SaaS Client Customer',
+        passwordHash: hashPassword('Customer123!'),
+        role: 'CUSTOMER',
+      },
+    });
+  } else {
+    customerUser = await prisma.user.update({
+      where: { id: customerUser.id },
+      data: {
+        role: 'CUSTOMER',
+        passwordHash: hashPassword('Customer123!'),
+      },
+    });
+  }
+
+  let adminUser = await prisma.user.findUnique({ where: { email: adminEmail } });
+  if (!adminUser) {
+    adminUser = await prisma.user.create({
+      data: {
+        email: adminEmail,
+        name: 'Viora Billing Admin',
+        passwordHash: hashPassword('AdminPassword123!'),
+        role: 'OWNER',
+      },
+    });
+  } else {
+    adminUser = await prisma.user.update({
+      where: { id: adminUser.id },
+      data: {
+        role: 'OWNER',
+        passwordHash: hashPassword('AdminPassword123!'),
+      },
+    });
+  }
+
+  // Legacy global SUPER_ADMIN test account kept intact for any automated unit helpers
+  await prisma.user.upsert({
+    where: { email: 'superadmin@viora.test' },
+    update: { role: 'SUPER_ADMIN', passwordHash: hashPassword('SuperAdmin123!') },
+    create: {
       email: 'superadmin@viora.test',
       name: 'Global Super Admin',
-      password: 'SuperAdmin123!',
-      role: 'SUPER_ADMIN' as const,
+      passwordHash: hashPassword('SuperAdmin123!'),
+      role: 'SUPER_ADMIN',
     },
-    {
-      email: 'admin@viora.test',
-      name: 'Viora Billing Admin',
-      password: 'AdminPassword123!',
-      role: 'OWNER' as const,
-    },
-    {
-      email: 'customer@viora.test',
-      name: 'SaaS Client Customer',
-      password: 'Customer123!',
-      role: 'CUSTOMER' as const,
-    },
-  ];
+  });
 
-  const defaultBiz = await prisma.business.findFirst();
+  // Ensure default business workspace belongs to customerUser and allows admin billing for demo
+  let defaultBiz =
+    (await prisma.business.findFirst({ where: { ownerUserId: customerUser.id } })) ||
+    (await prisma.business.findFirst());
 
-  for (const acc of seededAccounts) {
-    let user = await prisma.user.findUnique({ where: { email: acc.email } });
-    if (!user) {
-      user = await prisma.user.create({
+  if (!defaultBiz) {
+    defaultBiz = await prisma.business.create({
+      data: {
+        name: 'Viora Tech Solutions Pvt Ltd',
+        address: '4th Block Koramangala, Bengaluru, Karnataka - 560034',
+        phone: '+91 98765 43210',
+        email: customerEmail,
+        gstin: '29AABCV1234F1Z5',
+        state: 'Karnataka',
+        invoicePrefix: 'VTS',
+        ownerUserId: customerUser.id,
+        allowAdminBilling: true,
+      },
+    });
+  } else {
+    defaultBiz = await prisma.business.update({
+      where: { id: defaultBiz.id },
+      data: {
+        ownerUserId: customerUser.id,
+        allowAdminBilling: true,
+      },
+    });
+  }
+
+  // Link both customerUser (as OWNER/SuperAdmin of workspace) and adminUser (as billing operator)
+  for (const u of [customerUser, adminUser]) {
+    await prisma.businessMembership.upsert({
+      where: { userId_businessId: { userId: u.id, businessId: defaultBiz.id } },
+      update: { role: 'OWNER' },
+      create: { userId: u.id, businessId: defaultBiz.id, role: 'OWNER' },
+    });
+  }
+
+  // Ensure active Pro Subscription for customerUser with 12-digit Super Admin Code '123456789012'
+  const proPlan = await prisma.subscriptionPlan.findUnique({ where: { slug: 'pro' } });
+  if (proPlan) {
+    const existingDemoCodeSub = await prisma.subscription.findFirst({
+      where: { userId: customerUser.id, status: 'ACTIVE' },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (existingDemoCodeSub) {
+      // Ensure it has a valid 12-digit code and businessId
+      const codeConflict = await prisma.subscription.findFirst({
+        where: { superAdminAccessCode: '123456789012', id: { not: existingDemoCodeSub.id } },
+      });
+      await prisma.subscription.update({
+        where: { id: existingDemoCodeSub.id },
         data: {
-          email: acc.email,
-          name: acc.name,
-          passwordHash: hashPassword(acc.password),
-          role: acc.role,
+          businessId: defaultBiz.id,
+          currentPeriodEnd: new Date(Date.now() + 30 * 86400000),
+          superAdminAccessCode: existingDemoCodeSub.superAdminAccessCode || (codeConflict ? '123456789099' : '123456789012'),
+          superAdminCodeIssuedAt: existingDemoCodeSub.superAdminCodeIssuedAt || new Date(),
         },
       });
-      console.log(`✅ Created user: ${acc.email} (${acc.role})`);
     } else {
-      user = await prisma.user.update({
-        where: { id: user.id },
+      await prisma.subscription.create({
         data: {
-          role: acc.role,
-          passwordHash: hashPassword(acc.password),
+          userId: customerUser.id,
+          planId: proPlan.id,
+          businessId: defaultBiz.id,
+          status: 'ACTIVE',
+          billingCycle: 'MONTHLY',
+          amountPaid: 1499,
+          currency: 'INR',
+          razorpayOrderId: 'order_demo_initial_pro',
+          razorpayPaymentId: 'pay_demo_success_12345',
+          razorpaySignature: 'mock_sig_initial_verified',
+          superAdminAccessCode: '123456789012',
+          superAdminCodeIssuedAt: new Date(),
+          currentPeriodStart: new Date(),
+          currentPeriodEnd: new Date(Date.now() + 30 * 86400000),
         },
       });
-      console.log(`🔄 Updated user: ${acc.email} with role ${acc.role}`);
-    }
-
-    if (defaultBiz && acc.role !== 'CUSTOMER') {
-      const membership = await prisma.businessMembership.findUnique({
-        where: {
-          userId_businessId: {
-            userId: user.id,
-            businessId: defaultBiz.id,
-          },
-        },
-      });
-      if (!membership) {
-        await prisma.businessMembership.create({
-          data: {
-            userId: user.id,
-            businessId: defaultBiz.id,
-            role: 'OWNER',
-          },
-        });
-      }
-    }
-
-    // Give customer account an active Pro subscription in demo
-    if (acc.role === 'CUSTOMER') {
-      const proPlan = await prisma.subscriptionPlan.findUnique({ where: { slug: 'pro' } });
-      if (proPlan) {
-        const existingSub = await prisma.subscription.findFirst({
-          where: { userId: user.id, status: 'ACTIVE' },
-        });
-        if (!existingSub) {
-          await prisma.subscription.create({
-            data: {
-              userId: user.id,
-              planId: proPlan.id,
-              status: 'ACTIVE',
-              billingCycle: 'MONTHLY',
-              amountPaid: 1499,
-              currency: 'INR',
-              razorpayOrderId: 'order_demo_initial_pro',
-              razorpayPaymentId: 'pay_demo_success_12345',
-              razorpaySignature: 'mock_sig_initial_verified',
-              currentPeriodStart: new Date(),
-              currentPeriodEnd: new Date(Date.now() + 30 * 86400000),
-            },
-          });
-          console.log(`✅ Provisioned initial active Pro subscription for ${acc.email}`);
-        }
-      }
     }
   }
 
-  console.log('🎉 Super Admin, Admin, and Customer accounts successfully initialized!');
+  // Ensure seeded 12-digit Admin Access Code '987654321098' for demo Admin Desk login
+  await prisma.adminAccessCode.upsert({
+    where: { code: '987654321098' },
+    update: {
+      businessId: defaultBiz.id,
+      assignedEmail: adminEmail,
+      isActive: true,
+      canGenerateBills: true,
+    },
+    create: {
+      businessId: defaultBiz.id,
+      code: '987654321098',
+      label: 'Primary Billing Counter',
+      assignedEmail: adminEmail,
+      role: 'OWNER',
+      canGenerateBills: true,
+      isActive: true,
+      createdByUserId: customerUser.id,
+    },
+  });
+
+  console.log('✅ Seeded Customer (customer@viora.test) + 12-digit Super Admin Code');
+  console.log('✅ Seeded Billing Admin (admin@viora.test) + 12-digit Admin Code: 987654321098');
 }
 
 seedPlansAndRoles()

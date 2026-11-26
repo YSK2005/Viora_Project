@@ -1,169 +1,334 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
+  ShieldCheck,
   ShieldAlert,
-  Sliders,
-  Building2,
-  Users,
-  CreditCard,
+  KeyRound,
   Package,
-  Layers,
-  Save,
+  Receipt,
   CheckCircle2,
   RefreshCw,
-  Search,
-  KeyRound,
-  ExternalLink,
   Loader2,
+  Plus,
+  Copy,
+  Check,
+  RotateCw,
+  Trash2,
+  ToggleLeft,
+  ToggleRight,
+  ExternalLink,
+  Lock,
+  Unlock,
+  Activity,
+  Settings,
+  ArrowRight,
 } from 'lucide-react';
 import {
-  fetchSuperAdminStats,
-  fetchSuperAdminSettings,
-  updateSuperAdminSettings,
-  fetchSuperAdminTenants,
-  fetchSuperAdminUsers,
-  fetchSuperAdminProducts,
-  fetchSubscriptionPlans,
-  updateSuperAdminPlan,
+  fetchSuperAdminOverview,
+  toggleAdminBilling,
+  fetchAdminAccessCodes,
+  createAdminAccessCode,
+  updateAdminAccessCode,
+  deleteAdminAccessCode,
 } from '../../services/api';
+import { AdminAccessCode, SuperAdminOverview } from '../../types';
+import { ProductsView } from './ProductsView';
 
 interface SuperAdminViewProps {
-  onSwitchToWorkspace: (businessId: string) => void;
+  userEmail: string;
+  onOpenProducts: () => void;
+  onOpenSettings: () => void;
+  onRefreshParent?: () => void;
 }
 
-export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onSwitchToWorkspace }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'settings' | 'tenants' | 'users' | 'plans' | 'products'>('overview');
-  const [stats, setStats] = useState<any | null>(null);
-  const [settings, setSettings] = useState<Record<string, string>>({});
-  const [tenants, setTenants] = useState<any[]>([]);
-  const [usersList, setUsersList] = useState<any[]>([]);
-  const [plans, setPlans] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [savingSettings, setSavingSettings] = useState(false);
-  const [saveMessage, setSaveMessage] = useState<string | null>(null);
-  const [tenantSearch, setTenantSearch] = useState('');
+function format12Digits(code: string): string {
+  const clean = code.replace(/\D/g, '');
+  if (clean.length === 12) {
+    return `${clean.slice(0, 4)}  ${clean.slice(4, 8)}  ${clean.slice(8, 12)}`;
+  }
+  return code;
+}
 
-  const loadData = async () => {
+export const SuperAdminView: React.FC<SuperAdminViewProps> = ({
+  userEmail,
+  onOpenProducts,
+  onOpenSettings,
+  onRefreshParent,
+}) => {
+  const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'admin_codes' | 'oversight'>(
+    'overview'
+  );
+  const [overview, setOverview] = useState<SuperAdminOverview | null>(null);
+  const [adminCodes, setAdminCodes] = useState<AdminAccessCode[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [togglingBilling, setTogglingBilling] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Create Admin Access Code form states
+  const [label, setLabel] = useState('Main Billing Counter');
+  const [assignmentType, setAssignmentType] = useState<'SELF' | 'STAFF'>('SELF');
+  const [staffEmail, setStaffEmail] = useState('');
+  const [staffName, setStaffName] = useState('');
+  const [staffPassword, setStaffPassword] = useState('');
+  const [role, setRole] = useState<'OWNER' | 'ACCOUNTANT' | 'VIEWER'>('OWNER');
+  const [canGenerateBills, setCanGenerateBills] = useState(true);
+  const [enableBusinessBillingNow, setEnableBusinessBillingNow] = useState(true);
+  const [creatingCode, setCreatingCode] = useState(false);
+  const [newlyGeneratedCode, setNewlyGeneratedCode] = useState<AdminAccessCode | null>(null);
+
+  const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [statsData, settingsList, tenantsData, plansData] = await Promise.all([
-        fetchSuperAdminStats().catch(() => null),
-        fetchSuperAdminSettings().catch(() => []),
-        fetchSuperAdminTenants().catch(() => ({ tenants: [] })),
-        fetchSubscriptionPlans().catch(() => []),
+      const [ov, codes] = await Promise.all([
+        fetchSuperAdminOverview(),
+        fetchAdminAccessCodes(),
       ]);
-
-      if (statsData) setStats(statsData);
-      if (tenantsData?.tenants) setTenants(tenantsData.tenants);
-      if (plansData) setPlans(plansData);
-
-      const settingsMap: Record<string, string> = {};
-      settingsList.forEach((s: any) => {
-        settingsMap[s.key] = s.value;
-      });
-      setSettings(settingsMap);
+      setOverview(ov);
+      setAdminCodes(codes);
     } catch (err) {
       console.error('Failed to load Super Admin data:', err);
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    loadData();
   }, []);
 
-  const handleTabChange = async (tab: typeof activeTab) => {
-    setActiveTab(tab);
-    if (tab === 'users' && usersList.length === 0) {
-      const u = await fetchSuperAdminUsers().catch(() => ({ users: [] }));
-      setUsersList(u.users || []);
-    } else if (tab === 'products' && products.length === 0) {
-      const p = await fetchSuperAdminProducts().catch(() => []);
-      setProducts(p || []);
-    }
+  useEffect(() => {
+    loadAll();
+  }, [loadAll]);
+
+  const showNotice = (msg: string) => {
+    setErrorMsg(null);
+    setNotice(msg);
+    setTimeout(() => setNotice(null), 4000);
   };
 
-  const handleSaveSettings = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSavingSettings(true);
-    setSaveMessage(null);
-    try {
-      const payload = Object.entries(settings).map(([key, value]) => ({
-        key,
-        value,
-        category: key.startsWith('RAZORPAY_') ? 'PAYMENT' : key.includes('GST') ? 'BILLING' : 'GENERAL',
-      }));
+  const showError = (msg: string) => {
+    setNotice(null);
+    setErrorMsg(msg);
+    setTimeout(() => setErrorMsg(null), 6000);
+  };
 
-      await updateSuperAdminSettings(payload);
-      setSaveMessage('System settings and Razorpay configuration updated successfully.');
-      setTimeout(() => setSaveMessage(null), 4000);
+  const handleToggleMasterBilling = async () => {
+    if (!overview) return;
+    const nextState = !overview.business.allowAdminBilling;
+    setTogglingBilling(true);
+    try {
+      const res = await toggleAdminBilling(nextState);
+      showNotice(
+        res.message ||
+          (nextState
+            ? 'Admin billing authorized!'
+            : 'Admin billing paused.')
+      );
+      await loadAll();
+      onRefreshParent?.();
     } catch (err: any) {
-      alert(`Error saving settings: ${err.message}`);
+      showError(`Error updating billing authorization: ${err.message}`);
     } finally {
-      setSavingSettings(false);
+      setTogglingBilling(false);
     }
   };
 
-  const handleUpdatePlanPrice = async (planId: string, monthly: number, yearly: number) => {
+  const handleGenerateAdminCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!label.trim()) return;
+
+    const assignedEmail =
+      assignmentType === 'SELF' ? userEmail : staffEmail.trim().toLowerCase();
+
+    if (assignmentType === 'STAFF' && !assignedEmail) {
+      showError('Please enter the Admin staff email address.');
+      return;
+    }
+
+    setCreatingCode(true);
     try {
-      await updateSuperAdminPlan(planId, { monthlyPrice: monthly, yearlyPrice: yearly });
-      alert('Plan pricing updated successfully!');
-      const updated = await fetchSubscriptionPlans();
-      setPlans(updated);
+      const result = await createAdminAccessCode({
+        label: label.trim(),
+        assignedEmail,
+        name: assignmentType === 'STAFF' ? staffName.trim() || label.trim() : undefined,
+        password: assignmentType === 'STAFF' && staffPassword ? staffPassword : undefined,
+        role,
+        canGenerateBills,
+        enableBusinessBilling: enableBusinessBillingNow,
+      });
+
+      setNewlyGeneratedCode(result.adminCode);
+      setLabel('');
+      setStaffEmail('');
+      setStaffName('');
+      setStaffPassword('');
+      showNotice(`Generated 12-digit Admin Access Code: ${result.adminCode.code}`);
+      await loadAll();
+      onRefreshParent?.();
     } catch (err: any) {
-      alert(`Failed to update plan: ${err.message}`);
+      showError(`Error generating Admin Access Code: ${err.message}`);
+    } finally {
+      setCreatingCode(false);
     }
   };
 
-  if (loading && !stats) {
+  const handleToggleCodeField = async (
+    codeItem: AdminAccessCode,
+    payload: { canGenerateBills?: boolean; isActive?: boolean; rotateCode?: boolean }
+  ) => {
+    try {
+      await updateAdminAccessCode(codeItem.id, payload);
+      showNotice(
+        payload.rotateCode
+          ? 'Generated fresh 12-digit Admin Access Code'
+          : payload.isActive === false
+          ? 'Revoked Admin Access Code & terminated active sessions'
+          : 'Updated Admin terminal permissions'
+      );
+      await loadAll();
+    } catch (err: any) {
+      showError(`Failed to update code: ${err.message}`);
+    }
+  };
+
+  const handleDeleteCode = async (codeItem: AdminAccessCode) => {
+    if (!window.confirm(`Delete Admin Access Code "${codeItem.label}"? Any active Admin terminal using it will be signed out.`)) {
+      return;
+    }
+    try {
+      await deleteAdminAccessCode(codeItem.id);
+      showNotice('Admin Access Code deleted.');
+      await loadAll();
+    } catch (err: any) {
+      showError(`Error deleting code: ${err.message}`);
+    }
+  };
+
+  const copyCode = (id: string, code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  if (loading && !overview) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[450px]">
         <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mb-3" />
-        <span className="text-sm text-slate-500">Loading Super Admin Control Panel...</span>
+        <span className="text-sm text-slate-500">Loading Super Admin Control Desk...</span>
       </div>
     );
   }
 
+  const biz = overview?.business;
+  const sub = overview?.subscription;
+  const stats = overview?.stats;
+  const checklist = overview?.setupChecklist;
+  const isBillingAllowed = Boolean(biz?.allowAdminBilling);
+
   return (
-    <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 space-y-8">
-      {/* Header Banner */}
-      <div className="rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-8 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-6 border border-slate-800">
+    <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 space-y-6">
+      {notice && (
+        <div
+          role="status"
+          className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-semibold flex items-center justify-between gap-2 shadow-sm"
+        >
+          <span className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+            <span>{notice}</span>
+          </span>
+          <button type="button" onClick={() => setNotice(null)} className="text-[11px] underline text-emerald-700">
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {errorMsg && (
+        <div
+          role="alert"
+          className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 text-xs font-semibold flex items-center justify-between gap-2 shadow-sm"
+        >
+          <span className="flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 text-rose-600 flex-shrink-0" />
+            <span>{errorMsg}</span>
+          </span>
+          <button type="button" onClick={() => setErrorMsg(null)} className="text-[11px] underline text-rose-700">
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Hero Control Banner */}
+      <div className="rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-7 shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-6 border border-slate-800">
         <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
-              <ShieldAlert className="w-3.5 h-3.5 text-indigo-400" />
-              Super Admin Control Center
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-200 border border-indigo-400/30 text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
+              <KeyRound className="w-3.5 h-3.5 text-yellow-300" />
+              Verified Super Admin (Email + 12-Digit Key)
             </span>
-            <span className="text-xs text-slate-400">Global System Management</span>
+            {sub && (
+              <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-xs font-bold">
+                {sub.planName} • Active
+              </span>
+            )}
           </div>
-          <h1 className="text-3xl font-black tracking-tight text-white">
-            Platform System Overview & Control
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+            {biz?.name || 'Your Business Workspace'}
           </h1>
-          <p className="text-sm text-slate-300 max-w-xl">
-            Configure payment gateways, manage tenant business workspaces, master product catalogs, and subscription pricing in INR.
+          <p className="text-xs sm:text-sm text-slate-300 max-w-2xl">
+            Signed in as <strong>{userEmail}</strong>. Manage your master Product Catalog, generate 12-digit Admin Access Codes, and authorize Admins on Port 5173 to issue GST bills.
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={loadData}
-          className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white font-semibold text-xs border border-white/20 flex items-center gap-2 transition-colors self-start md:self-auto"
-        >
-          <RefreshCw className="w-4 h-4" />
-          <span>Refresh Metrics</span>
-        </button>
+        {/* Master Billing Authorization Toggle Card */}
+        <div className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 p-4 flex flex-col sm:flex-row items-start sm:items-center gap-4 min-w-[300px]">
+          <div className="flex-1">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-300">
+              Admin Billing Status (Port 5173)
+            </div>
+            <div className="flex items-center gap-2 mt-1">
+              {isBillingAllowed ? (
+                <span className="text-sm font-black text-emerald-300 flex items-center gap-1.5">
+                  <Unlock className="w-4 h-4" /> BILLING AUTHORIZED
+                </span>
+              ) : (
+                <span className="text-sm font-black text-amber-300 flex items-center gap-1.5">
+                  <Lock className="w-4 h-4" /> BILLING PAUSED
+                </span>
+              )}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            disabled={togglingBilling}
+            onClick={handleToggleMasterBilling}
+            className={`px-4 py-2.5 rounded-xl text-xs font-black shadow-lg transition-all flex items-center gap-1.5 disabled:opacity-50 ${
+              isBillingAllowed
+                ? 'bg-amber-500 hover:bg-amber-400 text-slate-950'
+                : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
+            }`}
+          >
+            {togglingBilling ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : isBillingAllowed ? (
+              <>
+                <Lock className="w-3.5 h-3.5" />
+                <span>Pause Billing</span>
+              </>
+            ) : (
+              <>
+                <Unlock className="w-3.5 h-3.5" />
+                <span>Allow Admin Billing</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Navigation Tabs */}
       <div className="flex items-center gap-2 border-b border-slate-200 overflow-x-auto pb-1">
         {[
-          { key: 'overview', label: 'Platform Stats', icon: Layers },
-          { key: 'settings', label: 'System Settings & Razorpay', icon: Sliders },
-          { key: 'tenants', label: 'Tenant Businesses', icon: Building2 },
-          { key: 'users', label: 'Platform Users', icon: Users },
-          { key: 'plans', label: 'Subscription Plans (INR)', icon: CreditCard },
-          { key: 'products', label: 'Global Products', icon: Package },
+          { key: 'overview', label: 'Overview & Checklist', icon: Activity },
+          { key: 'products', label: 'Manage Product Catalog', icon: Package },
+          { key: 'admin_codes', label: 'Admin Access Codes (Port 5173)', icon: KeyRound },
+          { key: 'oversight', label: 'Bills & Audit Trail', icon: Receipt },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.key;
@@ -171,8 +336,8 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onSwitchToWorksp
             <button
               key={tab.key}
               type="button"
-              onClick={() => handleTabChange(tab.key as any)}
-              className={`px-4 py-3 text-xs font-bold rounded-xl flex items-center gap-2 transition-all whitespace-nowrap ${
+              onClick={() => setActiveTab(tab.key as any)}
+              className={`px-4 py-2.5 text-xs font-bold rounded-xl flex items-center gap-2 transition-colors duration-100 whitespace-nowrap ${
                 isActive
                   ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
@@ -183,438 +348,585 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onSwitchToWorksp
             </button>
           );
         })}
+
+        <button
+          type="button"
+          onClick={loadAll}
+          className="ml-auto p-2 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100"
+          title="Refresh Data"
+        >
+          <RefreshCw className="w-4 h-4" />
+        </button>
       </div>
 
-      {/* TAB 1: Platform Overview */}
+      {/* TAB 1: Overview & Setup Checklist */}
       {activeTab === 'overview' && (
-        <div className="space-y-8 animate-in fade-in duration-150">
-          {/* Key Stat Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            <div className="p-6 rounded-2xl bg-white border border-slate-200/80 shadow-sm space-y-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Total Businesses</span>
-              <div className="text-3xl font-black text-slate-900">{stats?.totalTenants || 0}</div>
-              <span className="text-xs text-indigo-600 font-medium">Tenant Workspaces</span>
-            </div>
-
-            <div className="p-6 rounded-2xl bg-white border border-slate-200/80 shadow-sm space-y-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Platform Users</span>
-              <div className="text-3xl font-black text-slate-900">{stats?.totalUsers || 0}</div>
-              <span className="text-xs text-teal-600 font-medium">Admins & Customers</span>
-            </div>
-
-            <div className="p-6 rounded-2xl bg-white border border-slate-200/80 shadow-sm space-y-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Active Subscriptions</span>
-              <div className="text-3xl font-black text-emerald-600">{stats?.activeSubscriptionsCount || 0}</div>
-              <span className="text-xs text-slate-500 font-medium">Paying Customers</span>
-            </div>
-
-            <div className="p-6 rounded-2xl bg-white border border-slate-200/80 shadow-sm space-y-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Total Subscription Revenue</span>
-              <div className="text-3xl font-black text-slate-900">
-                ₹{Number(stats?.totalRevenue || 0).toLocaleString('en-IN')}
+        <div className="space-y-6 animate-in fade-in duration-150">
+          {/* Interactive Onboarding Checklist */}
+          <div className="rounded-3xl bg-white border border-slate-200 p-6 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h2 className="font-bold text-base text-slate-900">
+                  Launch Workflow Checklist (Before Admin Generates Bills)
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Complete these steps so your Admin Billing Desk (Port 5173) can generate official GST bills.
+                </p>
               </div>
-              <span className="text-xs text-emerald-600 font-medium">Via Razorpay Gateway</span>
+              <a
+                href="http://localhost:5173"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-teal-50 border border-teal-200 text-teal-800 font-bold text-xs hover:bg-teal-100 transition-colors"
+              >
+                <span>Open Billing Admin Desk (5173)</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+              <button
+                type="button"
+                onClick={() => setActiveTab('products')}
+                className={`p-4 rounded-2xl border text-left transition-all flex items-start justify-between gap-3 ${
+                  checklist?.hasActiveProducts
+                    ? 'bg-emerald-50/70 border-emerald-200'
+                    : 'bg-indigo-50/70 border-indigo-200 hover:bg-indigo-100/60'
+                }`}
+              >
+                <div className="space-y-1">
+                  <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                    {checklist?.hasActiveProducts ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    ) : (
+                      <Package className="w-4 h-4 text-indigo-600" />
+                    )}
+                    <span>1. Add Products ({stats?.activeProductsCount || 0})</span>
+                  </div>
+                  <p className="text-slate-600">
+                    Add products, unit prices & GST % for your billing team to pick from.
+                  </p>
+                </div>
+                <ArrowRight className="w-4 h-4 text-slate-400 flex-shrink-0 mt-1" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('admin_codes')}
+                className={`p-4 rounded-2xl border text-left transition-all flex items-start justify-between gap-3 ${
+                  checklist?.hasActiveAdminCode
+                    ? 'bg-emerald-50/70 border-emerald-200'
+                    : 'bg-indigo-50/70 border-indigo-200 hover:bg-indigo-100/60'
+                }`}
+              >
+                <div className="space-y-1">
+                  <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                    {checklist?.hasActiveAdminCode ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    ) : (
+                      <KeyRound className="w-4 h-4 text-indigo-600" />
+                    )}
+                    <span>2. Generate Admin Code ({stats?.activeAdminCodesCount || 0})</span>
+                  </div>
+                  <p className="text-slate-600">
+                    Create 12-digit Admin Access Code(s) required for Port 5173 login.
+                  </p>
+                </div>
+                <ArrowRight className="w-4 h-4 text-slate-400 flex-shrink-0 mt-1" />
+              </button>
+
+              <div
+                className={`p-4 rounded-2xl border text-left flex items-start justify-between gap-3 ${
+                  checklist?.isAdminBillingAllowed
+                    ? 'bg-emerald-50/70 border-emerald-200'
+                    : 'bg-amber-50 border-amber-300'
+                }`}
+              >
+                <div className="space-y-1">
+                  <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                    {checklist?.isAdminBillingAllowed ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    ) : (
+                      <ShieldAlert className="w-4 h-4 text-amber-600" />
+                    )}
+                    <span>3. Authorize Admin Billing</span>
+                  </div>
+                  <p className="text-slate-600">
+                    {checklist?.isAdminBillingAllowed
+                      ? 'Enabled! Admins can create & issue GST bills.'
+                      : 'Click "Allow Admin Billing" in the top banner to unlock billing.'}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Recent Businesses Table */}
-          <div className="rounded-2xl bg-white border border-slate-200/80 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-base text-slate-900">Recent Tenant Businesses</h3>
-                <p className="text-xs text-slate-500">Latest companies registered on Viora Bills</p>
+          {/* Metrics Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-1.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block whitespace-nowrap">
+                Catalog Products
+              </span>
+              <div className="text-3xl font-black text-slate-900">
+                {stats?.activeProductsCount || 0}
               </div>
+              <button
+                type="button"
+                onClick={onOpenProducts}
+                className="text-xs text-indigo-600 font-semibold hover:underline"
+              >
+                Manage Products →
+              </button>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-slate-500 uppercase font-semibold">
-                  <tr>
-                    <th className="py-3 px-6">Business Name</th>
-                    <th className="py-3 px-6">Contact Email / Phone</th>
-                    <th className="py-3 px-6">Invoices Generated</th>
-                    <th className="py-3 px-6">Clients</th>
-                    <th className="py-3 px-6">Joined Date</th>
-                    <th className="py-3 px-6 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                  {(stats?.recentTenants || []).map((t: any) => (
-                    <tr key={t.id} className="hover:bg-slate-50/50">
-                      <td className="py-4 px-6 font-bold text-slate-900">{t.name}</td>
-                      <td className="py-4 px-6">
-                        <div>{t.email}</div>
-                        <div className="text-[11px] text-slate-400">{t.phone}</div>
-                      </td>
-                      <td className="py-4 px-6">{t.invoicesCount}</td>
-                      <td className="py-4 px-6">{t.customersCount}</td>
-                      <td className="py-4 px-6 text-slate-500">
-                        {new Date(t.createdAt).toLocaleDateString('en-IN')}
-                      </td>
-                      <td className="py-4 px-6 text-right">
-                        <button
-                          type="button"
-                          onClick={() => onSwitchToWorkspace(t.id)}
-                          className="text-indigo-600 hover:text-indigo-800 font-bold hover:underline inline-flex items-center gap-1"
-                        >
-                          <span>Open Workspace</span>
-                          <ExternalLink className="w-3 h-3" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-1.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block whitespace-nowrap">
+                Active Admin Codes
+              </span>
+              <div className="text-3xl font-black text-indigo-600">
+                {stats?.activeAdminCodesCount || 0}
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('admin_codes')}
+                className="text-xs text-indigo-600 font-semibold hover:underline"
+              >
+                Issue / Manage Codes →
+              </button>
+            </div>
+
+            <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-1.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block whitespace-nowrap">
+                GST Bills Issued
+              </span>
+              <div className="text-3xl font-black text-slate-900">
+                {stats?.issuedInvoicesCount || 0}
+                <span className="text-xs font-normal text-slate-400 ml-1">
+                  / {sub?.invoiceLimit === -1 ? '∞' : sub?.invoiceLimit || '—'}
+                </span>
+              </div>
+              <span className="text-xs text-slate-500">
+                Total drafts & issued: {stats?.totalInvoicesCount || 0}
+              </span>
+            </div>
+
+            <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-1.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block whitespace-nowrap">
+                Billed Revenue (Issued)
+              </span>
+              <div className="text-3xl font-black text-emerald-700">
+                ₹{Number(stats?.totalBilledRevenue || 0).toLocaleString('en-IN')}
+              </div>
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className="text-xs text-slate-500 hover:text-indigo-600 font-medium flex items-center gap-1"
+              >
+                <Settings className="w-3 h-3" /> Company GST Settings →
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* TAB 2: System Settings & Razorpay Keys */}
-      {activeTab === 'settings' && (
-        <form onSubmit={handleSaveSettings} className="space-y-6 animate-in fade-in duration-150">
-          {saveMessage && (
-            <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
-              <span>{saveMessage}</span>
-            </div>
-          )}
+      {/* TAB 2: Full Product Catalog Management */}
+      {activeTab === 'products' && (
+        <div className="animate-in fade-in duration-150">
+          <ProductsView readOnly={false} onCatalogChanged={loadAll} />
+        </div>
+      )}
 
-          <div className="rounded-2xl bg-white border border-slate-200/80 shadow-sm p-6 space-y-6">
-            <div className="border-b border-slate-100 pb-4">
+      {/* TAB 3: Admin Access Code Generator & Permissions */}
+      {activeTab === 'admin_codes' && (
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 animate-in fade-in duration-150">
+          {/* Left: Generate New Admin Code Form */}
+          <div className="lg:col-span-2 rounded-3xl bg-white border border-slate-200 p-6 shadow-sm space-y-5 h-fit">
+            <div>
               <h3 className="font-bold text-base text-slate-900 flex items-center gap-2">
-                <KeyRound className="w-5 h-5 text-blue-600" />
-                <span>Razorpay Payment Gateway Settings</span>
+                <Plus className="w-4 h-4 text-indigo-600" />
+                <span>Generate 12-Digit Admin Access Code</span>
               </h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Configure your Razorpay API Credentials. In Test mode, mock checkout simulation is active.
+              <p className="text-xs text-slate-500 mt-0.5">
+                Admins strictly require a code generated here to sign into Billing Admin Desk (Port 5173).
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {newlyGeneratedCode && (
+              <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 space-y-2">
+                <div className="text-xs font-bold text-emerald-900 flex items-center justify-between">
+                  <span>✅ New Admin Code Ready!</span>
+                  <button
+                    type="button"
+                    onClick={() => copyCode(newlyGeneratedCode.id, newlyGeneratedCode.code)}
+                    className="text-emerald-800 underline text-[11px]"
+                  >
+                    {copiedId === newlyGeneratedCode.id ? 'Copied!' : 'Copy Code'}
+                  </button>
+                </div>
+                <div className="bg-white rounded-xl p-2.5 border border-emerald-200 text-center">
+                  <code className="text-lg font-mono font-black tracking-widest text-emerald-800">
+                    {format12Digits(newlyGeneratedCode.code)}
+                  </code>
+                </div>
+                <p className="text-[11px] text-emerald-800">
+                  Assigned to: <strong>{newlyGeneratedCode.assignedEmail || userEmail}</strong>
+                </p>
+              </div>
+            )}
+
+            <form onSubmit={handleGenerateAdminCode} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Razorpay Key ID
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Terminal / Counter Label *
                 </label>
                 <input
                   type="text"
-                  value={settings['RAZORPAY_KEY_ID'] || ''}
-                  onChange={(e) => setSettings({ ...settings, RAZORPAY_KEY_ID: e.target.value })}
-                  placeholder="e.g. rzp_test_..."
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-mono focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+                  required
+                  value={label}
+                  onChange={(e) => setLabel(e.target.value)}
+                  placeholder="e.g. POS Counter 1, Main Billing Desk"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Razorpay Key Secret
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Who will use this Admin code?
                 </label>
-                <input
-                  type="password"
-                  value={settings['RAZORPAY_KEY_SECRET'] || ''}
-                  onChange={(e) => setSettings({ ...settings, RAZORPAY_KEY_SECRET: e.target.value })}
-                  placeholder="Razorpay API Key Secret"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-mono focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
-                />
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAssignmentType('SELF')}
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all ${
+                      assignmentType === 'SELF'
+                        ? 'bg-indigo-600 text-white border-indigo-600'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    My Email ({userEmail.split('@')[0]})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAssignmentType('STAFF')}
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all ${
+                      assignmentType === 'STAFF'
+                        ? 'bg-indigo-600 text-white border-indigo-600'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    Staff / Operator Email
+                  </button>
+                </div>
               </div>
 
+              {assignmentType === 'STAFF' && (
+                <div className="space-y-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Operator Name
+                    </label>
+                    <input
+                      type="text"
+                      value={staffName}
+                      onChange={(e) => setStaffName(e.target.value)}
+                      placeholder="e.g. Rahul Sharma"
+                      className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Operator Email *
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={staffEmail}
+                      onChange={(e) => setStaffEmail(e.target.value)}
+                      placeholder="billing.staff@company.com"
+                      className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Initial Password (if new account, min 12 chars)
+                    </label>
+                    <input
+                      type="password"
+                      minLength={12}
+                      value={staffPassword}
+                      onChange={(e) => setStaffPassword(e.target.value)}
+                      placeholder="Min 12 characters"
+                      className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white"
+                    />
+                  </div>
+                </div>
+              )}
+
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Gateway Environment Mode
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Admin Desk Role
                 </label>
                 <select
-                  value={settings['RAZORPAY_MODE'] || 'TEST'}
-                  onChange={(e) => setSettings({ ...settings, RAZORPAY_MODE: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 bg-white"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value as any)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 bg-white"
                 >
-                  <option value="TEST">TEST (Sandbox Simulation)</option>
-                  <option value="LIVE">LIVE (Real INR Transactions)</option>
+                  <option value="OWNER">OWNER — Full Billing, Payments & Credit Notes</option>
+                  <option value="ACCOUNTANT">ACCOUNTANT — Create, Issue Bills & Payments</option>
+                  <option value="VIEWER">VIEWER — Read-Only Invoice Viewer</option>
                 </select>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Default Platform GST Rate (%)
+              <div className="space-y-2 pt-1">
+                <label className="flex items-center gap-2 text-xs text-slate-700 font-medium cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={canGenerateBills}
+                    onChange={(e) => setCanGenerateBills(e.target.checked)}
+                    className="rounded text-indigo-600"
+                  />
+                  <span>Allow this Admin code to generate & issue GST bills</span>
                 </label>
-                <input
-                  type="number"
-                  value={settings['DEFAULT_GST_RATE'] || '18'}
-                  onChange={(e) => setSettings({ ...settings, DEFAULT_GST_RATE: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600"
-                />
+
+                {!isBillingAllowed && (
+                  <label className="flex items-center gap-2 text-xs text-emerald-800 font-semibold cursor-pointer bg-emerald-50 p-2 rounded-lg border border-emerald-200">
+                    <input
+                      type="checkbox"
+                      checked={enableBusinessBillingNow}
+                      onChange={(e) => setEnableBusinessBillingNow(e.target.checked)}
+                      className="rounded text-emerald-600"
+                    />
+                    <span>Also authorize Master Workspace Billing immediately</span>
+                  </label>
+                )}
               </div>
-            </div>
+
+              <button
+                type="submit"
+                disabled={creatingCode}
+                className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {creatingCode ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Generating 12-Digit Code...</span>
+                  </>
+                ) : (
+                  <>
+                    <KeyRound className="w-4 h-4" />
+                    <span>Generate 12-Digit Admin Code</span>
+                  </>
+                )}
+              </button>
+            </form>
           </div>
 
-          <div className="rounded-2xl bg-white border border-slate-200/80 shadow-sm p-6 space-y-6">
-            <div className="border-b border-slate-100 pb-4">
-              <h3 className="font-bold text-base text-slate-900">General Platform Information</h3>
-              <p className="text-xs text-slate-500 mt-1">Branding and customer support information</p>
+          {/* Right: Active & Revoked Admin Access Codes List */}
+          <div className="lg:col-span-3 rounded-3xl bg-white border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-base text-slate-900">
+                  Issued Admin Access Codes ({adminCodes.length})
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Control bill generation permissions or revoke codes at any time.
+                </p>
+              </div>
+              <a
+                href="http://localhost:5173"
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-1.5 rounded-lg bg-teal-50 text-teal-800 border border-teal-200 text-xs font-bold inline-flex items-center gap-1 hover:bg-teal-100"
+              >
+                <span>Open Port 5173</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Platform Name
-                </label>
-                <input
-                  type="text"
-                  value={settings['PLATFORM_NAME'] || ''}
-                  onChange={(e) => setSettings({ ...settings, PLATFORM_NAME: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Support Email
-                </label>
-                <input
-                  type="email"
-                  value={settings['SUPPORT_EMAIL'] || ''}
-                  onChange={(e) => setSettings({ ...settings, SUPPORT_EMAIL: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Support Phone
-                </label>
-                <input
-                  type="text"
-                  value={settings['SUPPORT_PHONE'] || ''}
-                  onChange={(e) => setSettings({ ...settings, SUPPORT_PHONE: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={savingSettings}
-              className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-lg shadow-indigo-600/25 flex items-center gap-2 transition-all disabled:opacity-50"
-            >
-              {savingSettings ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Saving Settings...</span>
-                </>
+            <div className="divide-y divide-slate-100 flex-1 overflow-y-auto">
+              {adminCodes.length === 0 ? (
+                <div className="p-12 text-center text-xs text-slate-400">
+                  No Admin Access Codes generated yet. Create one using the form on the left.
+                </div>
               ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  <span>Save System Settings</span>
-                </>
-              )}
-            </button>
-          </div>
-        </form>
-      )}
+                adminCodes.map((ac) => (
+                  <div key={ac.id} className="p-5 hover:bg-slate-50/70 transition-colors space-y-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm text-slate-900">{ac.label}</span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                            {ac.role}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              ac.isActive
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-rose-100 text-rose-700'
+                            }`}
+                          >
+                            {ac.isActive ? 'ACTIVE' : 'REVOKED'}
+                          </span>
+                        </div>
+                        <div className="text-xs text-slate-500 mt-0.5">
+                          Operator Email: <strong className="text-slate-700">{ac.assignedEmail || 'Any workspace member'}</strong>
+                        </div>
+                      </div>
 
-      {/* TAB 3: Tenants Directory */}
-      {activeTab === 'tenants' && (
-        <div className="rounded-2xl bg-white border border-slate-200/80 shadow-sm overflow-hidden space-y-4 p-6 animate-in fade-in duration-150">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h3 className="font-bold text-base text-slate-900">Registered Tenant Entities</h3>
-              <p className="text-xs text-slate-500">Every isolated business organization hosted on the platform</p>
-            </div>
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search businesses..."
-                value={tenantSearch}
-                onChange={(e) => setTenantSearch(e.target.value)}
-                className="w-full pl-9 pr-3.5 py-2 rounded-xl border border-slate-300 text-xs focus:border-indigo-600 focus:outline-none"
-              />
-            </div>
-          </div>
-
-          <div className="overflow-x-auto -mx-6 -mb-6">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-500 uppercase font-semibold">
-                <tr>
-                  <th className="py-3 px-6">Business</th>
-                  <th className="py-3 px-6">GSTIN / State</th>
-                  <th className="py-3 px-6">Owner</th>
-                  <th className="py-3 px-6">Invoices</th>
-                  <th className="py-3 px-6">Clients</th>
-                  <th className="py-3 px-6 text-right">Switch</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                {tenants
-                  .filter((t) => !tenantSearch || t.name.toLowerCase().includes(tenantSearch.toLowerCase()))
-                  .map((t) => (
-                    <tr key={t.id} className="hover:bg-slate-50/50">
-                      <td className="py-4 px-6 font-bold text-slate-900">{t.name}</td>
-                      <td className="py-4 px-6">
-                        <div>{t.gstin || 'Unregistered'}</div>
-                        <div className="text-[11px] text-slate-400">{t.state || 'Karnataka'}</div>
-                      </td>
-                      <td className="py-4 px-6">
-                        {t.owners?.[0]?.name || 'N/A'}
-                        <div className="text-[11px] text-slate-400">{t.owners?.[0]?.email}</div>
-                      </td>
-                      <td className="py-4 px-6 font-bold">{t.invoicesCount}</td>
-                      <td className="py-4 px-6">{t.customersCount}</td>
-                      <td className="py-4 px-6 text-right">
+                      <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-xl">
+                        <code className="text-sm font-mono font-black tracking-wider text-indigo-900">
+                          {format12Digits(ac.code)}
+                        </code>
                         <button
                           type="button"
-                          onClick={() => onSwitchToWorkspace(t.id)}
-                          className="px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-bold text-xs"
+                          onClick={() => copyCode(ac.id, ac.code)}
+                          className="p-1 rounded hover:bg-indigo-200/50 text-indigo-700"
+                          title="Copy 12-Digit Code"
                         >
-                          Manage Workspace
+                          {copiedId === ac.id ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
                         </button>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleToggleCodeField(ac, { canGenerateBills: !ac.canGenerateBills })
+                        }
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-semibold border transition-colors ${
+                          ac.canGenerateBills
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                            : 'bg-amber-50 text-amber-800 border-amber-200'
+                        }`}
+                      >
+                        {ac.canGenerateBills ? (
+                          <>
+                            <ToggleRight className="w-4 h-4 text-emerald-600" />
+                            <span>Bill Generation: Allowed</span>
+                          </>
+                        ) : (
+                          <>
+                            <ToggleLeft className="w-4 h-4 text-amber-600" />
+                            <span>Bill Generation: Paused</span>
+                          </>
+                        )}
+                      </button>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleCodeField(ac, { rotateCode: true })}
+                          className="px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 font-medium inline-flex items-center gap-1"
+                        >
+                          <RotateCw className="w-3 h-3" />
+                          <span>Rotate Key</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleToggleCodeField(ac, { isActive: !ac.isActive })}
+                          className={`px-2.5 py-1 rounded-lg font-semibold ${
+                            ac.isActive
+                              ? 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200'
+                              : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
+                          }`}
+                        >
+                          {ac.isActive ? 'Revoke Access' : 'Restore Access'}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCode(ac)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
+                          title="Delete Code"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       )}
 
-      {/* TAB 4: Platform Users */}
-      {activeTab === 'users' && (
-        <div className="rounded-2xl bg-white border border-slate-200/80 shadow-sm overflow-hidden p-6 space-y-4 animate-in fade-in duration-150">
-          <div>
-            <h3 className="font-bold text-base text-slate-900">All Registered Users</h3>
-            <p className="text-xs text-slate-500">Super Admins, Business Owners, Accountants, and SaaS Customers</p>
-          </div>
-
-          <div className="overflow-x-auto -mx-6 -mb-6">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-500 uppercase font-semibold">
-                <tr>
-                  <th className="py-3 px-6">Name</th>
-                  <th className="py-3 px-6">Email</th>
-                  <th className="py-3 px-6">System Role</th>
-                  <th className="py-3 px-6">Active Plan</th>
-                  <th className="py-3 px-6">Joined Date</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                {usersList.map((u) => (
-                  <tr key={u.id} className="hover:bg-slate-50/50">
-                    <td className="py-4 px-6 font-bold text-slate-900">{u.name}</td>
-                    <td className="py-4 px-6">{u.email}</td>
-                    <td className="py-4 px-6">
-                      <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-bold ${
-                        u.role === 'SUPER_ADMIN'
-                          ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                          : u.role === 'CUSTOMER'
-                          ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                          : 'bg-teal-100 text-teal-800 border border-teal-200'
-                      }`}>
-                        {u.role}
+      {/* TAB 4: Bills Oversight & Audit Trail */}
+      {activeTab === 'oversight' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in duration-150">
+          <div className="rounded-3xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-slate-100">
+              <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                <Receipt className="w-4 h-4 text-teal-600" />
+                <span>Recent Bills Generated by Admin Desk</span>
+              </h3>
+            </div>
+            <div className="divide-y divide-slate-100 text-xs">
+              {(overview?.recentInvoices || []).length === 0 ? (
+                <div className="p-8 text-center text-slate-400 italic">No bills generated yet.</div>
+              ) : (
+                overview?.recentInvoices.map((inv) => (
+                  <div key={inv.id} className="p-4 flex items-center justify-between hover:bg-slate-50">
+                    <div>
+                      <div className="font-bold text-slate-900">{inv.invoiceNumber}</div>
+                      <div className="text-[11px] text-slate-500">
+                        {inv.customerName} • {inv.invoiceDate}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold text-slate-900">
+                        ₹{inv.grandTotal.toLocaleString('en-IN')}
+                      </div>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          inv.status === 'ISSUED'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {inv.status}
                       </span>
-                    </td>
-                    <td className="py-4 px-6 font-semibold text-slate-900">{u.activePlan}</td>
-                    <td className="py-4 px-6 text-slate-500">
-                      {new Date(u.createdAt).toLocaleDateString('en-IN')}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 5: Subscription Plans Pricing Editor */}
-      {activeTab === 'plans' && (
-        <div className="space-y-6 animate-in fade-in duration-150">
-          <div className="rounded-2xl bg-white border border-slate-200/80 shadow-sm p-6">
-            <h3 className="font-bold text-base text-slate-900">Manage Subscription Plans & INR Pricing</h3>
-            <p className="text-xs text-slate-500 mt-1">Super Admin pricing controls for Indian Rupees</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {plans.map((p) => (
-              <div key={p.id} className="rounded-3xl bg-white border border-slate-200 p-6 shadow-sm space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-bold text-lg text-slate-900">{p.name}</h4>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
-                    {p.isActive ? 'Active' : 'Inactive'}
-                  </span>
-                </div>
-
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">Monthly Price (INR ₹)</label>
-                    <input
-                      type="number"
-                      defaultValue={Number(p.monthlyPrice)}
-                      id={`monthly_${p.id}`}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm font-bold"
-                    />
+                    </div>
                   </div>
+                ))
+              )}
+            </div>
+          </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">Annual Price (INR ₹)</label>
-                    <input
-                      type="number"
-                      defaultValue={Number(p.yearlyPrice)}
-                      id={`yearly_${p.id}`}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm font-bold"
-                    />
+          <div className="rounded-3xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-slate-100">
+              <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                <span>Immutable Security & Catalog Audit Log</span>
+              </h3>
+            </div>
+            <div className="divide-y divide-slate-100 text-xs max-h-[420px] overflow-y-auto">
+              {(overview?.recentAuditLogs || []).length === 0 ? (
+                <div className="p-8 text-center text-slate-400 italic">No audit events recorded yet.</div>
+              ) : (
+                overview?.recentAuditLogs.map((log) => (
+                  <div key={log.id} className="p-4 space-y-1 hover:bg-slate-50">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-bold text-[11px] text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
+                        {log.action}
+                      </span>
+                      <span className="text-[11px] text-slate-400">
+                        {new Date(log.createdAt).toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-600">
+                      Actor: <strong>{log.user?.email || 'System'}</strong> • Target: {log.entityType}
+                    </div>
                   </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    const m = Number((document.getElementById(`monthly_${p.id}`) as HTMLInputElement)?.value);
-                    const y = Number((document.getElementById(`yearly_${p.id}`) as HTMLInputElement)?.value);
-                    handleUpdatePlanPrice(p.id, m, y);
-                  }}
-                  className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-colors"
-                >
-                  Save Plan Pricing
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 6: Global Products Catalog */}
-      {activeTab === 'products' && (
-        <div className="rounded-2xl bg-white border border-slate-200/80 shadow-sm p-6 space-y-4 animate-in fade-in duration-150">
-          <div>
-            <h3 className="font-bold text-base text-slate-900">Master Products Catalog</h3>
-            <p className="text-xs text-slate-500">Global product and service listings across businesses</p>
-          </div>
-
-          <div className="overflow-x-auto -mx-6 -mb-6">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-500 uppercase font-semibold">
-                <tr>
-                  <th className="py-3 px-6">Product / Service</th>
-                  <th className="py-3 px-6">Unit Price (INR)</th>
-                  <th className="py-3 px-6">GST Rate</th>
-                  <th className="py-3 px-6">Unit</th>
-                  <th className="py-3 px-6">Tenant Business</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                {products.map((prod) => (
-                  <tr key={prod.id} className="hover:bg-slate-50/50">
-                    <td className="py-4 px-6 font-bold text-slate-900">{prod.name}</td>
-                    <td className="py-4 px-6 font-bold text-slate-900">
-                      ₹{Number(prod.unitPrice).toLocaleString('en-IN')}
-                    </td>
-                    <td className="py-4 px-6">{Number(prod.taxRate)}%</td>
-                    <td className="py-4 px-6">{prod.unit}</td>
-                    <td className="py-4 px-6 text-slate-500">{prod.business?.name || 'Global'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                ))
+              )}
+            </div>
           </div>
         </div>
       )}

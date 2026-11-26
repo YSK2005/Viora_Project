@@ -1,4 +1,4 @@
-import {useDialog} from '../../hooks/useDialog';
+import { useDialog } from '../../hooks/useDialog';
 import React from 'react';
 import {
   LayoutDashboard,
@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { NavigationKey, User, UserRole } from '../../types';
 import { BillyWordmark } from '../common/BillyWordmark';
+import { getActivePortal } from '../../utils/portal';
 
 interface SidebarProps {
   currentNav: NavigationKey;
@@ -49,47 +50,46 @@ export const Sidebar: React.FC<SidebarProps> = ({
   userRole,
   onLogout,
 }) => {
-  const dialogProps=useDialog(isMobileOpen,onCloseMobile,'Main navigation');
+  const dialogProps = useDialog(isMobileOpen, onCloseMobile, 'Main navigation');
+  const activePortal = getActivePortal();
 
   const navItems: NavItem[] = React.useMemo(() => {
-    if (userRole === 'SUPER_ADMIN') {
+    // 1. CUSTOMER PORTAL (Port 5174): Strictly Software Purchase, License & 12-Digit Super Admin Key
+    if (activePortal === 'CUSTOMER' || userRole === 'CUSTOMER') {
       return [
-        { key: 'superadmin', label: 'Super Admin Control', icon: Sliders, badge: 'MASTER' },
-        { key: 'pricing', label: 'Subscription Plans', icon: Sparkles, badge: 'INR ₹' },
-        { key: 'dashboard', label: 'Billing Dashboard', icon: LayoutDashboard },
-        { key: 'invoices', label: 'All Invoices', icon: Receipt },
-        { key: 'customers', label: 'Customers', icon: Users },
-        { key: 'products', label: 'Master Products', icon: Package },
-        { key: 'settings', label: 'System Settings', icon: Settings },
+        { key: 'customer_portal', label: 'My License & Key', icon: ShieldCheck, badge: 'PORTAL' },
+        { key: 'pricing', label: 'Buy / Upgrade Plan', icon: Sparkles, badge: 'INR ₹' },
       ];
     }
-    if (userRole === 'CUSTOMER') {
+
+    // 2. SUPER ADMIN PORTAL (Port 5175): Strictly Product Catalog, Admin Code Generation & Billing Authorization
+    if (activePortal === 'SUPER_ADMIN' || userRole === 'SUPER_ADMIN') {
       return [
-        { key: 'customer_portal', label: 'My Subscription', icon: ShieldCheck, badge: 'PORTAL' },
-        { key: 'pricing', label: 'Upgrade / Plans', icon: Sparkles, badge: 'INR ₹' },
-        { key: 'dashboard', label: 'Billing Software', icon: LayoutDashboard },
-        { key: 'invoices', label: 'Invoices & Bills', icon: Receipt },
-        { key: 'payments', label: 'Receipts & Payments', icon: CreditCard },
+        { key: 'superadmin', label: 'Control Center', icon: Sliders, badge: 'CONTROL' },
+        { key: 'products', label: 'Product Catalog', icon: Package, badge: 'MANAGE' },
+        { key: 'invoices', label: 'Bills Oversight', icon: Receipt },
+        { key: 'customers', label: 'Client Directory', icon: Users },
+        { key: 'reports', label: 'Sales & GST Analytics', icon: BarChart3 },
+        { key: 'settings', label: 'Company & Tax Setup', icon: Settings },
       ];
     }
-    // OWNER, ACCOUNTANT, VIEWER (Billing Suite Admin)
+
+    // 3. ADMIN DESK PORTAL (Port 5173): Strictly Bill Generation, Clients, Read-Only Catalog & Collections
     return [
-      { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-      { key: 'invoices', label: 'Invoices', icon: Receipt },
+      { key: 'dashboard', label: 'Billing Dashboard', icon: LayoutDashboard },
+      { key: 'invoices', label: 'Generate & Issue Bills', icon: Receipt },
       { key: 'customers', label: 'Customers', icon: Users },
-      { key: 'products', label: 'Products & Services', icon: Package },
-      { key: 'payments', label: 'Payments', icon: CreditCard },
-      { key: 'reports', label: 'Sales Reports', icon: BarChart3 },
+      { key: 'products', label: 'Product Catalog', icon: Package, badge: 'CATALOG' },
+      { key: 'payments', label: 'Bill Collections', icon: CreditCard },
       { key: 'credits', label: 'Credit Notes', icon: Receipt },
       { key: 'statements', label: 'Customer Statements', icon: Users },
-      { key: 'recurring', label: 'Recurring', icon: Repeat },
-      { key: 'pricing', label: 'Software License', icon: Sparkles, badge: 'INR ₹' },
-      { key: 'settings', label: 'Business Settings', icon: Settings },
+      { key: 'recurring', label: 'Recurring Bills', icon: Repeat },
+      { key: 'reports', label: 'Sales Reports', icon: BarChart3 },
     ];
-  }, [userRole]);
+  }, [activePortal, userRole]);
+
   return (
     <>
-      {/* Mobile backdrop overlay */}
       {isMobileOpen && (
         <div
           className="fixed inset-0 z-40 bg-navy-950/40 backdrop-blur-xs lg:hidden transition-opacity"
@@ -97,23 +97,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
         />
       )}
 
-      {/* Sidebar container */}
-      <div {...(isMobileOpen ? dialogProps : {})} ref={dialogProps.ref} data-sidebar
+      <div
+        {...(isMobileOpen ? dialogProps : {})}
+        ref={dialogProps.ref}
+        data-sidebar
         className={`fixed top-0 bottom-0 left-0 z-50 flex flex-col bg-navy-950 border-r border-navy-800 transition-all duration-300 ease-in-out ${
           isCollapsed ? 'w-20' : 'w-64'
         } ${
-          isMobileOpen ? 'translate-x-0 visible' : '-translate-x-full invisible lg:visible lg:translate-x-0'
+          isMobileOpen
+            ? 'translate-x-0 visible'
+            : '-translate-x-full invisible lg:visible lg:translate-x-0'
         }`}
       >
         {/* Brand Header */}
         <div className="h-16 flex items-center justify-between px-4 border-b border-navy-800">
           <div className="flex items-center gap-3 overflow-hidden">
-            {/* Logo Icon */}
             <div className="w-10 h-10 rounded-xl overflow-hidden shadow-md flex-shrink-0 bg-white flex items-center justify-center p-0.5">
               <img src="/logo.png" alt="Logo" className="w-full h-full object-contain rounded-lg" />
             </div>
 
-            {/* Brand Title */}
             {!isCollapsed && (
               <div className="flex items-center min-w-0 pl-1">
                 <BillyWordmark className="h-9 w-auto select-none" />
@@ -121,7 +123,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           </div>
 
-          {/* Collapse toggle (desktop only) */}
           <button
             onClick={onToggleCollapse}
             type="button"
@@ -137,12 +138,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         </div>
 
-        <button className="lg:hidden p-3 text-white" onClick={onCloseMobile} aria-label="Close navigation">Close menu</button>
+        <button className="lg:hidden p-3 text-white" onClick={onCloseMobile} aria-label="Close navigation">
+          Close menu
+        </button>
+
         {/* Navigation list */}
         <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
           {!isCollapsed && (
             <div className="px-3 pb-2 text-[11px] font-semibold text-navy-500 uppercase tracking-wider">
-              Main Menu
+              {activePortal === 'CUSTOMER'
+                ? 'Customer Purchase Portal'
+                : activePortal === 'SUPER_ADMIN'
+                ? 'Super Admin Panel'
+                : 'Billing Admin Desk'}
             </div>
           )}
 
@@ -161,9 +169,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 }}
                 title={isCollapsed ? item.label : undefined}
                 className={`w-full flex items-center rounded-lg text-sm font-medium transition-all group relative ${
-                  isCollapsed
-                    ? 'justify-center px-2 py-3'
-                    : 'justify-between px-3.5 py-2.5'
+                  isCollapsed ? 'justify-center px-2 py-3' : 'justify-between px-3.5 py-2.5'
                 } ${
                   isActive
                     ? 'bg-brand-400/10 text-brand-400 font-semibold'
@@ -173,9 +179,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <div className="flex items-center gap-3">
                   <Icon
                     className={`w-5 h-5 flex-shrink-0 transition-colors ${
-                      isActive
-                        ? 'text-brand-400'
-                        : 'text-navy-500 group-hover:text-white'
+                      isActive ? 'text-brand-400' : 'text-navy-500 group-hover:text-white'
                     }`}
                   />
                   {!isCollapsed && <span className="truncate">{item.label}</span>}
@@ -183,7 +187,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
                 {!isCollapsed && item.badge && (
                   <span
-                    className={`px-2 py-0.5 text-[11px] font-semibold rounded-full ${
+                    className={`px-2 py-0.5 text-[10px] font-semibold rounded-full ${
                       isActive
                         ? 'bg-brand-400/20 text-brand-300'
                         : 'bg-navy-800 text-navy-400 group-hover:bg-navy-700'
@@ -193,7 +197,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </span>
                 )}
 
-                {/* Left active accent bar */}
                 {isActive && (
                   <span className="absolute left-0 top-1.5 bottom-1.5 w-1 bg-brand-400 rounded-r-full" />
                 )}
@@ -213,19 +216,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <p className="text-[11px] text-navy-400 truncate">{user.email}</p>
                   </div>
                   <span
-                    className={`px-1.5 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider ${
-                      userRole === 'SUPER_ADMIN'
+                    className={`px-1.5 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider whitespace-nowrap flex-shrink-0 ${
+                      activePortal === 'SUPER_ADMIN'
                         ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                        : userRole === 'CUSTOMER'
-                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                        : userRole === 'OWNER'
-                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                        : userRole === 'ACCOUNTANT'
-                        ? 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
-                        : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                        : activePortal === 'CUSTOMER'
+                        ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                        : 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
                     }`}
                   >
-                    {userRole || 'USER'}
+                    {activePortal === 'SUPER_ADMIN'
+                      ? 'SUPER ADMIN'
+                      : activePortal === 'CUSTOMER'
+                      ? 'BUYER'
+                      : userRole || 'ADMIN'}
                   </span>
                 </div>
                 {onLogout && (
@@ -241,7 +244,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             ) : (
               <div className="flex flex-col items-center gap-2">
                 <div
-                  title={`${user.name} (${userRole || 'USER'})`}
+                  title={`${user.name} (${activePortal})`}
                   className="w-8 h-8 rounded-full bg-teal-600/30 text-teal-300 flex items-center justify-center text-xs font-bold border border-teal-500/30"
                 >
                   {user.name.charAt(0).toUpperCase()}
